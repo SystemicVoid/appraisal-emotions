@@ -1,0 +1,23 @@
+{
+  "record_kind": "rq8_pe_t01_ratification/v1",
+  "model_key": "qwen3_4b_instruct_2507",
+  "label_sets": ["cos_dat", "fir_hud"],
+  "shared_symbols": ["COS", "DAT"],
+  "held_out_symbols": ["FIR", "HUD"],
+  "ratified": true,
+  "ratified_on": "2026-07-02",
+  "ratified_fork": "Decision-7 Fork 2: T0.1 ACCEPTED on the slope gate with the documented partial sure-thing binding caveat (an explicit, operator-authorized downgrade of the pointer-binding sub-gate to a caveat, not a silent pass) — design-log Decisions 9-10; rq8_rpe_valence_spec section 5 T0.1 outcome block.",
+  "ratified_c0_run_id": "rq8_pe_gambles_choicepointer",
+  "ratified_beta_ev": 0.08602022311643706,
+  "ratified_verdict": "escalate",
+  "binding_caveat": "Partial sure-thing bias, a model property not an instrument artifact: gamble-dominant catch cells bind submaximally (0.802/0.868; 18/20 and 17/20 at n=20) while certain-dominant cells are crisp (0.971/0.981; 20/20); directional and token-general; answer-slot token bias ruled out (0.375 <= 0.5 nats). Conservative for the pass license: submaximal gamble-binding can only attenuate, never manufacture, a positive EV slope.",
+  "c1_reproduction_run_id": "rq8_pe_gambles_choicepointer_c1",
+  "confirmation_partition_authorized": true,
+  "confirmation_run_dir": "runs/rq8_pe_gambles_choicepointer_confirm",
+  "confirmation_config_sha256": "6b0ab69d5a6ef66f01592330e38ef5b9c6f921581aa333af019e8eb866b9695f",
+  "model_backend": "hf",
+  "model_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+  "model_spec_sha256": "305bc02c464d06ec3e3e20e00368005bf3f22412a936f921c9fe2cdf396ded7f",
+  "authorization": "Operator directive 2026-07-03 (fork (c) activation; design-log Decision 12): execute the Qwen freeze + first frozen confirmation run, consuming the choicepointer battery's confirmation slice exactly once (F14 single-touch) with byte-identical geometry to the ratified C0 and the pre-registered T0.1 sensitivity criterion as the confirmation gate."
+}

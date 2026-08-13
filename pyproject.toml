@@ -1,0 +1,80 @@
+[project]
+name = "appraisal-emotions"
+version = "0.1.0"
+description = "Appraisal directions and emotion-concept geometry in an LLM residual stream."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Pinned, not floored, to the parent program's resolved version. numpy wheels bundle their
+    # own LAPACK, and `np.linalg.qr` is not bit-stable across builds: on 2.5.2 the planted
+    # orthonormal basis in tests/conftest.py comes out different, so the golden-parity digests
+    # in tests/test_golden_parity.py stop matching the artifacts the parent committed. Bump this
+    # only together with fresh goldens regenerated from the parent at a named revision.
+    "numpy==2.4.6",
+    "pydantic>=2.13.4",
+    "pyyaml>=6.0.3",
+    "rich>=15.0.0",
+    "scipy>=1.17.1",
+    "typer>=0.26.2",
+]
+
+[project.scripts]
+appraisal-emotions = "appraisal_emotions.cli:app"
+
+[project.optional-dependencies]
+# GPU path. Same pins as the parent program, so a capture here runs the certified stack.
+hf = [
+    "torch>=2.12.0",
+    "transformers==5.10.1",
+]
+
+# Standalone uv workspace root: prevents uv from walking up into ambient parent workspaces.
+[tool.uv.workspace]
+members = []
+
+[build-system]
+requires = ["uv_build>=0.11.16,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Resolved relative to this file, so first-party detection (and therefore import ordering) is
+# the same whether ruff runs from this directory or from the enclosing checkout.
+src = ["src", "tests"]
+extend-exclude = [
+    "runs",
+    "results",
+    "data",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "PL"]
+ignore = ["PLC0415", "PLR0913", "PLR2004"]
+
+[tool.ruff.lint.isort]
+# Stated explicitly rather than inferred from `src`: inference depends on the working directory
+# ruff is invoked from, which made import ordering flip between `just lint` and a run from an
+# enclosing checkout.
+known-first-party = ["appraisal_emotions", "conftest", "test_reveal_rpe"]
+
+[tool.ruff.lint.pycodestyle]
+# Formatter wraps code at line-length=100; E501 tolerates up to 120 so unicode-heavy
+# comments/docstrings the formatter cannot wrap stop demanding hand-reflow.
+max-line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-q",
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-xdist>=3.6",
+]

@@ -1,0 +1,67 @@
+# Rung R-A reveal-token signed-RPE BASE capture (rq8_rpe_valence_spec §4.4; R-A plan).
+#
+# Copied from the parent program's configs/rq8_pe_reveal_rpe_base.yaml @ 10c4662; every numeric
+# and symbol value is unchanged. Adapted only where the loader differs: the unused stimuli.cvt
+# block is dropped (the parent's StudyConfig required it; this one does not), and adapter_dir is
+# gone because this scaffold is base-side by construction.
+#
+# BASE Qwen3-4B-Instruct-2507 only, NO adapter. Read-only residual-stream capture at the
+# byte-pinned outcome-reveal token — no steering, no training, no GPU write. Tests whether a
+# SIGNED reward-prediction-error direction is present and separable from realised reward, EV, and
+# unsigned surprise |RPE|. The licence is capped to PRESENT-AND-SEPARABLE: R-A has no causal arm
+# and licenses no functional / welfare / experience claim.
+#
+# This run reproduces the R-A' RECIPE. It does not inherit the R-A' CERTIFICATION: a fresh
+# capture earns whatever verdict its own gates return.
+#
+# Offline contract: run with HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 (see `just extract-rpe`);
+# the registry pins the model revision with local_files_only true. Outputs live under the
+# gitignored runs/ root.
+run:
+  id: reveal_rpe_base
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: rq8-pe-reveal-rpe
+  prompt_or_workflow_version: reveal-rpe-base/v1
+  known_gaps:
+    - "RUNG R-A is REPRESENTATIONAL only: a present-and-separable signed-RPE direction is a
+      measurement-validity claim about a representation. It is NOT functional use, welfare,
+      sentience, or experience, and there is no causal arm here (that is a separate rung)."
+    - "reward = ev + signed_rpe exactly, so signed RPE is entangled with realised reward; the
+      identifiable claims are signed-beyond-unsigned (the matched-sign conjunction) and gradient
+      orientation. Incremental-variance-over-value is structurally ill-posed and is NOT gated."
+  decision_affected:
+    - docs/design/experiment.md
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: qwen3_4b_instruct_2507
+
+reveal_rpe:
+  seed: 7
+  # PILOT POWER-UP (2026-07-04, operator-ratified): the first R-A base capture came in at
+  # verdict=indeterminate with every identification gate passing decisively and the SOLE miss
+  # being split-half stability (0.776 < 0.80). Root cause was two-fold: (a) the stability split
+  # was row-level (leakage-inflated), now fixed to a draw-grouped, K-averaged cosine; (b) per-half
+  # N was small (~144 rows). This raises N so the HONEST metric has a fair shot at 0.80.
+  # single_shot_per_cell 8->16 grows distinct draws 94->~124 (saturates ~124 as EV terciles
+  # exhaust) — also strengthens the matched contests; renderings_per_reveal 2->8 multiplies rows
+  # within the 32-surface ceiling (2 shared + 2 held-out symbols x 2 orders x 4 templates = 32 —
+  # NO new symbols, no re-calibration). ~1984 reveals, est ~1488, ~744 rows / ~62 draws per half.
+  # PRE-COMMITMENT: one N level, one capture, report pass OR fail honestly — do not iterate N to
+  # pass (that would p-hack the near-miss). Both-outcome balanced enumeration is unconditional, so
+  # signed_rpe⊥ev / ⊥|RPE| stay exact and the design stays rank-5.
+  single_shot_per_cell: 16
+  renderings_per_reveal: 8
+  reward_matched_augment: true
+  # FROZEN 2026-06-28 neutrality-calibrated nonce pairs (data/symbol_calibration/
+  # qwen3_4b_instruct_2507), single-token leading-space on the pinned tokenizer; the run-time
+  # preflight re-gates them.
+  shared_symbols: [SIL, WAN]
+  held_out_symbols: [GIS, PIL]
+  partitions: [estimation, selection]
+  n_permutations: 1000
+  n_random_directions: 200
+  alpha: 0.05

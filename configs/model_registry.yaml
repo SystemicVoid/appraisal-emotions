@@ -1,0 +1,18 @@
+# Model registry. Entries copied verbatim from the parent program's
+# configs/model_registry.yaml @ 10c4662 (the Qwen entry at L26-34); the revision pin and
+# local_files_only are what make the R-A' capture reproducible offline.
+models:
+  fake-functional:
+    backend: fake
+    model_id: fake-functional-valence
+    batch_size: 8
+
+  qwen3_4b_instruct_2507:
+    backend: hf
+    model_id: Qwen/Qwen3-4B-Instruct-2507
+    tokenizer_id: Qwen/Qwen3-4B-Instruct-2507
+    revision: cdbee75f17c01a7cc42f958dc650907174af0554
+    device: cuda
+    dtype: bfloat16
+    batch_size: 1
+    local_files_only: true

@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "_note": "Pre-registered emotion word set, docs/design/experiment.md §5, fixed BEFORE any emotion vector is extracted. The `valence` field is MINTED FOR THIS PROJECT: binary +1/-1/0 labels, our own judgment, not a published norm. §5 says so explicitly and CONTEXT.md requires every use of 'valence' to name its operationalization -- this one is `affect-concept valence, binary project label`. Numeric valence/arousal norms (Warriner et al. 2013; NRC-VAD) are FETCHED by scripts/fetch_norms.py into data/norms/, never hand-transcribed, and upgrade P1/P2 from binary to graded when present. The surprise family carries valence 0 because P4's whole claim is that v_absrpe picks it out WITHOUT loading a valence pole; assigning it a pole would beg that question. Emotion words here are CONCEPT LABELS, never state attributions.",
+  "words": [
+    {"word": "elated", "category": "outcome_pos", "valence": 1},
+    {"word": "thrilled", "category": "outcome_pos", "valence": 1},
+    {"word": "delighted", "category": "outcome_pos", "valence": 1},
+    {"word": "relieved", "category": "outcome_pos", "valence": 1},
+    {"word": "gratified", "category": "outcome_pos", "valence": 1},
+
+    {"word": "disappointed", "category": "outcome_neg", "valence": -1},
+    {"word": "dismayed", "category": "outcome_neg", "valence": -1},
+    {"word": "crestfallen", "category": "outcome_neg", "valence": -1},
+
+    {"word": "content", "category": "nonoutcome_pos", "valence": 1},
+    {"word": "calm", "category": "nonoutcome_pos", "valence": 1},
+    {"word": "serene", "category": "nonoutcome_pos", "valence": 1},
+    {"word": "peaceful", "category": "nonoutcome_pos", "valence": 1},
+    {"word": "cheerful", "category": "nonoutcome_pos", "valence": 1},
+
+    {"word": "sad", "category": "nonoutcome_neg", "valence": -1},
+    {"word": "gloomy", "category": "nonoutcome_neg", "valence": -1},
+    {"word": "melancholy", "category": "nonoutcome_neg", "valence": -1},
+    {"word": "lonely", "category": "nonoutcome_neg", "valence": -1},
+    {"word": "wistful", "category": "nonoutcome_neg", "valence": -1},
+
+    {"word": "hopeful", "category": "prospect", "valence": 1},
+    {"word": "eager", "category": "prospect", "valence": 1},
+    {"word": "anxious", "category": "prospect", "valence": -1},
+    {"word": "apprehensive", "category": "prospect", "valence": -1},
+    {"word": "fearful", "category": "prospect", "valence": -1},
+
+    {"word": "surprised", "category": "surprise", "valence": 0},
+    {"word": "astonished", "category": "surprise", "valence": 0},
+    {"word": "startled", "category": "surprise", "valence": 0},
+
+    {"word": "ecstatic", "category": "arousal_control", "valence": 1},
+    {"word": "exhilarated", "category": "arousal_control", "valence": 1},
+    {"word": "furious", "category": "arousal_control", "valence": -1},
+    {"word": "panicked", "category": "arousal_control", "valence": -1},
+
+    {"word": "angry", "category": "agency_ext", "valence": -1},
+    {"word": "indignant", "category": "agency_ext", "valence": -1},
+    {"word": "resentful", "category": "agency_ext", "valence": -1},
+
+    {"word": "happy", "category": "anchor", "valence": 1},
+    {"word": "excited", "category": "anchor", "valence": 1},
+    {"word": "bored", "category": "anchor", "valence": -1},
+    {"word": "proud", "category": "anchor", "valence": 1},
+    {"word": "grateful", "category": "anchor", "valence": 1}
+  ],
+  "confirmatory": {
+    "_note": "The ONLY confirmatory readouts (design §5). Everything else -- including the full-set P1 correlation -- is exploratory and is labeled so in the reports. `calm` is listed once, under nonoutcome_pos, and is reused here as the P2 valence-matched control for `relieved`; the §5 anchor list names it only to say it is already present.",
+    "p2_pairs": [
+      ["disappointed", "sad"],
+      ["relieved", "calm"],
+      ["elated", "content"]
+    ],
+    "p4": {
+      "surprise": ["surprised", "astonished", "startled"],
+      "arousal_matched": ["ecstatic", "exhilarated", "furious", "panicked"]
+    },
+    "p5a": "sad",
+    "p5c": "style_control"
+  }
+}

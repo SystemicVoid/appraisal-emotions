@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:$PATH"
+mkdir -p "$HOME/.local/bin"
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$HOME/.local/bin" sh
+fi
+
+if ! command -v just >/dev/null 2>&1; then
+    echo "Installing just..."
+    curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+        | bash -s -- --to "$HOME/.local/bin"
+fi
+
+echo "Installing Python 3.12..."
+uv python install 3.12
+
+# Core dependencies only: CPU-side analysis and tests run without model weights.
+# The GPU path is `uv sync --extra hf` (torch + transformers + accelerate); it pulls
+# multi-GB wheels and is the prerequisite for downloading weights, so it stays OUT of
+# unattended setup — GPU runs and model downloads gate behind explicit human approval.
+echo "Installing locked project dependencies (core only)..."
+if [ -f uv.lock ]; then
+    uv sync --python 3.12 --locked
+else
+    uv sync --python 3.12
+fi
+
+# Invoked by the justfile, intentionally not a project dependency.
+echo "Installing repository development tools..."
+uv tool install ruff
+
+echo "Setup complete. GPU extras: uv sync --extra hf (ask first)."

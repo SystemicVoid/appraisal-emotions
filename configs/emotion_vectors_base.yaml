@@ -1,0 +1,55 @@
+# Rung E0 emotion-concept basis + G0 sensitivity gate (design docs/design/experiment.md §4 E0).
+#
+# REAL capture: base Qwen3-4B-Instruct-2507, the same model and revision the certified appraisal
+# directions were fit on — the geometry comparison is only meaningful at matched model identity.
+# Cost: 38 words + 1 style control, 24 stories each = 936 short generations plus 936 read-only
+# forwards for the token-mean capture. That is the ~1 GPU-hour E0 slot in design §8.
+#
+# Downscaled Sofroniew et al. 2026 recipe: generation-based stories, "without naming the emotion"
+# (the arXiv:2606.26987 lexical control), residual stream averaged from token 50 onward, grand
+# mean across emotions subtracted. arXiv:2606.26987 reports ~9 stories/emotion suffice; 24 buys
+# headroom for the drop rate the lexical filter will take out of the sample.
+#
+# The G0 gate is the manipulation check for ALL of E1/E2. G0 fail => the artifact records
+# gate_verdict=harness_inadequate, and every downstream null inherits that cap: the emotion
+# basis, not the inheritance hypothesis, failed, and the claim stays OPEN.
+#
+# The story filter is frozen BLIND (no story from this model has been read yet). The run carries
+# its first-contact checkpoint: the first 10 generations are read against the frozen rule and the
+# run refuses before the capture pass if more than half of them drop.
+#
+# GPU runs and model downloads gate behind explicit human approval (`just extract-emotions`).
+
+run:
+  id: emotion_vectors_base
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-base/v1
+  known_gaps:
+    - "E0 is a MEASUREMENT INSTRUMENT, not a result: an emotion-concept basis plus its
+      sensitivity gate. No emotion word here is a state attribution."
+    - "The story filter is frozen BLIND against unread model outputs; the first-contact
+      checkpoint is the licensed compensation, not a substitute for a reality sample."
+  decision_affected:
+    - docs/design/experiment.md
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: qwen3_4b_instruct_2507
+
+emotion_vectors:
+  seed: 7
+  words_file: data/emotion_words.json
+  stories_per_emotion: 24
+  # Sofroniew capture window: mean residual stream from token 50 onward.
+  min_token: 50
+  max_tokens: 320
+  # Sampled, not greedy: 24 stories per word from one deterministic decode would be 24 copies.
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 36
+  first_contact_n: 10
+  first_contact_max_drop_rate: 0.5

@@ -1,0 +1,45 @@
+# Rung E0 emotion-concept basis CONTRACT SMOKE (fake backend; NO scientific claim).
+#
+# Exercises the full E0 path end to end on the deterministic fake backend: story grid ->
+# generation -> lexical/length filter -> first-contact checkpoint -> token-mean capture ->
+# grand-mean centring -> PCA -> G0 gate -> hash-bound artifact. The fake backend's hidden states
+# are a deterministic hash of the text and its "stories" are seeded templates, so the G0 number
+# and every downstream statistic are MEANINGLESS and must never be read as evidence.
+#
+# Tiny numbers throughout: 3 stories per word, a 20-token capture window, a 160-byte generation
+# cap (the fake tokenizer is byte-level). The fake backend reports no fixed depth, so
+# fallback_blocks pins the same 4 blocks the reveal smoke uses — which is what lets the smoke
+# emotion artifact and the smoke directions artifact be compared by map-geometry.
+
+run:
+  id: emotion_vectors_smoke
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-smoke/v1
+  known_gaps:
+    - "FAKE backend contract smoke: template stories and hash-derived hidden states exercise the
+      path; the G0 verdict and every E1/E2 number downstream of it are meaningless and MUST NOT
+      be read as evidence."
+  decision_affected:
+    - none (smoke)
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: fake-functional
+
+emotion_vectors:
+  seed: 7
+  words_file: data/emotion_words.json
+  stories_per_emotion: 3
+  min_token: 20
+  max_tokens: 160
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 4
+  first_contact_n: 10
+  # The fake generator names the quoted target in ~1 story in 6 by construction, so a smoke
+  # first-contact rate near 0.17 is the expected shape; 0.6 leaves room without disarming it.
+  first_contact_max_drop_rate: 0.6

@@ -1,0 +1,15 @@
+runs/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Fitted artifacts are large and run-specific; the drop-in slot keeps only its README.
+results/artifacts/*
+!results/artifacts/README.md
+
+# Fetched norm VALUES are third-party (Warriner supplement; NRC-VAD is research-use-only and
+# non-redistributable). The provenance manifest is ours and stays; the values do not.
+data/norms/*
+!data/norms/MANIFEST.json

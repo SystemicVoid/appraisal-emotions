@@ -1,0 +1,41 @@
+# Rung R-A reveal-token signed-RPE CONTRACT SMOKE (fake backend; NO scientific claim).
+#
+# Copied from the parent program's configs/rq8_pe_reveal_rpe_smoke.yaml @ 10c4662; every numeric
+# and symbol value is unchanged (the unused stimuli.cvt block is dropped — this loader has none).
+#
+# Exercises the full R-A path end to end on the deterministic fake backend: symbol preflight,
+# balanced reveal-battery build, byte-pinned reveal-token capture, the collinearity-aware
+# multivariate estimator (cross-fitted matched-sign conjunction + gradient orientation), and the
+# hash-bound states/directions artifacts. The fake tokenizer treats single leading-space
+# characters as single tokens, so the smoke uses single-letter symbols; the real run uses
+# SIL/WAN + GIS/PIL (see configs/reveal_rpe_base.yaml). No GPU, no offline model, no result.
+run:
+  id: reveal_rpe_smoke
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: rq8-pe-reveal-rpe
+  prompt_or_workflow_version: reveal-rpe-smoke/v1
+  known_gaps:
+    - "FAKE backend contract smoke: deterministic hidden states exercise the path; the gate
+      numbers are meaningless and MUST NOT be read as evidence."
+  decision_affected:
+    - none (smoke)
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: fake-functional
+
+reveal_rpe:
+  seed: 7
+  single_shot_per_cell: 3
+  renderings_per_reveal: 2
+  reward_matched_augment: true
+  shared_symbols: [Q, Z]
+  held_out_symbols: [K, J, W, X]
+  partitions: [estimation, selection]
+  # Small null budgets keep the smoke fast; the real run uses the code defaults (1000 / 200).
+  n_permutations: 50
+  n_random_directions: 30
+  alpha: 0.05

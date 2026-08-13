@@ -1,0 +1,33 @@
+{
+  "artifact_contract_version": "reveal_rpe_directions/v2",
+  "backend": "fake",
+  "battery_contract_version": "reveal_probes/v1",
+  "battery_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "design_columns": [
+    "intercept",
+    "reward",
+    "ev",
+    "abs_rpe",
+    "reward_x_abs_rpe"
+  ],
+  "direction_families": [
+    "v_rpe",
+    "v_ev",
+    "v_absrpe"
+  ],
+  "directions_dtype": "float64",
+  "directions_sha256": "ad8cb184e4fb04d36ce6f3fc7535a65c01ec56b5129d904b9ee57fb7e8a3c924",
+  "dtype": null,
+  "hidden_size": 128,
+  "model_id": "fake",
+  "model_key": "fake",
+  "model_spec_hash": "5f0502a45f924a60b299b92fbcdd3c259717a7539b5ffe2731ca1fb56c14d5cd",
+  "n_blocks": 6,
+  "n_estimation": 226,
+  "revision": null,
+  "seed": 7,
+  "selected_block": 0,
+  "source_verdict": "separable-signed-rpe",
+  "states_sha256": "34a32f9612ef76354f3d290e3fd0ec3dc95276b06bd1f377fd2e903741136fc3",
+  "tokenizer_id": "fake"
+}
