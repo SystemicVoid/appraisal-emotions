@@ -103,9 +103,14 @@ what licenses E1's nulls to mean something.
 1. **P1 (sanity, not result):** `ρ(cos(v_RPE, e_j), valence_j) > 0` across all words. Expected
    true; failure means extraction breakage, not theory.
 2. **P2 (confirmatory):** regress `cos(v_RPE, e_j)` on valence (and arousal where norms are
-   available); test the pre-registered matched pairs on residuals:
-   `disappointed > sad`, `relieved > calm`, `elated > content` (one-sided, permutation p,
-   Holm-corrected across the three pairs).
+   available); test the pre-registered matched pairs on residuals, each one-sided in its
+   pre-registered direction (permutation p, Holm-corrected across the three pairs):
+   `disappointed < sad`, `relieved > calm`, `elated > content`. `v_RPE` is a *signed* axis, so
+   the OCC / decision-affect prediction puts positive-disconfirmation concepts (relief, elation)
+   on its positive pole and negative-disconfirmation concepts (disappointment) on its negative
+   pole — see the §5 amendment record. The reported pair statistic is
+   `predicted_sign × (residual_outcome − residual_control)`: positive always means the
+   theory-predicted split.
 3. **P4 (confirmatory):** `v_absrpe` aligns with the surprise family beyond arousal-matched
    valenced controls (`surprised, astonished, startled` vs `ecstatic, furious`), and loads the
    arousal PC, not the valence PC. *Stated caveat:* `v_RPE ⊥ v_absrpe` is by construction; the
@@ -180,6 +185,21 @@ hand-transcribed, and upgrade P1/P2 from binary to graded when present.
 
 Confirmatory: the three P2 pairs, the P4 surprise-vs-arousal-matched contrast, P5a, P5c.
 Everything else — including the full-set P1 correlation — is exploratory and labeled so.
+
+**Amendment record (2026-08-13, pre-data).** The original registration wrote all three P2
+contrasts uniformly as `first > second`, including `disappointed > sad`. `v_RPE` is a signed
+axis, and the OCC / decision-affect reading that motivates the pairs (Ortony, Clore & Collins
+1988; Mellers et al. 1997) makes disappointment the *negative*-disconfirmation concept: it
+predicts `e_disappointed` anti-aligned with `v_RPE`, i.e. `disappointed < sad` on the valence
+residual. The registration is amended to per-pair predicted directions — `disappointed < sad`,
+`relieved > calm`, `elated > content` — carried explicitly as `predicted_sign` in
+`data/emotion_words.json`. No emotion vector has been extracted and no capture has run: this is
+a pre-data amendment, not outcome-dependent auditing. Effect in both directions (rails.md
+symmetric-amendment clause): under the original form a true OCC-shaped effect on
+disappointed/sad would have read as a maximal miss (permutation p → 1); under the amended form
+an anti-OCC effect (`disappointed` aligning *positively* with `v_RPE` beyond `sad`) reads as
+the miss. The amendment moves which hypothesis can fail, not the false-positive rate: the
+within-valence permutation null and the Holm correction are unchanged.
 
 ## 6. Threats table (each with its control)
 

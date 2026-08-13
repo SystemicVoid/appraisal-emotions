@@ -11,9 +11,11 @@ with ``u ⊥ w``, and ``v_rpe`` planted along ``w``. The valence term is the nui
 out; the ``appraisal_j`` term is exactly the residual structure P2 claims to detect. Two cases,
 both required:
 
-- **recovery** — ``appraisal_j`` is planted as the pre-registered contrast (+1 on the three
-  appraisal-congruent words, −1 on their valence-matched controls); the three P2 pairs must come
-  out positive and Holm-significant, and the observed statistic must clear both nulls.
+- **recovery** — ``appraisal_j`` is planted as the pre-registered contrast, in each pair's
+  pre-registered direction (``predicted_sign`` on the outcome word, its negation on the
+  valence-matched control — so ``disappointed`` is planted on the NEGATIVE pole of the signed
+  axis, per the §5 amendment record); the three P2 predicted-direction statistics must come out
+  positive and Holm-significant, and the observed statistic must clear both nulls.
 - **rejection** — ``appraisal_j = 0`` everywhere (valence and noise only); no pair may pass.
 
 A power note the recovery case makes concrete: the within-valence permutation's resolution floor
@@ -60,10 +62,10 @@ def _planted(appraisal_scale: float, *, seed: int = 5):
     # observed maximum often enough to sit at its own 95th percentile. Distinct amplitudes make
     # the largest observed statistic reachable by exactly one arrangement.
     appraisal = dict.fromkeys(labels, 0.0)
-    for rank, (high, low) in enumerate(words.confirmatory_pairs()):
+    for rank, (outcome, control, sign) in enumerate(words.confirmatory_pairs()):
         amplitude = 1.0 - 0.25 * rank
-        appraisal[high] = +amplitude
-        appraisal[low] = -amplitude
+        appraisal[outcome] = sign * amplitude
+        appraisal[control] = -sign * amplitude
 
     rows = [
         words.valence_by_word[label] * u_valence + appraisal_scale * appraisal[label] * w_appraisal
@@ -120,8 +122,11 @@ def test_p2_recovers_the_planted_appraisal_alignment(tmp_path):
     block = report.confirmatory[0]
     assert block.valence_source == "binary_project_labels"
     for pair in block.p2_pairs:
-        assert pair.statistic > 0.0, f"{pair.high}>{pair.low} lost its planted sign"
-        assert pair.passed, f"{pair.high}>{pair.low} p_holm={pair.p_holm}"
+        assert pair.statistic > 0.0, f"{pair.outcome}/{pair.control} lost its planted direction"
+        assert pair.passed, f"{pair.outcome}/{pair.control} p_holm={pair.p_holm}"
+        # The planted residuals sit on the pair's registered pole: negative on the outcome word
+        # when predicted_sign is -1 (disappointed), positive when +1.
+        assert pair.predicted_sign * pair.residual_outcome > 0.0
     assert block.p2_any_passed
     # And the effect clears both anisotropy nulls, which is what makes it readable at all.
     assert block.clears_both_nulls

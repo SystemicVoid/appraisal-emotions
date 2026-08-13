@@ -50,11 +50,11 @@
     {"word": "grateful", "category": "anchor", "valence": 1}
   ],
   "confirmatory": {
-    "_note": "The ONLY confirmatory readouts (design §5). Everything else -- including the full-set P1 correlation -- is exploratory and is labeled so in the reports. `calm` is listed once, under nonoutcome_pos, and is reused here as the P2 valence-matched control for `relieved`; the §5 anchor list names it only to say it is already present.",
+    "_note": "The ONLY confirmatory readouts (design §5). Everything else -- including the full-set P1 correlation -- is exploratory and is labeled so in the reports. `calm` is listed once, under nonoutcome_pos, and is reused here as the P2 valence-matched control for `relieved`; the §5 anchor list names it only to say it is already present. `predicted_sign` is the pre-registered direction of the outcome word's valence residual relative to its control on cos(v_RPE, e_j): +1 predicts outcome > control, -1 predicts outcome < control. v_RPE is a SIGNED axis, so the OCC/decision-affect prediction puts positive-disconfirmation concepts (relieved, elated) on its positive pole and negative-disconfirmation concepts (disappointed) on its negative pole -- see the §5 amendment record (2026-08-13, pre-data) in docs/design/experiment.md.",
     "p2_pairs": [
-      ["disappointed", "sad"],
-      ["relieved", "calm"],
-      ["elated", "content"]
+      {"outcome": "disappointed", "control": "sad", "predicted_sign": -1},
+      {"outcome": "relieved", "control": "calm", "predicted_sign": 1},
+      {"outcome": "elated", "control": "content", "predicted_sign": 1}
     ],
     "p4": {
       "surprise": ["surprised", "astonished", "startled"],

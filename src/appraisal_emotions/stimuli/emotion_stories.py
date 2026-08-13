@@ -164,11 +164,28 @@ class EmotionWordSet:
     def words_in_category(self, category: str) -> tuple[str, ...]:
         return tuple(word.word for word in self.words if word.category == category)
 
-    def confirmatory_pairs(self) -> tuple[tuple[str, str], ...]:
+    def confirmatory_pairs(self) -> tuple[tuple[str, str, int], ...]:
+        """The P2 pairs as ``(outcome, control, predicted_sign)`` triples.
+
+        ``predicted_sign`` is the pre-registered direction of the outcome word's valence
+        residual relative to its control on ``cos(v_RPE, e_j)``: +1 predicts outcome > control,
+        -1 predicts outcome < control (§5 amendment record, 2026-08-13, pre-data).
+        """
+
         pairs = self.confirmatory["p2_pairs"]
         if not isinstance(pairs, list):
-            raise ValueError("confirmatory.p2_pairs must be a list of two-word pairs")
-        return tuple((str(pair[0]), str(pair[1])) for pair in pairs)
+            raise ValueError("confirmatory.p2_pairs must be a list of pair mappings")
+        triples: list[tuple[str, str, int]] = []
+        for pair in pairs:
+            if not isinstance(pair, dict):
+                raise ValueError(
+                    "confirmatory.p2_pairs entries must be {outcome, control, predicted_sign}"
+                )
+            sign = int(pair["predicted_sign"])
+            if sign not in (-1, 1):
+                raise ValueError(f"predicted_sign must be -1 or +1, got {sign}")
+            triples.append((str(pair["outcome"]), str(pair["control"]), sign))
+        return tuple(triples)
 
     def confirmatory_set(self, key: str) -> tuple[str, ...]:
         block = self.confirmatory["p4"]

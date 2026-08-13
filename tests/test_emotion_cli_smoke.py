@@ -92,7 +92,7 @@ def test_emotion_chain_smoke(tmp_path):
     assert e1["verdict_cap"].startswith("harness_inadequate")
     assert e1["confirmatory"] and e1["exploratory"]
     assert len(e1["block_sweep"]) == emotion.metadata.n_blocks
-    assert {pair["high"] for block in e1["confirmatory"] for pair in block["p2_pairs"]} == {
+    assert {pair["outcome"] for block in e1["confirmatory"] for pair in block["p2_pairs"]} == {
         "disappointed",
         "relieved",
         "elated",

@@ -39,8 +39,9 @@ so a situation-projector predicts β_rpe ≈ 0 within cells and an expectation-t
 
 The OCC prospect branch: relief and disappointment attach to the *disconfirmation of a prospect*
 — the sign of the prediction error — not to outcome valence; satisfaction and fears-confirmed
-attach to confirmation. This is why P2's matched pairs are `disappointed > sad`, `relieved > calm`,
-`elated > content`: within each pair valence is matched and only prospect-disconfirmation differs.
+attach to confirmation. This is why P2's matched pairs are `disappointed < sad`, `relieved > calm`,
+`elated > content` (each in its pre-registered direction on the signed `v_RPE` axis — §5
+amendment record): within each pair valence is matched and only prospect-disconfirmation differs.
 
 **Mellers et al. 1997.** *Psychological Science* — decision affect theory.
 

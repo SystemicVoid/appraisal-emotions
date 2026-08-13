@@ -14,10 +14,11 @@ variables. So every readout is a *residual* readout:
   true; a failure indicts the extraction, not the theory.
 - **P2 (confirmatory):** regress ``cos(v_RPE, e_j)`` on valence (numeric norms when the fetched
   subset covers the set, else the §5 minted binary labels), then test the three pre-registered
-  matched pairs on the residuals — one-sided, permutation p with residuals shuffled WITHIN the
-  valence-matched set, Holm-corrected across the three. Read ``open_questions`` in the report
-  before quoting a P2 number: it carries the power floor and an unresolved sign question on the
-  ``disappointed > sad`` pair.
+  matched pairs on the residuals — one-sided in each pair's pre-registered direction
+  (``disappointed < sad``, ``relieved > calm``, ``elated > content``; §5 amendment record,
+  2026-08-13, pre-data), permutation p with residuals shuffled WITHIN the valence-matched set,
+  Holm-corrected across the three. Read ``p2_notes`` in the report before quoting a P2
+  number: it carries the permutation power floor and the sign-amendment record.
 - **P4 (confirmatory):** ``v_absrpe`` prefers the surprise family over arousal-matched valenced
   controls, and loads PC2 rather than PC1. *Stated every time:* ``v_RPE ⊥ v_absrpe`` holds by
   construction of the reveal design matrix; the informative half is which WORDS ``v_absrpe``
@@ -181,7 +182,7 @@ class MapGeometryReport(StrictModel):
     confirmatory: tuple[ConfirmatoryBlock, ...]
     exploratory: tuple[ExploratoryBlock, ...]
     block_sweep: tuple[BlockSweepRow, ...]
-    open_questions: tuple[str, ...]
+    p2_notes: tuple[str, ...]
 
 
 _P2_POWER_NOTE = (
@@ -191,14 +192,13 @@ _P2_POWER_NOTE = (
     "extremes of its matched set can survive Holm across three pairs. A large positive pair "
     "statistic that misses significance is a POWER finding, not a null."
 )
-_P2_SIGN_QUESTION = (
-    "P2 SIGN, OPEN: design §4 E1.2 pre-registers all three pairs as high > low on the valence "
-    "residual of cos(v_RPE, e_j), and that is what is computed here — unchanged. But the OCC "
-    "reading that motivates the pairs makes 'disappointed' a NEGATIVE prediction error, which "
-    "predicts e_disappointed ANTI-aligned with v_RPE and therefore disappointed < sad on a "
-    "signed residual, while relieved > calm and elated > content are sign-consistent as "
-    "written. Resolve this in the design doc BEFORE the first real run; changing it afterwards "
-    "is a post-hoc amendment and must pass the symmetric-amendment test in docs/agents/rails.md."
+_P2_SIGN_RESOLVED = (
+    "P2 SIGN, RESOLVED (pre-data amendment, 2026-08-13): each pair is tested one-sided in its "
+    "pre-registered direction, carried as predicted_sign in data/emotion_words.json — "
+    "disappointed < sad (negative pole of the signed v_RPE axis, per OCC / decision affect "
+    "theory), relieved > calm and elated > content (positive pole). The pair statistic is "
+    "predicted_sign * (residual_outcome - residual_control), so positive always means the "
+    "theory-predicted split. Amendment record and both-directions statement: design doc §5."
 )
 
 _EXPLORATORY_NOTE = (
@@ -335,7 +335,8 @@ def _sweep_row(
         block=geometry.block,
         p1_spearman_rho=spearman(geometry.cos["v_rpe"], valence)[0],
         p2_pair_statistics={
-            f"{pair[0]}>{pair[1]}": value for pair, value in zip(pairs, statistics, strict=True)
+            f"{pair[0]}{'>' if pair[2] > 0 else '<'}{pair[1]}": value
+            for pair, value in zip(pairs, statistics, strict=True)
         },
         p4_contrast=p4_contrast(cos, left, right),
         cos_absrpe_pc1=float(loading[0]),
@@ -416,7 +417,7 @@ def map_geometry(
             _sweep_row(geometry, words, index, designs[0], binary_valence, valence)
             for geometry in geometries
         ),
-        open_questions=(_P2_POWER_NOTE, _P2_SIGN_QUESTION),
+        p2_notes=(_P2_POWER_NOTE, _P2_SIGN_RESOLVED),
     )
 
 
@@ -442,10 +443,12 @@ def _verdict_cap(gate: str) -> str:
 
 def _confirmatory_lines(block: ConfirmatoryBlock) -> list[str]:
     lines = [f"  block {block.block} (valence source: {block.valence_source})"]
-    lines.append("    P2  pair                       stat      p     p_holm  pass")
+    lines.append("    P2  pair (predicted direction; + stat = predicted split)")
+    lines.append("                                   stat      p     p_holm  pass")
     for pair in block.p2_pairs:
+        direction = ">" if pair.predicted_sign > 0 else "<"
         lines.append(
-            f"        {pair.high:>13} > {pair.low:<11} {pair.statistic:+7.4f} "
+            f"        {pair.outcome:>13} {direction} {pair.control:<11} {pair.statistic:+7.4f} "
             f"{pair.p_value:6.4f} {pair.p_holm:6.4f}  {'Y' if pair.passed else 'n'}"
         )
     lines.append(
@@ -508,7 +511,7 @@ def format_map_geometry_summary(report: MapGeometryReport) -> str:
             f"{row.cos_absrpe_pc2:+.3f}"
         )
     lines.append("")
-    lines.append("OPEN QUESTIONS (read before quoting any P2 number)")
-    for question in report.open_questions:
+    lines.append("P2 NOTES (read before quoting any P2 number)")
+    for question in report.p2_notes:
         lines.append(f"  - {question}")
     return "\n".join(lines)

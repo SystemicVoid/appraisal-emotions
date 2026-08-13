@@ -44,9 +44,9 @@ def test_valence_labels_are_the_committed_ternary_vocabulary(words):
 
 def test_confirmatory_words_all_appear_in_the_word_list(words):
     labels = set(words.labels)
-    for high, low in words.confirmatory_pairs():
-        assert high in labels, f"P2 pair references unknown word {high!r}"
-        assert low in labels, f"P2 pair references unknown word {low!r}"
+    for outcome, control, _sign in words.confirmatory_pairs():
+        assert outcome in labels, f"P2 pair references unknown word {outcome!r}"
+        assert control in labels, f"P2 pair references unknown word {control!r}"
     for key in ("surprise", "arousal_matched"):
         for word in words.confirmatory_set(key):
             assert word in labels, f"P4 {key} references unknown word {word!r}"
@@ -58,10 +58,24 @@ def test_confirmatory_words_all_appear_in_the_word_list(words):
 
 def test_p2_pairs_are_valence_matched(words):
     valence = words.valence_by_word
-    for high, low in words.confirmatory_pairs():
-        assert valence[high] == valence[low], (
-            f"pair {high}/{low} is not valence-matched; P2 residualizes on valence and permutes "
-            "within the valence-matched set, so an unmatched pair has no null"
+    for outcome, control, _sign in words.confirmatory_pairs():
+        assert valence[outcome] == valence[control], (
+            f"pair {outcome}/{control} is not valence-matched; P2 residualizes on valence and "
+            "permutes within the valence-matched set, so an unmatched pair has no null"
+        )
+
+
+def test_p2_predicted_signs_follow_the_signed_rpe_axis(words):
+    """§5 amendment record (2026-08-13, pre-data): the predicted direction of each pair is the
+    pole of the signed v_RPE axis its outcome-disconfirmation concept occupies under OCC —
+    which, on this word set, is exactly the outcome word's minted valence label."""
+
+    valence = words.valence_by_word
+    for outcome, control, sign in words.confirmatory_pairs():
+        assert sign == valence[outcome], (
+            f"pair {outcome}/{control} registers predicted_sign={sign} but {outcome!r} has "
+            f"valence {valence[outcome]}; the OCC prediction ties the pole to the outcome "
+            "word's disconfirmation sign"
         )
 
 

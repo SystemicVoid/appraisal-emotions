@@ -144,12 +144,19 @@ def block_geometry(
 
 
 class PairResult(StrictModel):
-    """One pre-registered P2 matched pair tested on valence residuals (one-sided high > low)."""
+    """One pre-registered P2 matched pair tested on valence residuals.
 
-    high: str
-    low: str
-    residual_high: float
-    residual_low: float
+    One-sided in the pair's pre-registered direction (§5 amendment record, 2026-08-13,
+    pre-data): ``statistic = predicted_sign * (residual_outcome - residual_control)``, so a
+    positive statistic always means the theory-predicted split, whichever pole the outcome
+    word is registered on.
+    """
+
+    outcome: str
+    control: str
+    predicted_sign: int
+    residual_outcome: float
+    residual_control: float
     statistic: float
     p_value: float
     p_holm: float
@@ -161,11 +168,12 @@ def _pair_permutation_p(
     residuals: np.ndarray,
     matched: np.ndarray,
     positions: tuple[int, int],
+    sign: int,
     *,
     rng: np.random.Generator,
     n_permutations: int,
 ) -> tuple[float, float]:
-    """One-sided permutation p for ``high > low``, shuffling residuals within the matched set.
+    """One-sided permutation p in the predicted direction, shuffling within the matched set.
 
     The exchangeability unit is the valence-matched set — the words the §5 pairing declares
     interchangeable up to prospect-disconfirmation — so the null asks: among words of this
@@ -173,17 +181,17 @@ def _pair_permutation_p(
     """
 
     values = residuals[matched]
-    observed = float(values[positions[0]] - values[positions[1]])
+    observed = sign * float(values[positions[0]] - values[positions[1]])
     exceedances = 0
     for _ in range(n_permutations):
         shuffled = rng.permutation(values)
-        if float(shuffled[positions[0]] - shuffled[positions[1]]) >= observed:
+        if sign * float(shuffled[positions[0]] - shuffled[positions[1]]) >= observed:
             exceedances += 1
     return observed, add_one_p(exceedances, n_permutations)
 
 
 def _matched_positions(
-    binary_valence: np.ndarray, index: dict[str, int], pair: tuple[str, str]
+    binary_valence: np.ndarray, index: dict[str, int], pair: tuple[str, str, int]
 ) -> tuple[np.ndarray, tuple[int, int]]:
     if binary_valence[index[pair[0]]] != binary_valence[index[pair[1]]]:
         raise ValueError(f"pre-registered pair {pair} is not valence-matched in the word file")
@@ -194,23 +202,23 @@ def _matched_positions(
 
 def pair_statistics(
     residuals: np.ndarray,
-    pairs: tuple[tuple[str, str], ...],
+    pairs: tuple[tuple[str, str, int], ...],
     binary_valence: np.ndarray,
     index: dict[str, int],
 ) -> list[float]:
-    """The three observed pair differences (no permutation) — the block-sweep / null statistic."""
+    """The three observed predicted-direction statistics (no permutation) — sweep / null stat."""
 
     stats: list[float] = []
-    for pair in pairs:
-        matched, positions = _matched_positions(binary_valence, index, pair)
+    for outcome, control, sign in pairs:
+        matched, positions = _matched_positions(binary_valence, index, (outcome, control, sign))
         values = residuals[matched]
-        stats.append(float(values[positions[0]] - values[positions[1]]))
+        stats.append(sign * float(values[positions[0]] - values[positions[1]]))
     return stats
 
 
 def p2_matched_pairs(
     geometry: BlockGeometry,
-    pairs: tuple[tuple[str, str], ...],
+    pairs: tuple[tuple[str, str, int], ...],
     index: dict[str, int],
     design: np.ndarray,
     binary_valence: np.ndarray,
@@ -220,20 +228,21 @@ def p2_matched_pairs(
     alpha: float,
 ) -> tuple[tuple[PairResult, ...], np.ndarray]:
     residuals = ols_residuals(geometry.cos["v_rpe"], design)
-    raw: list[tuple[tuple[str, str], float, float, int]] = []
+    raw: list[tuple[tuple[str, str, int], float, float, int]] = []
     for pair in pairs:
         matched, positions = _matched_positions(binary_valence, index, pair)
         statistic, p_value = _pair_permutation_p(
-            residuals, matched, positions, rng=rng, n_permutations=n_permutations
+            residuals, matched, positions, pair[2], rng=rng, n_permutations=n_permutations
         )
         raw.append((pair, statistic, p_value, int(matched.size)))
     holm = _holm([entry[2] for entry in raw])
     results = tuple(
         PairResult(
-            high=pair[0],
-            low=pair[1],
-            residual_high=float(residuals[index[pair[0]]]),
-            residual_low=float(residuals[index[pair[1]]]),
+            outcome=pair[0],
+            control=pair[1],
+            predicted_sign=pair[2],
+            residual_outcome=float(residuals[index[pair[0]]]),
+            residual_control=float(residuals[index[pair[1]]]),
             statistic=statistic,
             p_value=p_value,
             p_holm=adjusted,
@@ -421,7 +430,7 @@ def p5c_style_control(
 
 def label_shuffled_pair_floor(
     geometry: BlockGeometry,
-    pairs: tuple[tuple[str, str], ...],
+    pairs: tuple[tuple[str, str, int], ...],
     index: dict[str, int],
     design: np.ndarray,
     binary_valence: np.ndarray,
@@ -442,7 +451,7 @@ def label_shuffled_pair_floor(
 
 def random_direction_pair_floor(
     geometry: BlockGeometry,
-    pairs: tuple[tuple[str, str], ...],
+    pairs: tuple[tuple[str, str, int], ...],
     index: dict[str, int],
     design: np.ndarray,
     binary_valence: np.ndarray,
