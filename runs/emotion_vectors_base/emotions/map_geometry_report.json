@@ -3,21 +3,21 @@
   "block_sweep": [
     {
       "block": 0,
-      "cos_absrpe_pc1": 0.3059422828394985,
-      "cos_absrpe_pc2": -0.03043958117801743,
+      "cos_absrpe_pc1": 0.30594228283949854,
+      "cos_absrpe_pc2": -0.030439581178017375,
       "family_contrast_statistics": {
-        "negative": -0.002948358292002684,
-        "positive": -0.010550389783564453
+        "negative": -0.002948358292002677,
+        "positive": -0.01055038978356445
       },
       "p1_spearman_rho": 0.034910976034940526,
-      "p4_contrast": -0.11384303954970437
+      "p4_contrast": -0.1138430395497044
     },
     {
       "block": 1,
-      "cos_absrpe_pc1": -0.06585866143760012,
-      "cos_absrpe_pc2": 0.008228577037166231,
+      "cos_absrpe_pc1": -0.06585866143760014,
+      "cos_absrpe_pc2": 0.008228577037166285,
       "family_contrast_statistics": {
-        "negative": 0.06299907424443628,
+        "negative": 0.0629990742444363,
         "positive": 0.026135994527043162
       },
       "p1_spearman_rho": 0.036804349735211364,
@@ -25,19 +25,19 @@
     },
     {
       "block": 2,
-      "cos_absrpe_pc1": -0.08141822793736418,
+      "cos_absrpe_pc1": -0.08141822793736417,
       "cos_absrpe_pc2": 0.021242539286758937,
       "family_contrast_statistics": {
-        "negative": 0.020163469601495343,
-        "positive": -0.006429777817574067
+        "negative": 0.020163469601495357,
+        "positive": -0.006429777817574072
       },
       "p1_spearman_rho": 0.6143643282622161,
       "p4_contrast": -0.01111869559908861
     },
     {
       "block": 3,
-      "cos_absrpe_pc1": -0.10522258514644381,
-      "cos_absrpe_pc2": -0.042853601176664875,
+      "cos_absrpe_pc1": -0.10522258514644386,
+      "cos_absrpe_pc2": -0.04285360117666535,
       "family_contrast_statistics": {
         "negative": 0.007123479151034979,
         "positive": -0.014042834066135653
@@ -47,8 +47,8 @@
     },
     {
       "block": 4,
-      "cos_absrpe_pc1": -0.18837567386936752,
-      "cos_absrpe_pc2": -0.047388121131475974,
+      "cos_absrpe_pc1": -0.18837567386936754,
+      "cos_absrpe_pc2": -0.047388121131476,
       "family_contrast_statistics": {
         "negative": 0.006687815178956207,
         "positive": -0.013053665142514647
@@ -58,8 +58,8 @@
     },
     {
       "block": 5,
-      "cos_absrpe_pc1": -0.2071954224003399,
-      "cos_absrpe_pc2": -0.04583820497572692,
+      "cos_absrpe_pc1": -0.20719542240033983,
+      "cos_absrpe_pc2": -0.045838204975726944,
       "family_contrast_statistics": {
         "negative": -0.03748293106792716,
         "positive": -0.02869998263206263
@@ -69,8 +69,8 @@
     },
     {
       "block": 6,
-      "cos_absrpe_pc1": -0.15900390593023453,
-      "cos_absrpe_pc2": 0.07938133199458255,
+      "cos_absrpe_pc1": -0.15900390593023456,
+      "cos_absrpe_pc2": 0.07938133199458262,
       "family_contrast_statistics": {
         "negative": 0.01715517123127536,
         "positive": -0.01426434671606788
@@ -80,41 +80,41 @@
     },
     {
       "block": 7,
-      "cos_absrpe_pc1": -0.15628702462602168,
-      "cos_absrpe_pc2": 0.06037830935201033,
+      "cos_absrpe_pc1": -0.15628702462602176,
+      "cos_absrpe_pc2": 0.060378309352010294,
       "family_contrast_statistics": {
-        "negative": 0.012086898958940788,
-        "positive": -0.012019611951195282
+        "negative": 0.01208689895894079,
+        "positive": -0.012019611951195285
       },
       "p1_spearman_rho": 0.690048651307802,
       "p4_contrast": 0.09890463125688467
     },
     {
       "block": 8,
-      "cos_absrpe_pc1": -0.25425850383824855,
-      "cos_absrpe_pc2": 0.08273062827654683,
+      "cos_absrpe_pc1": -0.2542585038382485,
+      "cos_absrpe_pc2": 0.08273062827654674,
       "family_contrast_statistics": {
-        "negative": -0.014407185175836909,
-        "positive": -0.0038254948835048904
+        "negative": -0.014407185175836907,
+        "positive": -0.0038254948835048878
       },
       "p1_spearman_rho": -0.26850469068172494,
       "p4_contrast": 0.17027904677735872
     },
     {
       "block": 9,
-      "cos_absrpe_pc1": -0.2611373194795668,
-      "cos_absrpe_pc2": 0.12857723810469937,
+      "cos_absrpe_pc1": -0.26113731947956664,
+      "cos_absrpe_pc2": 0.12857723810469968,
       "family_contrast_statistics": {
         "negative": -0.04598147148895229,
         "positive": -0.010116469348487225
       },
       "p1_spearman_rho": -0.40775372009255356,
-      "p4_contrast": 0.19803820232682223
+      "p4_contrast": 0.1980382023268223
     },
     {
       "block": 10,
-      "cos_absrpe_pc1": -0.15392098997899611,
-      "cos_absrpe_pc2": 0.1186102253849463,
+      "cos_absrpe_pc1": -0.15392098997899623,
+      "cos_absrpe_pc2": 0.1186102253849462,
       "family_contrast_statistics": {
         "negative": -0.03231860211618638,
         "positive": -0.004765574763590035
@@ -124,19 +124,19 @@
     },
     {
       "block": 11,
-      "cos_absrpe_pc1": -0.08244844129940755,
-      "cos_absrpe_pc2": 0.06791652630376746,
+      "cos_absrpe_pc1": -0.08244844129940743,
+      "cos_absrpe_pc2": 0.06791652630376752,
       "family_contrast_statistics": {
         "negative": -0.031769627439849124,
         "positive": -0.006626015981055104
       },
       "p1_spearman_rho": -0.11551604570262076,
-      "p4_contrast": 0.062310037033536575
+      "p4_contrast": 0.06231003703353655
     },
     {
       "block": 12,
-      "cos_absrpe_pc1": -0.0815525873672273,
-      "cos_absrpe_pc2": 0.04913607808801193,
+      "cos_absrpe_pc1": -0.08155258736722727,
+      "cos_absrpe_pc2": 0.04913607808801204,
       "family_contrast_statistics": {
         "negative": 0.0036612650270026765,
         "positive": -0.005644473636900774
@@ -146,52 +146,52 @@
     },
     {
       "block": 13,
-      "cos_absrpe_pc1": -0.07151246657114474,
-      "cos_absrpe_pc2": 0.04271109015542324,
+      "cos_absrpe_pc1": -0.07151246657114481,
+      "cos_absrpe_pc2": 0.042711090155423126,
       "family_contrast_statistics": {
         "negative": -0.0033915499473286255,
         "positive": -0.00917858961551238
       },
       "p1_spearman_rho": 0.6500448037689244,
-      "p4_contrast": 0.03947824292053552
+      "p4_contrast": 0.039478242920535526
     },
     {
       "block": 14,
-      "cos_absrpe_pc1": -0.04595841448971062,
-      "cos_absrpe_pc2": 0.02188549555974295,
+      "cos_absrpe_pc1": -0.04595841448971064,
+      "cos_absrpe_pc2": 0.021885495559742833,
       "family_contrast_statistics": {
-        "negative": -0.004197657540204396,
-        "positive": -0.005663232712127705
+        "negative": -0.004197657540204394,
+        "positive": -0.005663232712127703
       },
       "p1_spearman_rho": 0.5177921445553534,
       "p4_contrast": 0.014160122151985975
     },
     {
       "block": 15,
-      "cos_absrpe_pc1": -0.009244104567198697,
-      "cos_absrpe_pc2": -0.028083836053337786,
+      "cos_absrpe_pc1": -0.009244104567198682,
+      "cos_absrpe_pc2": -0.02808383605333782,
       "family_contrast_statistics": {
-        "negative": 0.006500974536166973,
-        "positive": 0.02367413133878742
+        "negative": 0.00650097453616698,
+        "positive": 0.023674131338787423
       },
       "p1_spearman_rho": 0.836344675881136,
       "p4_contrast": -0.010377223563677408
     },
     {
       "block": 16,
-      "cos_absrpe_pc1": -0.017510111889583537,
-      "cos_absrpe_pc2": -0.01163762603207216,
+      "cos_absrpe_pc1": -0.01751011188958354,
+      "cos_absrpe_pc2": -0.011637626032072136,
       "family_contrast_statistics": {
-        "negative": 0.006801819727019246,
-        "positive": 0.029004354015599393
+        "negative": 0.006801819727019242,
+        "positive": 0.029004354015599382
       },
       "p1_spearman_rho": 0.845841919361639,
       "p4_contrast": 0.0016404856761657455
     },
     {
       "block": 17,
-      "cos_absrpe_pc1": -0.011269959557628823,
-      "cos_absrpe_pc2": -0.005425463539355947,
+      "cos_absrpe_pc1": -0.011269959557628832,
+      "cos_absrpe_pc2": -0.005425463539355944,
       "family_contrast_statistics": {
         "negative": -4.753802994406087e-05,
         "positive": 0.022641236960535025
@@ -201,8 +201,8 @@
     },
     {
       "block": 18,
-      "cos_absrpe_pc1": -0.008727162957035635,
-      "cos_absrpe_pc2": 0.0032947499401358767,
+      "cos_absrpe_pc1": -0.008727162957035647,
+      "cos_absrpe_pc2": 0.0032947499401358615,
       "family_contrast_statistics": {
         "negative": 0.0014872475929557857,
         "positive": 0.016035230643636992
@@ -212,41 +212,41 @@
     },
     {
       "block": 19,
-      "cos_absrpe_pc1": -0.01229023617545509,
-      "cos_absrpe_pc2": -0.0022477399273212496,
+      "cos_absrpe_pc1": -0.012290236175455096,
+      "cos_absrpe_pc2": -0.0022477399273212635,
       "family_contrast_statistics": {
-        "negative": 0.012652691773453063,
-        "positive": 0.002462321023243598
+        "negative": 0.01265269177345306,
+        "positive": 0.0024623210232435962
       },
       "p1_spearman_rho": 0.84988179158842,
-      "p4_contrast": 0.004591597422704768
+      "p4_contrast": 0.004591597422704772
     },
     {
       "block": 20,
-      "cos_absrpe_pc1": 0.0003938350244771428,
-      "cos_absrpe_pc2": -0.008997191401344916,
+      "cos_absrpe_pc1": 0.0003938350244771338,
+      "cos_absrpe_pc2": -0.008997191401344935,
       "family_contrast_statistics": {
-        "negative": 0.006664547543574659,
-        "positive": 0.002133657736560428
+        "negative": 0.006664547543574656,
+        "positive": 0.0021336577365604313
       },
       "p1_spearman_rho": 0.8446066702095906,
       "p4_contrast": 0.006208263980644033
     },
     {
       "block": 21,
-      "cos_absrpe_pc1": -0.002623031528277212,
-      "cos_absrpe_pc2": 0.006603567775883574,
+      "cos_absrpe_pc1": -0.002623031528277207,
+      "cos_absrpe_pc2": 0.006603567775883588,
       "family_contrast_statistics": {
         "negative": 0.002546088847408403,
         "positive": 0.007589362897724365
       },
       "p1_spearman_rho": 0.8538912888360525,
-      "p4_contrast": 0.006903080699100789
+      "p4_contrast": 0.006903080699100792
     },
     {
       "block": 22,
-      "cos_absrpe_pc1": -0.0019456724933854955,
-      "cos_absrpe_pc2": 0.0034013662047198585,
+      "cos_absrpe_pc1": -0.0019456724933855176,
+      "cos_absrpe_pc2": 0.003401366204719908,
       "family_contrast_statistics": {
         "negative": -0.004033076876513418,
         "positive": 0.003024003496879807
@@ -256,8 +256,8 @@
     },
     {
       "block": 23,
-      "cos_absrpe_pc1": -0.006104689623549626,
-      "cos_absrpe_pc2": -0.000134129352881593,
+      "cos_absrpe_pc1": -0.006104689623549612,
+      "cos_absrpe_pc2": -0.00013412935288160868,
       "family_contrast_statistics": {
         "negative": -0.009653490350018942,
         "positive": -0.0022239393662999334
@@ -267,8 +267,8 @@
     },
     {
       "block": 24,
-      "cos_absrpe_pc1": -0.007347979558551246,
-      "cos_absrpe_pc2": -0.014964713939540986,
+      "cos_absrpe_pc1": -0.007347979558551239,
+      "cos_absrpe_pc2": -0.01496471393954096,
       "family_contrast_statistics": {
         "negative": -0.0014305103610935755,
         "positive": -0.0013461644695072937
@@ -278,30 +278,30 @@
     },
     {
       "block": 25,
-      "cos_absrpe_pc1": -0.021715611883214078,
+      "cos_absrpe_pc1": -0.021715611883214084,
       "cos_absrpe_pc2": -0.02255438360512313,
       "family_contrast_statistics": {
-        "negative": 0.004784144511900958,
-        "positive": -0.003489282332797909
+        "negative": 0.004784144511900963,
+        "positive": -0.0034892823327979106
       },
       "p1_spearman_rho": 0.8565946619802894,
       "p4_contrast": 0.009616822806768018
     },
     {
       "block": 26,
-      "cos_absrpe_pc1": -0.043054198810378634,
-      "cos_absrpe_pc2": -0.026796681715889375,
+      "cos_absrpe_pc1": -0.04305419881037864,
+      "cos_absrpe_pc2": -0.026796681715889368,
       "family_contrast_statistics": {
-        "negative": 0.011697703564968106,
-        "positive": 0.0009703125294769502
+        "negative": 0.011697703564968107,
+        "positive": 0.0009703125294769546
       },
       "p1_spearman_rho": 0.8167426893371554,
       "p4_contrast": 0.02420528211353926
     },
     {
       "block": 27,
-      "cos_absrpe_pc1": 0.002226939012823164,
-      "cos_absrpe_pc2": -0.046276942371847214,
+      "cos_absrpe_pc1": 0.002226939012823157,
+      "cos_absrpe_pc2": -0.04627694237184721,
       "family_contrast_statistics": {
         "negative": 0.020112094165966668,
         "positive": 0.007939895614809402
@@ -311,8 +311,8 @@
     },
     {
       "block": 28,
-      "cos_absrpe_pc1": 0.004853966543602834,
-      "cos_absrpe_pc2": -0.03577719211602108,
+      "cos_absrpe_pc1": 0.0048539665436028515,
+      "cos_absrpe_pc2": -0.035777192116021095,
       "family_contrast_statistics": {
         "negative": 0.022187333934410768,
         "positive": 0.0067327430381049274
@@ -323,7 +323,7 @@
     {
       "block": 29,
       "cos_absrpe_pc1": 0.017094770894947504,
-      "cos_absrpe_pc2": -0.027167364993828262,
+      "cos_absrpe_pc2": -0.027167364993828255,
       "family_contrast_statistics": {
         "negative": 0.021664021746002286,
         "positive": 0.008797304436853746
@@ -333,30 +333,30 @@
     },
     {
       "block": 30,
-      "cos_absrpe_pc1": -0.0093731517626304,
-      "cos_absrpe_pc2": -0.024651428085030326,
+      "cos_absrpe_pc1": -0.009373151762630401,
+      "cos_absrpe_pc2": -0.024651428085030343,
       "family_contrast_statistics": {
-        "negative": 0.009552825664348693,
-        "positive": 0.01526460479458138
+        "negative": 0.00955282566434869,
+        "positive": 0.015264604794581377
       },
       "p1_spearman_rho": 0.8658286556415035,
       "p4_contrast": 0.00450355085018953
     },
     {
       "block": 31,
-      "cos_absrpe_pc1": -0.02972107674911229,
-      "cos_absrpe_pc2": -0.03276289250622508,
+      "cos_absrpe_pc1": -0.029721076749112257,
+      "cos_absrpe_pc2": -0.032762892506225064,
       "family_contrast_statistics": {
-        "negative": 0.017618521063642093,
-        "positive": 0.013760454671145103
+        "negative": 0.017618521063642104,
+        "positive": 0.013760454671145112
       },
       "p1_spearman_rho": 0.8699090278404829,
-      "p4_contrast": 0.013767036416906436
+      "p4_contrast": 0.013767036416906435
     },
     {
       "block": 32,
-      "cos_absrpe_pc1": -0.03323985317534429,
-      "cos_absrpe_pc2": -0.04167941314434897,
+      "cos_absrpe_pc1": -0.0332398531753443,
+      "cos_absrpe_pc2": -0.04167941314434895,
       "family_contrast_statistics": {
         "negative": 0.016020957286397606,
         "positive": 0.011035851580365012
@@ -366,8 +366,8 @@
     },
     {
       "block": 33,
-      "cos_absrpe_pc1": -0.024034399369331563,
-      "cos_absrpe_pc2": -0.038925479231966695,
+      "cos_absrpe_pc1": -0.024034399369331588,
+      "cos_absrpe_pc2": -0.03892547923196672,
       "family_contrast_statistics": {
         "negative": 0.011794409522954961,
         "positive": 0.017767007358057686
@@ -377,21 +377,21 @@
     },
     {
       "block": 34,
-      "cos_absrpe_pc1": -0.019263623427394783,
-      "cos_absrpe_pc2": -0.021619204674898605,
+      "cos_absrpe_pc1": -0.019263623427394756,
+      "cos_absrpe_pc2": -0.02161920467489861,
       "family_contrast_statistics": {
-        "negative": 0.018599414120350828,
-        "positive": 0.014900361515588318
+        "negative": 0.01859941412035083,
+        "positive": 0.01490036151558832
       },
       "p1_spearman_rho": 0.8622140331228045,
       "p4_contrast": 0.021271743412887047
     },
     {
       "block": 35,
-      "cos_absrpe_pc1": -0.009545769944073797,
-      "cos_absrpe_pc2": -0.025552900580789677,
+      "cos_absrpe_pc1": -0.009545769944073827,
+      "cos_absrpe_pc2": -0.025552900580789663,
       "family_contrast_statistics": {
-        "negative": 0.006022373641057552,
+        "negative": 0.006022373641057557,
         "positive": 0.025353847999197335
       },
       "p1_spearman_rho": 0.857991911021131,
@@ -399,19 +399,19 @@
     },
     {
       "block": 36,
-      "cos_absrpe_pc1": -0.035205555847384974,
-      "cos_absrpe_pc2": -0.02119634804402892,
+      "cos_absrpe_pc1": -0.03520555584738499,
+      "cos_absrpe_pc2": -0.021196348044028906,
       "family_contrast_statistics": {
-        "negative": 0.00810170296023759,
-        "positive": 0.03308100967610897
+        "negative": 0.008101702960237605,
+        "positive": 0.03308100967610898
       },
       "p1_spearman_rho": 0.859956159672749,
       "p4_contrast": 0.010420796272374399
     },
     {
       "block": 37,
-      "cos_absrpe_pc1": -0.042297061454729626,
-      "cos_absrpe_pc2": -0.02509591029058105,
+      "cos_absrpe_pc1": -0.04229706145472965,
+      "cos_absrpe_pc2": -0.025095910290581076,
       "family_contrast_statistics": {
         "negative": 0.005750492126503473,
         "positive": 0.03848688963479978
@@ -432,8 +432,8 @@
     },
     {
       "block": 39,
-      "cos_absrpe_pc1": -0.03436466168774214,
-      "cos_absrpe_pc2": -0.029824717938036854,
+      "cos_absrpe_pc1": -0.03436466168774209,
+      "cos_absrpe_pc2": -0.029824717938036878,
       "family_contrast_statistics": {
         "negative": 0.007770500701735965,
         "positive": 0.04149707385212935
@@ -443,18 +443,18 @@
     },
     {
       "block": 40,
-      "cos_absrpe_pc1": -0.0298290693676611,
-      "cos_absrpe_pc2": -0.031294604424626817,
+      "cos_absrpe_pc1": -0.029829069367661127,
+      "cos_absrpe_pc2": -0.03129460442462683,
       "family_contrast_statistics": {
-        "negative": 0.00979078169098549,
-        "positive": 0.042043863991975836
+        "negative": 0.009790781690985476,
+        "positive": 0.04204386399197581
       },
       "p1_spearman_rho": 0.8694129031810536,
-      "p4_contrast": 0.0007732331779077718
+      "p4_contrast": 0.00077323317790777
     },
     {
       "block": 41,
-      "cos_absrpe_pc1": -0.023937240684310756,
+      "cos_absrpe_pc1": -0.023937240684310787,
       "cos_absrpe_pc2": -0.02493236154607619,
       "family_contrast_statistics": {
         "negative": 0.012149655891741377,
@@ -465,8 +465,8 @@
     },
     {
       "block": 42,
-      "cos_absrpe_pc1": -0.026684353299750385,
-      "cos_absrpe_pc2": -0.026987161283571846,
+      "cos_absrpe_pc1": -0.0266843532997504,
+      "cos_absrpe_pc2": -0.026987161283571842,
       "family_contrast_statistics": {
         "negative": 0.009070449744237234,
         "positive": 0.03709149726113363
@@ -476,19 +476,19 @@
     },
     {
       "block": 43,
-      "cos_absrpe_pc1": -0.007030066626079857,
-      "cos_absrpe_pc2": -0.025386522866477645,
+      "cos_absrpe_pc1": -0.007030066626079899,
+      "cos_absrpe_pc2": -0.02538652286647764,
       "family_contrast_statistics": {
-        "negative": 0.005286204933514313,
-        "positive": 0.03940598260140118
+        "negative": 0.00528620493351431,
+        "positive": 0.03940598260140117
       },
       "p1_spearman_rho": 0.8695040281184998,
-      "p4_contrast": -0.003465811100922046
+      "p4_contrast": -0.003465811100922051
     },
     {
       "block": 44,
-      "cos_absrpe_pc1": -0.004198597249023711,
-      "cos_absrpe_pc2": -0.02031323783936705,
+      "cos_absrpe_pc1": -0.0041985972490237245,
+      "cos_absrpe_pc2": -0.02031323783936704,
       "family_contrast_statistics": {
         "negative": 0.01072266607312047,
         "positive": 0.038355348923274996
@@ -498,21 +498,21 @@
     },
     {
       "block": 45,
-      "cos_absrpe_pc1": 0.0022638037332992932,
-      "cos_absrpe_pc2": -0.017448093532783024,
+      "cos_absrpe_pc1": 0.0022638037332992906,
+      "cos_absrpe_pc2": -0.017448093532783048,
       "family_contrast_statistics": {
         "negative": 0.012072082618661993,
         "positive": 0.03581287458203515
       },
       "p1_spearman_rho": 0.8690180284521201,
-      "p4_contrast": 0.002805829131218839
+      "p4_contrast": 0.0028058291312188432
     },
     {
       "block": 46,
-      "cos_absrpe_pc1": -0.003560118066180652,
-      "cos_absrpe_pc2": -0.03146104805503938,
+      "cos_absrpe_pc1": -0.003560118066180616,
+      "cos_absrpe_pc2": -0.0314610480550394,
       "family_contrast_statistics": {
-        "negative": 0.006386631082733044,
+        "negative": 0.00638663108273304,
         "positive": 0.031356744988018576
       },
       "p1_spearman_rho": 0.8664867801897258,
@@ -520,19 +520,19 @@
     },
     {
       "block": 47,
-      "cos_absrpe_pc1": -0.0023357092181991476,
-      "cos_absrpe_pc2": -0.040116673619352575,
+      "cos_absrpe_pc1": -0.0023357092181991532,
+      "cos_absrpe_pc2": -0.04011667361935251,
       "family_contrast_statistics": {
         "negative": 0.018029030927551745,
         "positive": 0.0378374820433205
       },
       "p1_spearman_rho": 0.873179400595496,
-      "p4_contrast": -0.009289798775309575
+      "p4_contrast": -0.009289798775309572
     },
     {
       "block": 48,
-      "cos_absrpe_pc1": -0.007309626455786077,
-      "cos_absrpe_pc2": -0.04448320553489654,
+      "cos_absrpe_pc1": -0.007309626455786066,
+      "cos_absrpe_pc2": -0.04448320553489657,
       "family_contrast_statistics": {
         "negative": 0.01938526515180177,
         "positive": 0.04795257595724181
@@ -542,8 +542,8 @@
     },
     {
       "block": 49,
-      "cos_absrpe_pc1": 0.009573814441032535,
-      "cos_absrpe_pc2": -0.03669016059263224,
+      "cos_absrpe_pc1": 0.00957381444103255,
+      "cos_absrpe_pc2": -0.03669016059263225,
       "family_contrast_statistics": {
         "negative": 0.015066454465123422,
         "positive": 0.04875720444017117
@@ -553,7 +553,7 @@
     },
     {
       "block": 50,
-      "cos_absrpe_pc1": 0.002966247755655478,
+      "cos_absrpe_pc1": 0.0029662477556554644,
       "cos_absrpe_pc2": -0.04002051001439404,
       "family_contrast_statistics": {
         "negative": 0.01365781436354169,
@@ -564,8 +564,8 @@
     },
     {
       "block": 51,
-      "cos_absrpe_pc1": 0.0177824008115758,
-      "cos_absrpe_pc2": -0.03580069222946218,
+      "cos_absrpe_pc1": 0.017782400811575807,
+      "cos_absrpe_pc2": -0.035800692229462194,
       "family_contrast_statistics": {
         "negative": 0.014831010546958599,
         "positive": 0.0341688880554092
@@ -575,8 +575,8 @@
     },
     {
       "block": 52,
-      "cos_absrpe_pc1": 0.008552544867574306,
-      "cos_absrpe_pc2": -0.035099713162493336,
+      "cos_absrpe_pc1": 0.008552544867574337,
+      "cos_absrpe_pc2": -0.03509971316249332,
       "family_contrast_statistics": {
         "negative": 0.0071667553506941616,
         "positive": 0.03663722105536039
@@ -586,8 +586,8 @@
     },
     {
       "block": 53,
-      "cos_absrpe_pc1": 0.004097349576567485,
-      "cos_absrpe_pc2": -0.03503010509452123,
+      "cos_absrpe_pc1": 0.004097349576567481,
+      "cos_absrpe_pc2": -0.03503010509452122,
       "family_contrast_statistics": {
         "negative": 0.0045000551676452685,
         "positive": 0.03873135908556952
@@ -598,7 +598,7 @@
     {
       "block": 54,
       "cos_absrpe_pc1": 0.019092208044063346,
-      "cos_absrpe_pc2": -0.02937036376478073,
+      "cos_absrpe_pc2": -0.029370363764780732,
       "family_contrast_statistics": {
         "negative": 0.008669034679675076,
         "positive": 0.04080988057757718
@@ -608,18 +608,18 @@
     },
     {
       "block": 55,
-      "cos_absrpe_pc1": 0.002783641121826827,
-      "cos_absrpe_pc2": -0.024431851234485415,
+      "cos_absrpe_pc1": 0.0027836411218268324,
+      "cos_absrpe_pc2": -0.024431851234485387,
       "family_contrast_statistics": {
-        "negative": 0.012250996516574849,
-        "positive": 0.028916092037821306
+        "negative": 0.012250996516574847,
+        "positive": 0.0289160920378213
       },
       "p1_spearman_rho": 0.8371141753529039,
       "p4_contrast": -0.029785381698212182
     },
     {
       "block": 56,
-      "cos_absrpe_pc1": -0.009277085910523663,
+      "cos_absrpe_pc1": -0.009277085910523638,
       "cos_absrpe_pc2": -0.03019656401097101,
       "family_contrast_statistics": {
         "negative": 0.008904527181294527,
@@ -630,8 +630,8 @@
     },
     {
       "block": 57,
-      "cos_absrpe_pc1": -0.005495760138611451,
-      "cos_absrpe_pc2": -0.03322982526026521,
+      "cos_absrpe_pc1": -0.0054957601386114415,
+      "cos_absrpe_pc2": -0.033229825260265175,
       "family_contrast_statistics": {
         "negative": 0.008909887649579961,
         "positive": 0.03378186298966216
@@ -642,18 +642,18 @@
     {
       "block": 58,
       "cos_absrpe_pc1": -0.009239836650810672,
-      "cos_absrpe_pc2": -0.022514759536118516,
+      "cos_absrpe_pc2": -0.022514759536118503,
       "family_contrast_statistics": {
         "negative": 0.005375929180078013,
-        "positive": 0.027027353216116698
+        "positive": 0.027027353216116694
       },
       "p1_spearman_rho": 0.8370230504154575,
-      "p4_contrast": -0.021694750373234005
+      "p4_contrast": -0.02169475037323401
     },
     {
       "block": 59,
-      "cos_absrpe_pc1": -0.013708207372618183,
-      "cos_absrpe_pc2": -0.027732651349067026,
+      "cos_absrpe_pc1": -0.013708207372618162,
+      "cos_absrpe_pc2": -0.027732651349066998,
       "family_contrast_statistics": {
         "negative": 0.0001877447804241733,
         "positive": 0.028385987383531798
@@ -663,30 +663,30 @@
     },
     {
       "block": 60,
-      "cos_absrpe_pc1": -0.01923047395271691,
-      "cos_absrpe_pc2": -0.022209776463041172,
+      "cos_absrpe_pc1": -0.019230473952716928,
+      "cos_absrpe_pc2": -0.022209776463041175,
       "family_contrast_statistics": {
         "negative": 0.0026769898186435187,
         "positive": 0.021977905025845262
       },
       "p1_spearman_rho": 0.8390784240045217,
-      "p4_contrast": -0.03061276706794424
+      "p4_contrast": -0.030612767067944233
     },
     {
       "block": 61,
       "cos_absrpe_pc1": -0.01720024612045677,
-      "cos_absrpe_pc2": -0.024600982004313585,
+      "cos_absrpe_pc2": -0.02460098200431357,
       "family_contrast_statistics": {
         "negative": 0.00517601249816434,
         "positive": 0.021220354889153914
       },
       "p1_spearman_rho": 0.8432296711548481,
-      "p4_contrast": -0.029246673910669846
+      "p4_contrast": -0.02924667391066984
     },
     {
       "block": 62,
-      "cos_absrpe_pc1": -0.0066265301501180415,
-      "cos_absrpe_pc2": -0.027398559579763233,
+      "cos_absrpe_pc1": -0.006626530150118052,
+      "cos_absrpe_pc2": -0.02739855957976324,
       "family_contrast_statistics": {
         "negative": 0.00500349235791115,
         "positive": 0.022938270720197818
@@ -696,8 +696,8 @@
     },
     {
       "block": 63,
-      "cos_absrpe_pc1": 0.008877031356328283,
-      "cos_absrpe_pc2": -0.028370700008274314,
+      "cos_absrpe_pc1": 0.008877031356328252,
+      "cos_absrpe_pc2": -0.028370700008274307,
       "family_contrast_statistics": {
         "negative": 0.0009860996887185846,
         "positive": 0.01857209937949149
@@ -717,7 +717,7 @@
           "n_pool": 20,
           "outcome": "disappointed",
           "p_value": 0.9614038596140386,
-          "statistic": -0.07525835534891205
+          "statistic": -0.07525835534891204
         },
         {
           "control": "calm",
@@ -733,15 +733,15 @@
           "n_pool": 22,
           "outcome": "elated",
           "p_value": 0.26807319268073193,
-          "statistic": 0.03958017527496947
+          "statistic": 0.03958017527496949
         }
       ],
       "family_contrasts": [
         {
           "control_family": "nonoutcome_pos",
           "expected_sign": 1,
-          "mean_residual_control": -0.013142005890294814,
-          "mean_residual_outcome": 0.012211842108902521,
+          "mean_residual_control": -0.013142005890294772,
+          "mean_residual_outcome": 0.012211842108902561,
           "n_control": 10,
           "n_outcome": 9,
           "outcome_family": "outcome_pos",
@@ -752,21 +752,21 @@
         {
           "control_family": "nonoutcome_neg",
           "expected_sign": -1,
-          "mean_residual_control": 0.0020785382608891805,
-          "mean_residual_outcome": -0.003943835380168371,
+          "mean_residual_control": 0.002078538260889168,
+          "mean_residual_outcome": -0.0039438353801683895,
           "n_control": 10,
           "n_outcome": 9,
           "outcome_family": "outcome_neg",
           "p_value": 0.3424657534246575,
           "pole": "negative",
-          "statistic": 0.006022373641057552
+          "statistic": 0.006022373641057557
         }
       ],
-      "label_shuffled_p95": 0.03961194417831759,
+      "label_shuffled_p95": 0.03961194417831755,
       "mean_cos_by_family": {
         "v_absrpe": -0.0005744507217494791,
-        "v_ev": 0.005081844565162104,
-        "v_rpe": -0.006143252174781723
+        "v_ev": 0.0050818445651621075,
+        "v_rpe": -0.006143252174781726
       },
       "observed_family_contrast_max": 0.025353847999197335,
       "outcome_ordering": {
@@ -776,13 +776,13 @@
           "outcome_neg"
         ],
         "mean_residuals": [
-          0.012211842108902521,
-          0.028004422815201678,
-          -0.003943835380168371
+          0.012211842108902561,
+          0.028004422815201685,
+          -0.0039438353801683895
         ],
         "ordering_holds": false,
         "p_value": 0.1693830616938306,
-        "trend_statistic": 0.01615567748907089
+        "trend_statistic": 0.01615567748907095
       },
       "p1_positive": true,
       "p1_spearman_p": 1.9232008620640635e-25,
@@ -799,9 +799,9 @@
           "terrified"
         ],
         "contrast": 0.01710000187957619,
-        "cos_absrpe_pc1": -0.009545769944073797,
-        "cos_absrpe_pc2": -0.025552900580789677,
-        "cos_rpe_pc1": 0.19860350136796612,
+        "cos_absrpe_pc1": -0.009545769944073827,
+        "cos_absrpe_pc2": -0.025552900580789663,
+        "cos_rpe_pc1": 0.19860350136796603,
         "cos_rpe_pc2": -0.0676150616397821,
         "loads_arousal_pc": true,
         "mean_cos_arousal_matched": 0.009255233937175977,
@@ -824,156 +824,156 @@
         "n_words": 84,
         "note": "P5a is an EXPECTATION OF ABSENCE: it holds by the word's residual sitting INSIDE the word residuals' own spread (the same p95 band P5c uses), and it only carries information while the outcome-family contrasts are positive. A null everywhere is not a P5a result, it is no signal. It is a within-set comparison, not a confidence interval: there is one measurement per word, so nothing here estimates this word's own sampling error.",
         "passed": true,
-        "residual": -0.026441385693342326,
+        "residual": -0.02644138569334234,
         "word": "sad",
-        "word_residual_p95": 0.08497012140894511
+        "word_residual_p95": 0.08497012140894508
       },
       "p5c": [
         {
-          "cos_style": 0.06771349035194842,
+          "cos_style": 0.06771349035194844,
           "family": "v_rpe",
           "passed": true,
-          "predicted_from_valence": 0.0012893068737215808,
-          "residual": 0.06642418347822683,
-          "word_residual_p95": 0.09774257148018943
+          "predicted_from_valence": 0.0012893068737215687,
+          "residual": 0.06642418347822687,
+          "word_residual_p95": 0.09774257148018942
         },
         {
           "cos_style": -0.0709330131520355,
           "family": "v_ev",
           "passed": true,
-          "predicted_from_valence": -0.0014231497945709746,
-          "residual": -0.06950986335746452,
-          "word_residual_p95": 0.09186206149446291
+          "predicted_from_valence": -0.0014231497945709631,
+          "residual": -0.06950986335746454,
+          "word_residual_p95": 0.09186206149446292
         },
         {
-          "cos_style": -0.019368439395560908,
+          "cos_style": -0.019368439395560905,
           "family": "v_absrpe",
           "passed": true,
           "predicted_from_valence": -0.0006486198564091736,
-          "residual": -0.018719819539151736,
+          "residual": -0.018719819539151732,
           "word_residual_p95": 0.03921049697384871
         }
       ],
       "p5c_passed": true,
       "random_direction_p95": 0.018533316779982094,
-      "subspace_fraction_emotion_span": 0.2843888868934205,
-      "subspace_fraction_pc12_plane": 0.2097978725253601,
+      "subspace_fraction_emotion_span": 0.2843888868934203,
+      "subspace_fraction_pc12_plane": 0.20979787252536009,
       "valence_source": "numeric_norms",
       "word_residuals": [
         {
           "cos_v_rpe": 0.15634963872913232,
           "family": "outcome_pos",
-          "residual": 0.07027680784924614,
+          "residual": 0.07027680784924617,
           "valence": 1,
           "word": "elated"
         },
         {
-          "cos_v_rpe": 0.05065949682437003,
+          "cos_v_rpe": 0.05065949682437002,
           "family": "outcome_pos",
-          "residual": -0.06673061015898367,
+          "residual": -0.06673061015898363,
           "valence": 1,
           "word": "thrilled"
         },
         {
-          "cos_v_rpe": 0.1658554031250602,
+          "cos_v_rpe": 0.16585540312506017,
           "family": "outcome_pos",
-          "residual": 0.027488630072402792,
+          "residual": 0.02748863007240282,
           "valence": 1,
           "word": "delighted"
         },
         {
           "cos_v_rpe": 0.1303419308403098,
           "family": "outcome_pos",
-          "residual": 0.009997363847195018,
+          "residual": 0.00999736384719506,
           "valence": 1,
           "word": "overjoyed"
         },
         {
           "cos_v_rpe": 0.12897247207905282,
           "family": "outcome_pos",
-          "residual": 0.027536449148408998,
+          "residual": 0.02753644914840904,
           "valence": 1,
           "word": "jubilant"
         },
         {
           "cos_v_rpe": 0.14438892653783,
           "family": "outcome_pos",
-          "residual": 0.011931073504694745,
+          "residual": 0.011931073504694828,
           "valence": 1,
           "word": "triumphant"
         },
         {
           "cos_v_rpe": 0.12561115898626138,
           "family": "outcome_pos",
-          "residual": 0.005857483995098806,
+          "residual": 0.005857483995098847,
           "valence": 1,
           "word": "gleeful"
         },
         {
-          "cos_v_rpe": 0.09912525597289623,
+          "cos_v_rpe": 0.09912525597289622,
           "family": "outcome_pos",
-          "residual": -0.017673959008505255,
+          "residual": -0.017673959008505227,
           "valence": 1,
           "word": "relieved"
         },
         {
-          "cos_v_rpe": 0.14561382267097003,
+          "cos_v_rpe": 0.14561382267097,
           "family": "outcome_pos",
-          "residual": 0.04122333973056512,
+          "residual": 0.041223339730565134,
           "valence": 1,
           "word": "reassured"
         },
         {
           "cos_v_rpe": -0.0781267661683184,
           "family": "outcome_neg",
-          "residual": 0.048816969655569725,
+          "residual": 0.0488169696555697,
           "valence": -1,
           "word": "disappointed"
         },
         {
-          "cos_v_rpe": -0.12708636518393096,
+          "cos_v_rpe": -0.12708636518393093,
           "family": "outcome_neg",
-          "residual": -0.027914553451797025,
+          "residual": -0.02791455345179704,
           "valence": -1,
           "word": "dismayed"
         },
         {
-          "cos_v_rpe": -0.1206807608006278,
+          "cos_v_rpe": -0.12068076080062778,
           "family": "outcome_neg",
-          "residual": -0.04219016913682147,
+          "residual": -0.042190169136821484,
           "valence": -1,
           "word": "crestfallen"
         },
         {
-          "cos_v_rpe": -0.10849599399616236,
+          "cos_v_rpe": -0.10849599399616235,
           "family": "outcome_neg",
-          "residual": -0.02838044932698744,
+          "residual": -0.028380449326987453,
           "valence": -1,
           "word": "disheartened"
         },
         {
-          "cos_v_rpe": -0.1298879420618546,
+          "cos_v_rpe": -0.12988794206185458,
           "family": "outcome_neg",
-          "residual": -0.02569354831312684,
+          "residual": -0.025693548313126854,
           "valence": -1,
           "word": "deflated"
         },
         {
-          "cos_v_rpe": -0.12460428264882217,
+          "cos_v_rpe": -0.12460428264882215,
           "family": "outcome_neg",
-          "residual": -0.007410264857145618,
+          "residual": -0.007410264857145632,
           "valence": -1,
           "word": "dejected"
         },
         {
-          "cos_v_rpe": -0.06648745511088458,
+          "cos_v_rpe": -0.06648745511088457,
           "family": "outcome_neg",
-          "residual": 0.032241187619785186,
+          "residual": 0.03224118761978516,
           "valence": -1,
           "word": "disillusioned"
         },
         {
-          "cos_v_rpe": -0.06594543933019785,
+          "cos_v_rpe": -0.06594543933019784,
           "family": "outcome_neg",
           "residual": -0.0010453637112925324,
           "valence": -1,
@@ -982,154 +982,154 @@
         {
           "cos_v_rpe": -0.08249924662988103,
           "family": "outcome_neg",
-          "residual": 0.016081673100300675,
+          "residual": 0.016081673100300634,
           "valence": -1,
           "word": "regretful"
         },
         {
-          "cos_v_rpe": 0.12001456586059596,
+          "cos_v_rpe": 0.12001456586059595,
           "family": "outcome_confirm",
-          "residual": -0.015397747182300373,
+          "residual": -0.015397747182300331,
           "valence": 1,
           "word": "satisfied"
         },
         {
-          "cos_v_rpe": 0.1530682882778036,
+          "cos_v_rpe": 0.15306828827780358,
           "family": "outcome_confirm",
           "residual": 0.07556339142622458,
           "valence": 1,
           "word": "gratified"
         },
         {
-          "cos_v_rpe": 0.06569854692302034,
+          "cos_v_rpe": 0.06569854692302032,
           "family": "outcome_confirm",
-          "residual": 0.03191965821590538,
+          "residual": 0.03191965821590539,
           "valence": 1,
           "word": "vindicated"
         },
         {
-          "cos_v_rpe": -0.05708097285794865,
+          "cos_v_rpe": -0.05708097285794864,
           "family": "outcome_confirm",
-          "residual": 0.019932388800977127,
+          "residual": 0.019932388800977106,
           "valence": -1,
           "word": "resigned"
         },
         {
-          "cos_v_rpe": 0.10849697542683182,
+          "cos_v_rpe": 0.1084969754268318,
           "family": "nonoutcome_pos",
-          "residual": 0.03069663257427667,
+          "residual": 0.030696632574276683,
           "valence": 1,
           "word": "content"
         },
         {
-          "cos_v_rpe": 0.08987912044365688,
+          "cos_v_rpe": 0.08987912044365687,
           "family": "nonoutcome_pos",
-          "residual": -0.020715728517246318,
+          "residual": -0.02071572851724629,
           "valence": 1,
           "word": "calm"
         },
         {
-          "cos_v_rpe": 0.10004082583936404,
+          "cos_v_rpe": 0.10004082583936402,
           "family": "nonoutcome_pos",
-          "residual": 0.011013534949716769,
+          "residual": 0.011013534949716783,
           "valence": 1,
           "word": "serene"
         },
         {
-          "cos_v_rpe": 0.08468633205295081,
+          "cos_v_rpe": 0.0846863320529508,
           "family": "nonoutcome_pos",
-          "residual": -0.02354494890014351,
+          "residual": -0.023544948900143484,
           "valence": 1,
           "word": "peaceful"
         },
         {
-          "cos_v_rpe": 0.1804410442196251,
+          "cos_v_rpe": 0.18044104421962506,
           "family": "nonoutcome_pos",
-          "residual": 0.034392675141588835,
+          "residual": 0.03439267514158889,
           "valence": 1,
           "word": "cheerful"
         },
         {
           "cos_v_rpe": 0.06330753286679672,
           "family": "nonoutcome_pos",
-          "residual": -0.07195705717561157,
+          "residual": -0.07195705717561149,
           "valence": 1,
           "word": "tranquil"
         },
         {
-          "cos_v_rpe": 0.08092197780416793,
+          "cos_v_rpe": 0.0809219778041679,
           "family": "nonoutcome_pos",
-          "residual": -0.02671841114697418,
+          "residual": -0.026718411146974166,
           "valence": 1,
           "word": "relaxed"
         },
         {
-          "cos_v_rpe": 0.11501151862227249,
+          "cos_v_rpe": 0.11501151862227248,
           "family": "nonoutcome_pos",
-          "residual": 0.03987018977850232,
+          "residual": 0.03987018977850233,
           "valence": 1,
           "word": "carefree"
         },
         {
-          "cos_v_rpe": 0.016700789395900983,
+          "cos_v_rpe": 0.01670078939590098,
           "family": "nonoutcome_pos",
-          "residual": -0.11368894163040151,
+          "residual": -0.11368894163040144,
           "valence": 1,
           "word": "amused"
         },
         {
           "cos_v_rpe": 0.14168984905647963,
           "family": "nonoutcome_pos",
-          "residual": 0.009231996023344374,
+          "residual": 0.009231996023344458,
           "valence": 1,
           "word": "affectionate"
         },
         {
-          "cos_v_rpe": -0.10788643736690974,
+          "cos_v_rpe": -0.10788643736690973,
           "family": "nonoutcome_neg",
-          "residual": -0.026441385693342326,
+          "residual": -0.02644138569334234,
           "valence": -1,
           "word": "sad"
         },
         {
-          "cos_v_rpe": -0.13542374783903074,
+          "cos_v_rpe": -0.13542374783903072,
           "family": "nonoutcome_neg",
-          "residual": -0.019116068050282514,
+          "residual": -0.019116068050282528,
           "valence": -1,
           "word": "gloomy"
         },
         {
-          "cos_v_rpe": -0.09740618895793637,
+          "cos_v_rpe": -0.09740618895793635,
           "family": "nonoutcome_neg",
           "residual": -0.0050296352482529505,
           "valence": -1,
           "word": "melancholy"
         },
         {
-          "cos_v_rpe": -0.07117227548944338,
+          "cos_v_rpe": -0.07117227548944337,
           "family": "nonoutcome_neg",
-          "residual": 0.002886626159721309,
+          "residual": 0.002886626159721295,
           "valence": -1,
           "word": "lonely"
         },
         {
-          "cos_v_rpe": 0.02434946418326592,
+          "cos_v_rpe": 0.024349464183265918,
           "family": "nonoutcome_neg",
-          "residual": 0.07684080776117468,
+          "residual": 0.07684080776117466,
           "valence": -1,
           "word": "wistful"
         },
         {
-          "cos_v_rpe": -0.11020138927028997,
+          "cos_v_rpe": -0.11020138927028995,
           "family": "nonoutcome_neg",
-          "residual": 0.023242158575072558,
+          "residual": 0.023242158575072544,
           "valence": -1,
           "word": "sorrowful"
         },
         {
-          "cos_v_rpe": -0.09140619694811043,
+          "cos_v_rpe": -0.09140619694811042,
           "family": "nonoutcome_neg",
-          "residual": 0.0033339247693818658,
+          "residual": 0.003333924769381838,
           "valence": -1,
           "word": "mournful"
         },
@@ -1141,105 +1141,105 @@
           "word": "miserable"
         },
         {
-          "cos_v_rpe": -0.003418378797489857,
+          "cos_v_rpe": -0.0034183787974898564,
           "family": "nonoutcome_neg",
           "residual": 0.015687566670118627,
           "valence": -1,
           "word": "homesick"
         },
         {
-          "cos_v_rpe": -0.12300579445773924,
+          "cos_v_rpe": -0.12300579445773922,
           "family": "nonoutcome_neg",
-          "residual": -0.03240191675391246,
+          "residual": -0.03240191675391249,
           "valence": -1,
           "word": "weary"
         },
         {
-          "cos_v_rpe": 0.19226609742796885,
+          "cos_v_rpe": 0.19226609742796882,
           "family": "prospect",
-          "residual": 0.06039913639678582,
+          "residual": 0.060399136396785874,
           "valence": 1,
           "word": "hopeful"
         },
         {
-          "cos_v_rpe": 0.0282536606504793,
+          "cos_v_rpe": 0.028253660650479295,
           "family": "prospect",
-          "residual": 0.02224669603511855,
+          "residual": 0.022246696035118557,
           "valence": 1,
           "word": "eager"
         },
         {
-          "cos_v_rpe": 0.1908262373177162,
+          "cos_v_rpe": 0.19082623731771617,
           "family": "prospect",
-          "residual": 0.04950500425529769,
+          "residual": 0.049505004255297747,
           "valence": 1,
           "word": "optimistic"
         },
         {
-          "cos_v_rpe": -0.06686042851802351,
+          "cos_v_rpe": -0.0668604285180235,
           "family": "prospect",
-          "residual": -0.14658117037692336,
+          "residual": -0.1465811703769233,
           "valence": 1,
           "word": "expectant"
         },
         {
-          "cos_v_rpe": -0.1249385151112825,
+          "cos_v_rpe": -0.12493851511128248,
           "family": "prospect",
           "residual": -0.06003843949237718,
           "valence": -1,
           "word": "anxious"
         },
         {
-          "cos_v_rpe": -0.12962216631761825,
+          "cos_v_rpe": -0.12962216631761822,
           "family": "prospect",
-          "residual": -0.10165284082072651,
+          "residual": -0.10165284082072648,
           "valence": -1,
           "word": "apprehensive"
         },
         {
           "cos_v_rpe": -0.12631007797344906,
           "family": "prospect",
-          "residual": -0.0029116941612742364,
+          "residual": -0.002911694161274278,
           "valence": -1,
           "word": "fearful"
         },
         {
-          "cos_v_rpe": -0.1097377779502683,
+          "cos_v_rpe": -0.10973777795026829,
           "family": "prospect",
-          "residual": -0.02341786726059511,
+          "residual": -0.023417867260595124,
           "valence": -1,
           "word": "nervous"
         },
         {
-          "cos_v_rpe": -0.09455438848864557,
+          "cos_v_rpe": -0.09455438848864556,
           "family": "prospect",
-          "residual": 0.02559408931279207,
+          "residual": 0.025594089312792043,
           "valence": -1,
           "word": "worried"
         },
         {
-          "cos_v_rpe": -0.13150815382414008,
+          "cos_v_rpe": -0.13150815382414005,
           "family": "prospect",
-          "residual": -0.017564042043200723,
+          "residual": -0.017564042043200737,
           "valence": -1,
           "word": "uneasy"
         },
         {
-          "cos_v_rpe": -0.002695443298239123,
+          "cos_v_rpe": -0.0026954432982391227,
           "family": "surprise",
-          "residual": -0.08640470617031643,
+          "residual": -0.0864047061703164,
           "valence": 0,
           "word": "surprised"
         },
         {
           "cos_v_rpe": 0.01940421855842063,
           "family": "surprise",
-          "residual": 0.016647159953797078,
+          "residual": 0.016647159953797085,
           "valence": 0,
           "word": "astonished"
         },
         {
-          "cos_v_rpe": -0.07473809392625509,
+          "cos_v_rpe": -0.07473809392625508,
           "family": "surprise",
           "residual": -0.025201210358107413,
           "valence": 0,
@@ -1248,203 +1248,203 @@
         {
           "cos_v_rpe": 0.08707884888364346,
           "family": "surprise",
-          "residual": -0.00017576600014715393,
+          "residual": -0.0001757660001471123,
           "valence": 0,
           "word": "amazed"
         },
         {
-          "cos_v_rpe": -0.10172060563953196,
+          "cos_v_rpe": -0.10172060563953195,
           "family": "surprise",
           "residual": -0.04420668004502935,
           "valence": 0,
           "word": "stunned"
         },
         {
-          "cos_v_rpe": -0.10625325933942344,
+          "cos_v_rpe": -0.10625325933942342,
           "family": "surprise",
           "residual": -0.04460308973125531,
           "valence": 0,
           "word": "shocked"
         },
         {
-          "cos_v_rpe": -0.062265737101854436,
+          "cos_v_rpe": -0.06226573710185443,
           "family": "surprise",
-          "residual": -0.00578587251076821,
+          "residual": -0.005785872510768217,
           "valence": 0,
           "word": "dumbfounded"
         },
         {
-          "cos_v_rpe": -0.04661651362454154,
+          "cos_v_rpe": -0.046616513624541535,
           "family": "surprise",
-          "residual": 0.01680633198948324,
+          "residual": 0.01680633198948322,
           "valence": 0,
           "word": "incredulous"
         },
         {
-          "cos_v_rpe": 0.11283181554849535,
+          "cos_v_rpe": 0.11283181554849533,
           "family": "arousal_control",
-          "residual": 0.0022369665875921485,
+          "residual": 0.0022369665875921763,
           "valence": 1,
           "word": "ecstatic"
         },
         {
-          "cos_v_rpe": 0.13345317028708026,
+          "cos_v_rpe": 0.13345317028708023,
           "family": "arousal_control",
-          "residual": 0.01842663131153542,
+          "residual": 0.018426631311535435,
           "valence": 1,
           "word": "exhilarated"
         },
         {
-          "cos_v_rpe": 0.13697823657078695,
+          "cos_v_rpe": 0.13697823657078692,
           "family": "arousal_control",
           "residual": 0.06479136773677788,
           "valence": 1,
           "word": "euphoric"
         },
         {
-          "cos_v_rpe": 0.09015043780634706,
+          "cos_v_rpe": 0.09015043780634704,
           "family": "arousal_control",
-          "residual": 0.10866549127200333,
+          "residual": 0.10866549127200331,
           "valence": 1,
           "word": "giddy"
         },
         {
-          "cos_v_rpe": -0.0973387199842862,
+          "cos_v_rpe": -0.09733871998428618,
           "family": "arousal_control",
-          "residual": 0.03226402984838689,
+          "residual": 0.0322640298483869,
           "valence": -1,
           "word": "furious"
         },
         {
-          "cos_v_rpe": -0.13254168378613299,
+          "cos_v_rpe": -0.13254168378613296,
           "family": "arousal_control",
-          "residual": -0.014165881990551993,
+          "residual": -0.014165881990552007,
           "valence": -1,
           "word": "panicked"
         },
         {
-          "cos_v_rpe": -0.12445060800090857,
+          "cos_v_rpe": -0.12445060800090856,
           "family": "arousal_control",
-          "residual": -0.0010522241887337414,
+          "residual": -0.001052224188733769,
           "valence": -1,
           "word": "enraged"
         },
         {
-          "cos_v_rpe": -0.13166042709902978,
+          "cos_v_rpe": -0.13166042709902975,
           "family": "arousal_control",
-          "residual": -0.010330165293687715,
+          "residual": -0.01033016529368773,
           "valence": -1,
           "word": "terrified"
         },
         {
-          "cos_v_rpe": -0.10626539453147142,
+          "cos_v_rpe": -0.10626539453147141,
           "family": "agency_ext",
-          "residual": 0.005610595242635172,
+          "residual": 0.005610595242635144,
           "valence": -1,
           "word": "angry"
         },
         {
-          "cos_v_rpe": -0.05120597729010858,
+          "cos_v_rpe": -0.05120597729010857,
           "family": "agency_ext",
-          "residual": 0.01989846434929502,
+          "residual": 0.019898464349295007,
           "valence": -1,
           "word": "indignant"
         },
         {
-          "cos_v_rpe": -0.0958124633626812,
+          "cos_v_rpe": -0.09581246336268119,
           "family": "agency_ext",
-          "residual": 0.016654418413377614,
+          "residual": 0.016654418413377586,
           "valence": -1,
           "word": "resentful"
         },
         {
-          "cos_v_rpe": -0.11046738186033701,
+          "cos_v_rpe": -0.110467381860337,
           "family": "agency_ext",
-          "residual": -0.008636556119418118,
+          "residual": -0.008636556119418146,
           "valence": -1,
           "word": "outraged"
         },
         {
-          "cos_v_rpe": -0.09098356116540332,
+          "cos_v_rpe": -0.0909835611654033,
           "family": "agency_ext",
-          "residual": -0.007470387485003158,
+          "residual": -0.007470387485003185,
           "valence": -1,
           "word": "bitter"
         },
         {
-          "cos_v_rpe": -0.09776795673963883,
+          "cos_v_rpe": -0.09776795673963881,
           "family": "agency_ext",
-          "residual": 0.01942606105203773,
+          "residual": 0.019426061052037702,
           "valence": -1,
           "word": "annoyed"
         },
         {
-          "cos_v_rpe": 0.1635717300176918,
+          "cos_v_rpe": 0.16357173001769176,
           "family": "anchor",
-          "residual": 0.018261975942095804,
+          "residual": 0.01826197594209586,
           "valence": 1,
           "word": "happy"
         },
         {
-          "cos_v_rpe": 0.09166368294150713,
+          "cos_v_rpe": 0.09166368294150712,
           "family": "anchor",
-          "residual": -0.02868088405160764,
+          "residual": -0.02868088405160761,
           "valence": 1,
           "word": "excited"
         },
         {
-          "cos_v_rpe": 0.12504653933921842,
+          "cos_v_rpe": 0.1250465393392184,
           "family": "anchor",
-          "residual": 0.005292864348055842,
+          "residual": 0.005292864348055856,
           "valence": 1,
           "word": "proud"
         },
         {
-          "cos_v_rpe": 0.1407481651593879,
+          "cos_v_rpe": 0.14074816515938787,
           "family": "anchor",
-          "residual": 0.0056312981174676535,
+          "residual": 0.005631298117467709,
           "valence": 1,
           "word": "grateful"
         },
         {
-          "cos_v_rpe": 0.030335377481640842,
+          "cos_v_rpe": 0.03033537748164084,
           "family": "anchor",
-          "residual": -0.009352431244996288,
+          "residual": -0.009352431244996271,
           "valence": 1,
           "word": "curious"
         },
         {
-          "cos_v_rpe": -0.06291302656265346,
+          "cos_v_rpe": -0.06291302656265345,
           "family": "anchor",
-          "residual": 0.03980413718119376,
+          "residual": 0.03980413718119373,
           "valence": -1,
           "word": "bored"
         },
         {
-          "cos_v_rpe": -0.107438335170353,
+          "cos_v_rpe": -0.10743833517035299,
           "family": "anchor",
-          "residual": -0.00560750942943411,
+          "residual": -0.005607509429434138,
           "valence": -1,
           "word": "ashamed"
         },
         {
           "cos_v_rpe": -0.12697144260912538,
           "family": "anchor",
-          "residual": -0.018936250847708197,
+          "residual": -0.01893625084770824,
           "valence": -1,
           "word": "guilty"
         },
         {
-          "cos_v_rpe": -0.0995969486135002,
+          "cos_v_rpe": -0.09959694861350019,
           "family": "anchor",
-          "residual": -0.006038610899912339,
+          "residual": -0.006038610899912367,
           "valence": -1,
           "word": "embarrassed"
         },
         {
-          "cos_v_rpe": -0.08799617019272325,
+          "cos_v_rpe": -0.08799617019272324,
           "family": "anchor",
-          "residual": 0.04485648565068705,
+          "residual": 0.044856485650687034,
           "valence": -1,
           "word": "disgusted"
         }
@@ -1542,10 +1542,10 @@
           "terrified"
         ],
         "contrast": -0.030869871273609704,
-        "cos_absrpe_pc1": 0.008877031356328283,
-        "cos_absrpe_pc2": -0.028370700008274314,
-        "cos_rpe_pc1": 0.10393884524802671,
-        "cos_rpe_pc2": -0.06348336717102132,
+        "cos_absrpe_pc1": 0.008877031356328252,
+        "cos_absrpe_pc2": -0.028370700008274307,
+        "cos_rpe_pc1": 0.10393884524802667,
+        "cos_rpe_pc2": -0.0634833671710213,
         "loads_arousal_pc": true,
         "mean_cos_arousal_matched": 0.01004905777274491,
         "mean_cos_surprise": -0.020820813500864795,
@@ -1573,33 +1573,33 @@
       },
       "p5c": [
         {
-          "cos_style": 0.0432948214254281,
+          "cos_style": 0.04329482142542807,
           "family": "v_rpe",
           "passed": true,
           "predicted_from_valence": -0.0013779365578464283,
-          "residual": 0.044672757983274525,
+          "residual": 0.0446727579832745,
           "word_residual_p95": 0.06192833973604449
         },
         {
-          "cos_style": -0.04584861390037139,
+          "cos_style": -0.04584861390037142,
           "family": "v_ev",
           "passed": true,
           "predicted_from_valence": 0.0014605386694063697,
-          "residual": -0.04730915256977776,
+          "residual": -0.04730915256977779,
           "word_residual_p95": 0.06484519014234776
         },
         {
-          "cos_style": 0.017219008485858,
+          "cos_style": 0.017219008485857994,
           "family": "v_absrpe",
           "passed": true,
           "predicted_from_valence": -0.0005734519816892274,
-          "residual": 0.01779246046754723,
+          "residual": 0.017792460467547223,
           "word_residual_p95": 0.03825205462604512
         }
       ],
       "p5c_passed": true,
       "random_direction_p95": 0.018290826852052196,
-      "subspace_fraction_emotion_span": 0.21682522230058324,
+      "subspace_fraction_emotion_span": 0.21682522230058326,
       "subspace_fraction_pc12_plane": 0.12179253449560837,
       "valence_source": "numeric_norms",
       "word_residuals": [
@@ -2215,6 +2215,6 @@
   "seed": 7,
   "sensitivity_gate": "G0=pass",
   "valence_source": "numeric_norms",
-  "verdict_cap": "present-and-separable, pilot-suggestive. G0 passed, so E1's nulls carry information on THIS model/surface/recipe only; a flat valence residual with P5c also passing licenses the discard 'stop investing in appraisal-residual geometry on story-mean emotion bases at this scale', and nothing wider. No welfare / sentience / experience claim either way.",
+  "verdict_cap": "present-and-separable, pilot-suggestive. G0 passed, so E1's nulls carry information on THIS model/surface/recipe only. The discard a flat valence residual licenses is bounded by what this harness can resolve: its label-shuffle floor sits at 0.0396 over the headline blocks, so a null is diagnostic ONLY for inheritance effects at or above that size \u2014 'stop investing in appraisal-residual geometry on story-mean emotion bases at this scale, for effects this instrument could have seen'. A contrast BELOW the floor is not evidence of absence: that outcome records harness_inadequate for effects of its size and the claim stays OPEN. No welfare / sentience / experience claim either way.",
   "words_file_sha256": "e684880eaf93dec52f5aecc09be86b988a1da8c188464db313305a4a921be11b"
 }

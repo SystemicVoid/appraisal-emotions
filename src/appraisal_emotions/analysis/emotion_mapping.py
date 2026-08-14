@@ -410,6 +410,24 @@ def map_geometry(
         block_geometry(directions, emotion, block) for block in range(directions.metadata.n_blocks)
     ]
     gate = emotion.metadata.gate_verdict
+    # Built before the report so the verdict cap can be bounded by the harness's OWN measured
+    # sensitivity rather than by a claim about it.
+    blocks = tuple(
+        _block_report(
+            geometries[block],
+            words,
+            index,
+            rows,
+            pool,
+            designs,
+            binary_valence,
+            valence,
+            seed=seed,
+            n_permutations=n_permutations,
+            n_null_draws=n_null_draws,
+        )
+        for block in headline
+    )
     return MapGeometryReport(
         seed=seed,
         n_permutations=n_permutations,
@@ -426,23 +444,8 @@ def map_geometry(
         valence_source=designs[2],
         headline_blocks=headline,
         sensitivity_gate=f"G0={gate}",
-        verdict_cap=_verdict_cap(gate),
-        blocks=tuple(
-            _block_report(
-                geometries[block],
-                words,
-                index,
-                rows,
-                pool,
-                designs,
-                binary_valence,
-                valence,
-                seed=seed,
-                n_permutations=n_permutations,
-                n_null_draws=n_null_draws,
-            )
-            for block in headline
-        ),
+        verdict_cap=_verdict_cap(gate, blocks),
+        blocks=blocks,
         block_sweep=tuple(
             _sweep_row(geometry, words, index, rows, designs[0], binary_valence, valence)
             for geometry in geometries
@@ -451,18 +454,26 @@ def map_geometry(
     )
 
 
-def _verdict_cap(gate: str) -> str:
+def _verdict_cap(gate: str, blocks: tuple[BlockReport, ...]) -> str:
     if gate != "pass":
         return (
             "harness_inadequate — the E0 G0 sensitivity gate did NOT pass, so no null here is "
             "evidence against appraisal inheritance and no positive here is evidence for it. "
             "The claim stays OPEN (design §4 E0 diagnosticity clause)."
         )
+    # The floor is the smallest statistic this test can distinguish from relabelled noise, so it
+    # is the harness's own statement of what a null of its can and cannot rule out. Quoting it
+    # here stops the discard from being read as wider than the instrument.
+    floor = max(block.label_shuffled_p95 for block in blocks)
     return (
         "present-and-separable, pilot-suggestive. G0 passed, so E1's nulls carry information on "
-        "THIS model/surface/recipe only; a flat valence residual with P5c also passing licenses "
-        "the discard 'stop investing in appraisal-residual geometry on story-mean emotion bases "
-        "at this scale', and nothing wider. No welfare / sentience / experience claim either way."
+        "THIS model/surface/recipe only. The discard a flat valence residual licenses is bounded "
+        f"by what this harness can resolve: its label-shuffle floor sits at {floor:.4f} over the "
+        "headline blocks, so a null is diagnostic ONLY for inheritance effects at or above that "
+        "size — 'stop investing in appraisal-residual geometry on story-mean emotion bases at "
+        "this scale, for effects this instrument could have seen'. A contrast BELOW the floor is "
+        "not evidence of absence: that outcome records harness_inadequate for effects of its "
+        "size and the claim stays OPEN. No welfare / sentience / experience claim either way."
     )
 
 
