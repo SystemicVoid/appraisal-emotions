@@ -50,7 +50,9 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM", "PL"]
-ignore = ["PLC0415", "PLR0913", "PLR2004"]
+# PLR0913/PLR0917: every typer command declares one keyword-only Option per CLI flag; the count
+# is the interface, not a design smell. PLR0917 was preview when PLR0913 was first ignored.
+ignore = ["PLC0415", "PLR0913", "PLR0917", "PLR2004"]
 
 [tool.ruff.lint.isort]
 # Stated explicitly rather than inferred from `src`: inference depends on the working directory
