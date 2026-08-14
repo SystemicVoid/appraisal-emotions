@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -67,6 +68,12 @@ from appraisal_emotions.stimuli.emotion_stories import (
     EmotionWordSet,
     StoryRequest,
     build_story_grid,
+)
+from appraisal_emotions.stimuli.sofroniew_stories import (
+    DEFAULT_SOFRONIEW_DATA_DIR,
+    build_sofroniew_story_grid,
+    read_sofroniew_recipe,
+    split_completion,
 )
 
 __all__ = [
@@ -232,6 +239,12 @@ def _classify(text: str, request: StoryRequest, *, min_token: int, token_count: 
     return None
 
 
+def _single_story(text: str) -> tuple[str, ...]:
+    """The project recipe's split: one completion is one story."""
+
+    return (text,)
+
+
 def generate_stories(
     backend: StoryCaptureBackend,
     requests: tuple[StoryRequest, ...],
@@ -239,8 +252,17 @@ def generate_stories(
     min_token: int,
     max_tokens: int,
     temperature: float,
+    split: Callable[[str], tuple[str, ...]] = _single_story,
 ) -> tuple[GeneratedStory, ...]:
-    """Generate and filter one story per request, in request order."""
+    """Generate and filter the stories each request asks for, in request order.
+
+    ``split`` turns one completion into the stories it carries. The project recipe asks for one
+    story per call and leaves this at :func:`_single_story`; the Sofroniew arm asks for several
+    per call and passes
+    :func:`~appraisal_emotions.stimuli.sofroniew_stories.split_completion`. A completion that
+    yields nothing becomes one empty story, so the request still appears in the drop audit rather
+    than vanishing from it.
+    """
 
     stories: list[GeneratedStory] = []
     for request in requests:
@@ -248,18 +270,22 @@ def generate_stories(
         result = backend.generate_with_metadata(
             rendered, max_tokens=max_tokens, temperature=temperature
         )
-        text = result.text.strip()
-        token_count = len(backend.token_ids(text)) if text else 0
-        stories.append(
-            GeneratedStory(
-                emotion=request.emotion,
-                topic=request.topic,
-                story_index=request.story_index,
-                text=text,
-                token_count=token_count,
-                drop_reason=_classify(text, request, min_token=min_token, token_count=token_count),
+        pieces = split(result.text.strip()) or ("",)
+        for offset, piece in enumerate(pieces):
+            text = piece.strip()
+            token_count = len(backend.token_ids(text)) if text else 0
+            stories.append(
+                GeneratedStory(
+                    emotion=request.emotion,
+                    topic=request.topic,
+                    story_index=request.story_index + offset,
+                    text=text,
+                    token_count=token_count,
+                    drop_reason=_classify(
+                        text, request, min_token=min_token, token_count=token_count
+                    ),
+                )
             )
-        )
     return tuple(stories)
 
 
@@ -367,6 +393,11 @@ class EmotionVectorsMetadata(StrictModel):
     words_file: str
     words_file_sha256: str
     stimulus_hash: str
+    # Which E0 stimulus arm generated the stories: the §5 project recipe, or the Sofroniew et al.
+    # 2026 appendix prompt (docs/design/sofroniew-recipe.md). Everything else is held identical,
+    # so two bases differing only here are the prompt A/B.
+    story_recipe: str = "project"
+    recipe_manifest: dict[str, object] = {}
     stories_per_emotion: int
     min_token: int
     max_tokens: int
@@ -504,12 +535,108 @@ def _gate(table: tuple[G0BlockRow, ...], threshold: float) -> tuple[int, float, 
     )
 
 
+StoryRecipeName = Literal["project", "sofroniew"]
+
+
+@dataclass(frozen=True)
+class StimulusPlan:
+    """One recipe's generation grid, its completion splitter, and its provenance rows."""
+
+    recipe: str
+    requests: tuple[StoryRequest, ...]
+    split: Callable[[str], tuple[str, ...]]
+    stimulus_hash: str
+    stories_per_emotion: int
+    recipe_manifest: dict[str, object]
+
+
+def build_stimulus_plan(
+    labels: tuple[str, ...],
+    *,
+    story_recipe: StoryRecipeName,
+    stories_per_emotion: int,
+    seed: int,
+    sofroniew_stories_per_call: int = 2,
+    sofroniew_data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
+) -> StimulusPlan:
+    """Resolve the E0 stimulus arm.
+
+    ``project`` is the §5 recipe (three-sentence prompt, one paragraph per call, 25 neutral
+    settings). ``sofroniew`` is the paper's own appendix prompt over the paper's 100 topics,
+    batched ``sofroniew_stories_per_call`` stories per completion — the A/B whose whole point is
+    that everything downstream (word set, capture window, centring, G0) is held identical, so a
+    difference in the result is a difference the prompt made.
+
+    Under ``sofroniew``, ``stories_per_emotion`` still names the target stories per label; the
+    number of CALLS per label is ``stories_per_emotion // sofroniew_stories_per_call``, and it
+    must divide evenly or the two arms would not compare at matched sample size.
+    """
+
+    if story_recipe == "project":
+        return StimulusPlan(
+            recipe="project",
+            requests=build_story_grid(labels, stories_per_emotion=stories_per_emotion, seed=seed),
+            split=_single_story,
+            stimulus_hash=stable_hash(
+                [STORY_PROMPT_TEMPLATE, STYLE_CONTROL_PROMPT_TEMPLATE, list(STORY_TOPICS)]
+            ),
+            stories_per_emotion=stories_per_emotion,
+            recipe_manifest={"recipe": "project", "n_topics": len(STORY_TOPICS)},
+        )
+    if story_recipe != "sofroniew":
+        raise ValueError(f"unknown story_recipe {story_recipe!r}; expected project or sofroniew")
+
+    if sofroniew_stories_per_call < 1:
+        raise ValueError("sofroniew_stories_per_call must be >= 1")
+    if stories_per_emotion % sofroniew_stories_per_call:
+        raise ValueError(
+            f"stories_per_emotion={stories_per_emotion} is not a multiple of "
+            f"sofroniew_stories_per_call={sofroniew_stories_per_call}; the arms would compare at "
+            "different sample sizes"
+        )
+    recipe = read_sofroniew_recipe(sofroniew_data_dir)
+    topics_per_label = stories_per_emotion // sofroniew_stories_per_call
+    manifest = recipe.manifest()
+    manifest |= {
+        "recipe": "sofroniew",
+        "topics_per_label": topics_per_label,
+        "stories_per_call": sofroniew_stories_per_call,
+    }
+    return StimulusPlan(
+        recipe="sofroniew",
+        requests=build_sofroniew_story_grid(
+            labels,
+            recipe=recipe,
+            topics_per_label=topics_per_label,
+            stories_per_call=sofroniew_stories_per_call,
+            seed=seed,
+        ),
+        split=split_completion,
+        # Hashes the loaded paper text, not a copy of it: the arm's stimulus identity is the
+        # arXiv source it was extracted from plus how far it was downscaled.
+        stimulus_hash=stable_hash(
+            [
+                recipe.story_prompt_template,
+                recipe.style_control_prompt_template,
+                list(recipe.topics),
+                topics_per_label,
+                sofroniew_stories_per_call,
+            ]
+        ),
+        stories_per_emotion=stories_per_emotion,
+        recipe_manifest=manifest,
+    )
+
+
 def extract_emotion_vectors(
     backend: StoryCaptureBackend,
     word_set: EmotionWordSet,
     *,
     spec: ModelSpec,
     stories_per_emotion: int,
+    story_recipe: StoryRecipeName = "project",
+    sofroniew_stories_per_call: int = 2,
+    sofroniew_data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
     seed: int = EXTRACTION_SEED,
     min_token: int = DEFAULT_MIN_TOKEN,
     max_tokens: int = 320,
@@ -527,9 +654,21 @@ def extract_emotion_vectors(
     """
 
     labels = word_set.labels
-    requests = build_story_grid(labels, stories_per_emotion=stories_per_emotion, seed=seed)
+    plan = build_stimulus_plan(
+        labels,
+        story_recipe=story_recipe,
+        stories_per_emotion=stories_per_emotion,
+        seed=seed,
+        sofroniew_stories_per_call=sofroniew_stories_per_call,
+        sofroniew_data_dir=sofroniew_data_dir,
+    )
     stories = generate_stories(
-        backend, requests, min_token=min_token, max_tokens=max_tokens, temperature=temperature
+        backend,
+        plan.requests,
+        min_token=min_token,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        split=plan.split,
     )
     contact_n, contact_rate = _first_contact_check(
         stories, n=first_contact_n, max_drop_rate=first_contact_max_drop_rate
@@ -566,9 +705,9 @@ def extract_emotion_vectors(
         seed=seed,
         words_file=str(word_set.source_path),
         words_file_sha256=word_set.source_sha256,
-        stimulus_hash=stable_hash(
-            [STORY_PROMPT_TEMPLATE, STYLE_CONTROL_PROMPT_TEMPLATE, list(STORY_TOPICS)]
-        ),
+        stimulus_hash=plan.stimulus_hash,
+        story_recipe=plan.recipe,
+        recipe_manifest=plan.recipe_manifest,
         stories_per_emotion=stories_per_emotion,
         min_token=min_token,
         max_tokens=max_tokens,

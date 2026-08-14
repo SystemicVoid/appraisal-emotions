@@ -22,6 +22,7 @@ never consumed, and the artifact-path overrides (outputs live under ``<output_ro
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -110,6 +111,15 @@ class EmotionVectorsConfig(ConfigModel):
     seed: int = 7
     words_file: Path = Path("data/emotion_words.json")
     stories_per_emotion: int = 12
+    # Which E0 stimulus arm to run. ``project`` is the §5 recipe; ``sofroniew`` swaps in the
+    # paper's own appendix prompt and its 100 topics, holding word set, capture window, centring
+    # and G0 identical, so the two differ only in the prompt (docs/design/sofroniew-recipe.md).
+    story_recipe: Literal["project", "sofroniew"] = "project"
+    # ``sofroniew`` only: stories requested per completion. The paper asks for 12 per call over
+    # all 100 topics; a downscaled run trades calls against topic coverage, and
+    # stories_per_emotion must stay a multiple of this so both arms carry the same sample size.
+    sofroniew_stories_per_call: int = 2
+    sofroniew_data_dir: Path = Path("data/sofroniew2026")
     min_token: int = 50
     max_tokens: int = 320
     temperature: float = 1.0

@@ -1,0 +1,52 @@
+# Rung E0 PAPER-PROMPT ARM, CONTRACT SMOKE (fake backend; NO scientific claim).
+#
+# Same purpose as configs/emotion_vectors_smoke.yaml — exercise the whole E0 path without a GPU —
+# but through the Sofroniew arm, so the parts the arm adds are the parts under test: loading
+# data/sofroniew2026/, rendering the paper's prompt, batching stories per completion, splitting
+# on <NEW STORY>, and feeding the pieces to the existing filter and drop audit.
+#
+# The fake backend's hidden states are a deterministic hash of the text and its "stories" are
+# seeded templates, so the G0 number and everything downstream are MEANINGLESS. Run this before
+# renting the GPU: it proves the arm is wired, not that the arm found anything.
+#
+#   just extract-emotions configs/emotion_vectors_sofroniew_smoke.yaml
+#
+# Note the fake backend emits no <NEW STORY> separators, so every completion splits into exactly
+# one piece here. That is the correct smoke behaviour — the splitter's real shape is unknown
+# until a real model has been read, which is what the first-contact checkpoint is for.
+
+run:
+  id: emotion_vectors_sofroniew_smoke
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-sofroniew-smoke/v1
+  known_gaps:
+    - "FAKE backend contract smoke: template stories and hash-derived hidden states exercise the
+      path; the G0 verdict and every E1/E2 number downstream of it are meaningless and MUST NOT
+      be read as evidence."
+    - "The fake backend never emits <NEW STORY>, so this smoke does not exercise a multi-piece
+      split. tests/test_sofroniew_stories.py covers the splitter directly."
+  decision_affected:
+    - none (smoke)
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: fake-functional
+
+emotion_vectors:
+  seed: 7
+  words_file: data/emotion_words.json
+  stories_per_emotion: 2
+  story_recipe: sofroniew
+  sofroniew_stories_per_call: 2
+  sofroniew_data_dir: data/sofroniew2026
+  min_token: 20
+  max_tokens: 160
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 4
+  first_contact_n: 10
+  first_contact_max_drop_rate: 0.6

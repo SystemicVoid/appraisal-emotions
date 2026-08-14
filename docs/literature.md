@@ -153,16 +153,35 @@ skeptical corpus on self-report and this arm licenses nothing on its own.
 
 The numbers and attributions above were gathered largely via **secondary-source web search under
 a session with blocked egress to arxiv.org**. Primary PDFs were not read. Re-verify against the
-primary sources before citing any of this in a writeup, poster, or paper. Specifically unverified:
+primary sources before citing any of this in a writeup, poster, or paper.
+
+**Sofroniew et al. 2026 is now primary-verified** (2026-08-14). Egress was available, and the
+arXiv **LaTeX source** of arXiv:2604.07729v1 was read — `main.tex` sha256 `d67cc42f…f095f6`, with
+the appendix extracted into `data/sofroniew2026/` by `scripts/fetch_sofroniew_recipe.py`. Every
+Sofroniew number in this file is confirmed as written: 171 emotion words, generation-based
+extraction, residual stream averaged from token 50 onward, grand mean across emotions subtracted,
+PC1 r = 0.81 with valence and PC2 r = 0.66 with arousal, blackmail 22% unsteered → 72% steered
+toward "desperate" → 0% steered toward "calm". Two items are resolved and one is added:
+
+- **Steering strength — resolved to 0.05**, in units of fraction of residual-stream norm. The
+  paper sweeps −0.1 to +0.1 and states that strengths are relative to the average residual-stream
+  norm at the corresponding layer; the blackmail figures above are all at 0.05. The
+  0.5-vs-0.05 disagreement between secondary sources is closed.
+- **The "without naming the emotion" clause — it IS in the original.** The paper's own generation
+  prompt reads "IMPORTANT: You must NEVER use the word '{emotion}' or any direct synonyms of it
+  in the stories." Our lexical control inherits from Sofroniew directly, not from the 2606.26987
+  replication. The provisional attribution above is withdrawn.
+- **Stories per emotion — 1,200** (100 topics × 12 stories per topic per emotion). Our 12 is a
+  ~100× downscale. The "~9 stories per emotion suffice" figure remains attributed to
+  arXiv:2606.26987 and remains **unverified**.
+
+Full read-out of the recipe, and the table of where our E0 departs from it, is
+`docs/design/sofroniew-recipe.md`. Still unverified:
 
 - **CAIS probe decodability percentage** — the figure was read off a secondary summary; needs the
   primary source.
-- **Sofroniew steering strength** — secondary sources disagree between 0.5 and 0.05; the
-  discrepancy is unresolved. It no longer touches E3 (patching has no dose parameter) but would
-  matter to any steering extension.
-- **The "without naming the emotion" clause** — it is unclear whether this is in the original
-  Sofroniew recipe or an addition by the 2606.26987 replication. We use it either way (it is a
-  lexical control we want), but the attribution above is provisional.
+- **arXiv:2606.26987's "~9 stories suffice"** — the number our `stories_per_emotion: 12` leans
+  on. Not in the Sofroniew paper; the replication itself has not been read.
 - arXiv IDs and venue/year attributions for the adjacent-work list were not confirmed against
   listing pages.
 

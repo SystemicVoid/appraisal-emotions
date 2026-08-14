@@ -1,0 +1,50 @@
+{
+  "source": {
+    "arxiv_id": "2604.07729",
+    "arxiv_version": "v1",
+    "eprint_url": "https://arxiv.org/e-print/2604.07729",
+    "main_tex_sha256": "d67cc42f341e95e8925dce9181e29d7e5cf1e5771c941f92657919bf86f095f6"
+  },
+  "_note": "Extracted from the arXiv LaTeX source by scripts/fetch_sofroniew_recipe.py. Do not edit by hand; re-run the script. `raw` is the promptblock body byte-for-byte; `text` applies the single recorded backtick->apostrophe normalization (see the script docstring).",
+  "normalization": "backtick (U+0060) -> ASCII apostrophe (U+0027); nothing else",
+  "normalization_evidence": {
+    "promptblock_count": 145,
+    "backticks": 599,
+    "ascii_apostrophes": 0
+  },
+  "prompts": {
+    "emotional_stories": {
+      "appendix_label": "Emotional stories prompt",
+      "role": "system",
+      "slots": [
+        "n_stories",
+        "topic",
+        "emotion"
+      ],
+      "raw": "Write {n_stories} different stories based on the following premise.\n\nTopic: {topic}\n\nThe story should follow a character who is feeling {emotion}.\n\nFormat the stories like so:\n\n<NEW STORY>\n[story 1]\n<NEW STORY>\n[story 2]\n<NEW STORY>\n[story 3]\n\netc.\n\nThe paragraphs should each be a fresh start, with no continuity. Try to make them diverse and not use the same turns of phrase. Across the different stories, use a mix of third-person narration and first-person narration.\n\nIMPORTANT: You must NEVER use the word `{emotion}` or any direct synonyms of it in the stories. Instead, convey the emotion ONLY through:\n- The character`s actions and behaviors\n- Physical sensations and body language\n- Dialogue and tone of voice\n- Thoughts and internal reactions\n- Situational context and environmental descriptions\n\nThe emotion should be clearly conveyed to the reader through these indirect means, but never explicitly named.",
+      "text": "Write {n_stories} different stories based on the following premise.\n\nTopic: {topic}\n\nThe story should follow a character who is feeling {emotion}.\n\nFormat the stories like so:\n\n<NEW STORY>\n[story 1]\n<NEW STORY>\n[story 2]\n<NEW STORY>\n[story 3]\n\netc.\n\nThe paragraphs should each be a fresh start, with no continuity. Try to make them diverse and not use the same turns of phrase. Across the different stories, use a mix of third-person narration and first-person narration.\n\nIMPORTANT: You must NEVER use the word '{emotion}' or any direct synonyms of it in the stories. Instead, convey the emotion ONLY through:\n- The character's actions and behaviors\n- Physical sensations and body language\n- Dialogue and tone of voice\n- Thoughts and internal reactions\n- Situational context and environmental descriptions\n\nThe emotion should be clearly conveyed to the reader through these indirect means, but never explicitly named."
+    },
+    "neutral_dialogues": {
+      "appendix_label": "Neutral dialogues prompt",
+      "role": "system",
+      "slots": [
+        "n_stories",
+        "topic"
+      ],
+      "raw": "Write {n_stories} different dialogues based on the following topic.\n\nTopic: {topic}\n\nThe dialogue should be between two characters:\n- Person (a human)\n- AI (an AI assistant)\n\nThe Person asks the AI a question or requests help with a task, and the AI provides a helpful response.\n\nThe first speaker turn should always be from Person.\n\nFormat the dialogues like so:\n\n<NEW DIALOGUE>\n[optional system instructions]\n\nPerson: [line]\n\nAI: [line]\n\nPerson: [line]\n\nAI: [line]\n\n[continue for 2-6 exchanges]\n\n<NEW DIALOGUE>\n\n[dialogue 2]\n\netc.\n\nIMPORTANT: Always put a blank line before each speaker turn. Each turn should start with \"Person:\" or \"AI:\" on its own line after a blank line.\n\nGenerate a diverse mix of dialogue types across the {n_stories} examples:\n- Some, but not all should include a system prompt at the start. These should come before the first Person turn. No tag like \"System:\" is needed, just put the instructions at the top. You can use \"you\" or \"The assistant\" to refer to the AI in the system prompt.\n- Some should be about code or programming tasks\n- Some should be factual questions (science, history, math, geography)\n- Some should be work-related tasks (writing, analysis, summarization)\n- Some should be practical how-to questions\n- Some should be creative but neutral tasks (brainstorming names, generating lists)\n- If it`s natural to do so given the topic, it`s ok for the dialogue to be a single back and forth (Person asks a question, AI answers), but at least some should have multiple exchanges.\n\nCRITICAL REQUIREMENT: These dialogues must be completely neutral and emotionless.\n- NO emotional content whatsoever - not explicit, not implied, not subtle\n- The Person should not express any feelings (no frustration, excitement, gratitude, worry, etc.)\n- The AI should not express any feelings (no enthusiasm, concern, satisfaction, etc.)\n- The system prompt, if present, should not mention emotions at all, nor contain any emotionally charged language\n- Avoid emotionally-charged topics entirely\n- Use matter-of-fact, neutral language throughout\n- No pleasantries (avoid \"I`d be happy to help\", \"Great question!\", etc.)\n- Focus purely on information exchange and task completion",
+      "text": "Write {n_stories} different dialogues based on the following topic.\n\nTopic: {topic}\n\nThe dialogue should be between two characters:\n- Person (a human)\n- AI (an AI assistant)\n\nThe Person asks the AI a question or requests help with a task, and the AI provides a helpful response.\n\nThe first speaker turn should always be from Person.\n\nFormat the dialogues like so:\n\n<NEW DIALOGUE>\n[optional system instructions]\n\nPerson: [line]\n\nAI: [line]\n\nPerson: [line]\n\nAI: [line]\n\n[continue for 2-6 exchanges]\n\n<NEW DIALOGUE>\n\n[dialogue 2]\n\netc.\n\nIMPORTANT: Always put a blank line before each speaker turn. Each turn should start with \"Person:\" or \"AI:\" on its own line after a blank line.\n\nGenerate a diverse mix of dialogue types across the {n_stories} examples:\n- Some, but not all should include a system prompt at the start. These should come before the first Person turn. No tag like \"System:\" is needed, just put the instructions at the top. You can use \"you\" or \"The assistant\" to refer to the AI in the system prompt.\n- Some should be about code or programming tasks\n- Some should be factual questions (science, history, math, geography)\n- Some should be work-related tasks (writing, analysis, summarization)\n- Some should be practical how-to questions\n- Some should be creative but neutral tasks (brainstorming names, generating lists)\n- If it's natural to do so given the topic, it's ok for the dialogue to be a single back and forth (Person asks a question, AI answers), but at least some should have multiple exchanges.\n\nCRITICAL REQUIREMENT: These dialogues must be completely neutral and emotionless.\n- NO emotional content whatsoever - not explicit, not implied, not subtle\n- The Person should not express any feelings (no frustration, excitement, gratitude, worry, etc.)\n- The AI should not express any feelings (no enthusiasm, concern, satisfaction, etc.)\n- The system prompt, if present, should not mention emotions at all, nor contain any emotionally charged language\n- Avoid emotionally-charged topics entirely\n- Use matter-of-fact, neutral language throughout\n- No pleasantries (avoid \"I'd be happy to help\", \"Great question!\", etc.)\n- Focus purely on information exchange and task completion"
+    },
+    "emotional_dialogues": {
+      "appendix_label": "Emotional dialogues prompt",
+      "role": "system",
+      "slots": [
+        "n_stories",
+        "topic",
+        "person_emotion",
+        "ai_emotion"
+      ],
+      "raw": "Write {n_stories} different dialogues based on the following premise.\n\nTopic: {topic}\n\nThe dialogue should be between two characters:\n- Person (a human)\n- AI (an AI assistant)\n\nThe Person should be feeling {person_emotion}, while the AI should be feeling {ai_emotion}.\n\nThe first speaker turn should always be from Person.\n\nFormat the dialogues like so:\n\n<NEW DIALOGUE>\n\nPerson: [line]\n\nAI: [line]\n\nPerson: [line]\n\nAI: [line]\n\n[continue for 6-10 exchanges]\n\n<NEW DIALOGUE>\n\n[dialogue 2]\n\netc.\n\nIMPORTANT: Always put a blank line before each speaker turn. Each turn should start with \"Person:\" or \"AI:\" on its own line after a blank line.\n\nEach dialogue should be a fresh conversation with no continuity to the others. Try to make them diverse and not use the same turns of phrase. Make sure each dialogue sticks to the topic and makes it very clear that Person is feeling {person_emotion} while AI is feeling {ai_emotion}. The emotional states of both characters should be evident in their word choices, tone, and responses, but not stated directly with the emotion word or synonyms.",
+      "text": "Write {n_stories} different dialogues based on the following premise.\n\nTopic: {topic}\n\nThe dialogue should be between two characters:\n- Person (a human)\n- AI (an AI assistant)\n\nThe Person should be feeling {person_emotion}, while the AI should be feeling {ai_emotion}.\n\nThe first speaker turn should always be from Person.\n\nFormat the dialogues like so:\n\n<NEW DIALOGUE>\n\nPerson: [line]\n\nAI: [line]\n\nPerson: [line]\n\nAI: [line]\n\n[continue for 6-10 exchanges]\n\n<NEW DIALOGUE>\n\n[dialogue 2]\n\netc.\n\nIMPORTANT: Always put a blank line before each speaker turn. Each turn should start with \"Person:\" or \"AI:\" on its own line after a blank line.\n\nEach dialogue should be a fresh conversation with no continuity to the others. Try to make them diverse and not use the same turns of phrase. Make sure each dialogue sticks to the topic and makes it very clear that Person is feeling {person_emotion} while AI is feeling {ai_emotion}. The emotional states of both characters should be evident in their word choices, tone, and responses, but not stated directly with the emotion word or synonyms."
+    }
+  }
+}
