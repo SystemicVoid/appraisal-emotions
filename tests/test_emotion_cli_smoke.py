@@ -1,7 +1,7 @@
-"""End-to-end contract smoke for the emotion layer: the E0 -> E1 -> E2 -> E3 chain on the fake
-backend.
+"""End-to-end contract smoke for the emotion layer: the E0 -> P1 -> E1 -> E2 -> E3 chain on the
+fake backend.
 
-Runs the five shipped commands in order through the real CLI, into a tmp run root, using the
+Runs the six shipped commands in order through the real CLI, into a tmp run root, using the
 shipped smoke configs with only their output/registry/word paths redirected. Everything asserted
 here is CONTRACT — artifacts exist, revalidate, and bind to each other by digest; the reports
 carry every word's residual, the recorded-expectation readouts, the patching arms, and the
@@ -15,12 +15,18 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
 from typer.testing import CliRunner
 
 from appraisal_emotions.analysis.activation_patching import ARMS
 from appraisal_emotions.analysis.emotion_vectors import read_emotion_vectors
+from appraisal_emotions.analysis.reveal_rpe import read_reveal_rpe_directions
+from appraisal_emotions.analysis.story_projections import (
+    direction_matrix,
+    read_story_projections,
+)
 from appraisal_emotions.cli import app
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
@@ -86,6 +92,46 @@ def test_e0_writes_its_artifacts_and_reports_the_gate_cap(chain):
     # Hash-derived hidden states cannot carry valence structure, so the smoke MUST report the
     # cap rather than a pass — a "pass" here would mean the gate is not doing anything.
     assert emotion.metadata.gate_verdict == "harness_inadequate"
+
+
+def test_p1_projections_bind_to_the_artifacts_they_decompose(chain):
+    runner = CliRunner()
+    rpe_dir, emotion_dir = chain.rpe_dir, chain.emotion_dir
+    result = runner.invoke(
+        app,
+        [
+            "extract-story-projections",
+            "--config",
+            str(chain.emotion_config),
+            "--directions",
+            str(rpe_dir / "reveal_directions.json"),
+        ],
+    )
+    assert result.exit_code == 0, f"{result.output}\n{result.exception}"
+    assert not (emotion_dir / "story_projections_gate_failed.json").exists()
+
+    emotion = read_emotion_vectors(emotion_dir / "emotion_vectors.json")
+    directions = read_reveal_rpe_directions(rpe_dir / "reveal_directions.json")
+    projections = read_story_projections(emotion_dir / "story_projections.json")
+    meta = projections.metadata
+    assert meta.gate_verdict == "pass"
+    # The digests are the whole point of the capture: these projections are interpretable only
+    # against the basis they centre on and the directions they project onto, so the binding is
+    # checked against those two artifacts rather than against the projection metadata itself.
+    assert meta.emotion_vectors_sha256 == emotion.metadata.vectors_sha256
+    assert meta.directions_sha256 == directions.metadata.directions_sha256
+    assert meta.n_stories == emotion.metadata.n_kept
+    assert set(emotion.metadata.vector_labels) <= set(meta.stories_per_label)
+
+    # The identity the artifact exists for, exercised through the CLI's config -> path wiring:
+    # a re-capture that read a different window or a different run dir breaks it immediately.
+    unit = np.stack(
+        [direction_matrix(emotion, directions, block) for block in range(emotion.metadata.n_blocks)]
+    )
+    for index, label in enumerate(emotion.metadata.vector_labels):
+        observed = projections.projections[projections.rows_for(label)].mean(axis=0)
+        expected = np.einsum("bh,bdh->bd", emotion.vectors[index], unit)
+        assert np.allclose(observed, expected, rtol=0.0, atol=1e-12), label
 
 
 def test_e1_map_geometry_shows_every_word_and_the_recorded_expectations(chain):
