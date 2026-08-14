@@ -40,6 +40,19 @@ provenance:
       balanced rendering (both orders x both strata x four templates at equal weight) puts symbol
       identity in the design intercept rather than the signed-RPE slope -- that MITIGATES the gap,
       it does not remove it."
+    - "RESOLVED MODEL DEVIATES FROM THE DESIGN §2 DESCRIPTOR (runbook §2 step 2; resolved
+      2026-08-14). Design §2 names a ~27-32B DENSE INSTRUCT release; the resolved
+      Qwen/Qwen3.6-27B @ 6a9e13bd is dense-not-MoE and in band (27.78B), but it is (a) a
+      MULTIMODAL checkpoint (`Qwen3_5ForConditionalGeneration`, `image-text-to-text`) of which we
+      load only the text tower via AutoModelForCausalLM -> Qwen3_5ForCausalLM, and (b) a HYBRID
+      ATTENTION stack: 48 linear_attention + 16 full_attention layers over 64 blocks, not the
+      uniform full-attention transformer the R-A' recipe was certified on at 4B. There is no
+      text-only dense alternative in the Qwen 3.5/3.6 generation, and the only other in-band-ish
+      release (Qwen3.6-35B-A3B) is MoE — so this is the nearest available release, not a free
+      choice. CONSEQUENCE FOR READING THE RESULT: block indices are not comparable to the 4B
+      run (65 hidden-state tensors vs 37), and 'the residual stream' at a linear_attention block
+      is not the same object as at a full_attention block. Whether the selected block lands on a
+      full- or linear-attention layer is a REPORTABLE property of this run, not a nuisance."
   decision_affected:
     - docs/design/experiment.md
 

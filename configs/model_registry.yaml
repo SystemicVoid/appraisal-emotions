@@ -7,22 +7,34 @@ models:
     model_id: fake-functional-valence
     batch_size: 8
 
-  # PRIMARY (design §2): the current ~27-32B dense instruct release in the Qwen 3.x family.
-  # The repo id and revision are DELIBERATELY unresolved here: this container cannot reach
-  # HuggingFace and inventing a repo id is how a run silently loads the wrong weights. The
-  # runbook's resolution step fills both ON THE LAMBDA INSTANCE against the live hub listing
-  # (docs/agents/lambda-runbook.md §2, steps 1-6) and records any deviation from the
-  # operator-named version in the run config's provenance.known_gaps. The placeholder id below
-  # is not a repo: with local_files_only true it fails closed on the first load attempt.
+  # PRIMARY (design §2): resolved 2026-08-14 against the live hub (operator-named, verified —
+  # runbook §2 steps 1-6). Qwen/Qwen3.6-27B @ 6a9e13bd, 27,781,427,952 bf16 params, ungated.
+  # Resolution notes, all verified against the repo's own config.json rather than assumed:
+  #   - It is the ONLY dense in-band release in the family. The whole Qwen3.5/3.6 generation ships
+  #     multimodal (`image-text-to-text`); the sole in-family alternative near the band,
+  #     Qwen3.6-35B-A3B, is MoE and out of band. So "dense instruct" holds in the
+  #     dense-vs-MoE sense, NOT in the text-only sense — see known_gaps in the run configs.
+  #   - `AutoModelForCausalLM` maps qwen3_5 -> Qwen3_5ForCausalLM, i.e. backends/hf.py loads the
+  #     TEXT tower and never instantiates the vision encoder. `AutoModelForMultimodalLM` has no
+  #     qwen3_5 entry at transformers 5.10.1; the multimodal path is ForConditionalGeneration.
+  #   - Architecture differs from the runbook §1 working assumptions: 64 layers (not ~48), hidden
+  #     5120 (not 6144), 4 KV heads (not 8), head_dim 256, and a HYBRID attention stack —
+  #     48 linear_attention + 16 full_attention layers. The capture reads 65 hidden-state tensors.
+  #   - Hybrid-thinking model: the chat template opens `<think>` by default, so the two controls
+  #     below are set together (schema.py rejects either alone) to pin the no-think rendering.
   qwen_30b_primary:
     backend: hf
-    model_id: UNRESOLVED-resolve-on-instance-see-lambda-runbook-section-2
-    tokenizer_id: UNRESOLVED-resolve-on-instance-see-lambda-runbook-section-2
-    revision: null
+    model_id: Qwen/Qwen3.6-27B
+    tokenizer_id: Qwen/Qwen3.6-27B
+    revision: 6a9e13bd6fc8f0983b9b99948120bc37f49c13e9
     device: cuda
     dtype: bfloat16
     batch_size: 1
     local_files_only: true
+    chat_template_kwargs:
+      enable_thinking: false
+    no_think_reasoning_delimiters:
+      - ["<think>", "</think>"]
 
   # SECONDARY (design §2): the 4B parent checkpoint, run only after the 30B chain has produced
   # its verdict — an explicit within-family scale contrast against the superposition hypothesis,
