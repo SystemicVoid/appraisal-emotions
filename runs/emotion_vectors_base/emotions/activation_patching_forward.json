@@ -1,0 +1,438 @@
+{
+  "arm_notes": {
+    "full_residual": "Ceiling: the donor's whole reveal-token state. 1.0 by construction here.",
+    "random_component": "Floor: unit random directions, same substitution, reported at the 95th percentile over n_random_draws draws \u2014 a floor, not a single lucky or unlucky direction.",
+    "same_condition_donor": "No-op negative control: a different rendering of the recipient's OWN condition. Its shift should sit near zero \u2014 the transfer fraction is reported against the SAME donor-minus-recipient denominator so the arms are on one scale.",
+    "v_rpe_component": "Is the transfer carried by the certified signed-RPE direction?"
+  },
+  "arms": [
+    {
+      "arm": "full_residual",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0049596020899219,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "v_rpe_component",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0049596020899219,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "random_component",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0049596020899219,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 5,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "same_condition_donor",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0049596020899219,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "full_residual",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.783447650068603,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "v_rpe_component",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.783447650068603,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "random_component",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.783447650068603,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 5,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "same_condition_donor",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.783447650068603,
+      "mean_shift": 0.0,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 35,
+      "transfer_fraction": 0.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "full_residual",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.2281067064160083,
+      "mean_shift": 0.6984539185109268,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.5621398561766369,
+      "wiring_check": false
+    },
+    {
+      "arm": "v_rpe_component",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.2281067064160083,
+      "mean_shift": 0.9433212741985814,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.730831009867466,
+      "wiring_check": false
+    },
+    {
+      "arm": "random_component",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.2281067064160083,
+      "mean_shift": -0.00023228062923231278,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 5,
+      "readout_block": 63,
+      "transfer_fraction": -0.0016423136747483363,
+      "wiring_check": false
+    },
+    {
+      "arm": "same_condition_donor",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.2281067064160083,
+      "mean_shift": 0.15733346006495175,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.10925891550257047,
+      "wiring_check": false
+    },
+    {
+      "arm": "full_residual",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 1.1112566574182152,
+      "mean_shift": 0.7466458212270715,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.6718932266842434,
+      "wiring_check": false
+    },
+    {
+      "arm": "v_rpe_component",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 1.1112566574182152,
+      "mean_shift": 0.8142379536676619,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.7327181783183937,
+      "wiring_check": false
+    },
+    {
+      "arm": "random_component",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 1.1112566574182152,
+      "mean_shift": -0.0030359190284126054,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 5,
+      "readout_block": 63,
+      "transfer_fraction": -0.0027319692603380774,
+      "wiring_check": false
+    },
+    {
+      "arm": "same_condition_donor",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 1.1112566574182152,
+      "mean_shift": 0.2890573825901462,
+      "mode": "forward",
+      "n_pairs": 60,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.2601175710944345,
+      "wiring_check": false
+    }
+  ],
+  "artifact_contract_version": "activation_patching/v2",
+  "battery_sha256": "160208e6cdf9bb49624a5bca6094f216994196015027f9462c38df4481fa138e",
+  "block": 35,
+  "continuations": [
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 2,
+      "recipient_row": 213,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 2,
+      "recipient_row": 213,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 2,
+      "recipient_row": 213,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 2,
+      "recipient_row": 221,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 2,
+      "recipient_row": 221,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 2,
+      "recipient_row": 221,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 8,
+      "recipient_row": 217,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 8,
+      "recipient_row": 217,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 8,
+      "recipient_row": 217,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 12,
+      "recipient_row": 211,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 12,
+      "recipient_row": 211,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 12,
+      "recipient_row": 211,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 12,
+      "recipient_row": 223,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 12,
+      "recipient_row": 223,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 12,
+      "recipient_row": 223,
+      "reward_cell_id": "r30_a15",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 974,
+      "recipient_row": 1,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 974,
+      "recipient_row": 1,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 974,
+      "recipient_row": 1,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 968,
+      "recipient_row": 11,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 968,
+      "recipient_row": 11,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 968,
+      "recipient_row": 11,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 970,
+      "recipient_row": 15,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 970,
+      "recipient_row": 15,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 970,
+      "recipient_row": 15,
+      "reward_cell_id": "r0_a15",
+      "text": " = 0 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 18,
+      "recipient_row": 155,
+      "reward_cell_id": "r30_a10",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 18,
+      "recipient_row": 155,
+      "reward_cell_id": "r30_a10",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 18,
+      "recipient_row": 155,
+      "reward_cell_id": "r30_a10",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "unpatched_baseline",
+      "donor_row": 24,
+      "recipient_row": 153,
+      "reward_cell_id": "r30_a10",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "full_residual",
+      "donor_row": 24,
+      "recipient_row": 153,
+      "reward_cell_id": "r30_a10",
+      "text": " = 30 points"
+    },
+    {
+      "arm": "v_rpe_component",
+      "donor_row": 24,
+      "recipient_row": 153,
+      "reward_cell_id": "r30_a10",
+      "text": " = 30 points"
+    }
+  ],
+  "directions_sha256": "accea6aeedf3b34a5beb819e6edf1fc6731c11c817e680cec15ca8d4c24907a9",
+  "emotion_selected_block": 63,
+  "emotion_vectors_sha256": "14161298f04009150994f18b0bbb83d6c91fce85b6b54cc2bd1f66226a6dca2a",
+  "identification_limit": "Within a reward-matched cell EV and signed RPE are perfectly anti-correlated (reward is fixed), so E3 identifies 'the expectation manipulation transfers', NOT 'signed RPE rather than EV transfers'. That separation is R-A\u2032's two matched contests and E2. Patching across EV-matched pairs (same draw, opposite outcome) is the documented complement, not built.",
+  "mode": "forward",
+  "mode_note": "FORWARD-PATCHED (the causal tier). Each recipient's real prompt is re-run with the donor's value substituted at the reveal token of the patch block, and the emotion axes are read at downstream blocks, where the substitution has propagated. The unpatched baseline is a self-patch, so the design's wiring check and the reference are one measurement. Continuations are stored RAW and UNSCORED: no grader may be frozen before a reality sample of this surface (docs/agents/rails.md).",
+  "model_key": "qwen_30b_primary",
+  "n_no_op_pairs": 60,
+  "n_pairs": 60,
+  "n_random_draws": 5,
+  "n_reward_cells": 14,
+  "readout_blocks": [
+    35,
+    63
+  ],
+  "seed": 7,
+  "sensitivity_gate": "G0=pass",
+  "states_sha256": "3d6de5a79cd72ebadf2d74584d1f9fc608c872d1eca9acc2be689b11f2ae331c",
+  "symbol_confound": null,
+  "symbol_matched": true,
+  "verdict_cap": "functionally-used, pilot-suggestive \u2014 the strongest tier this project licenses, and only on THIS model/surface/recipe. READ ONLY THE ROWS WITH wiring_check=false: those are the downstream blocks, where the substituted reveal-token value has actually propagated, and they are what the claim rests on, against a same-condition no-op control and a random-direction floor. The wiring_check=true rows sit AT the patch site, which returns the substituted value by construction; they verify plumbing and license nothing. Still no welfare / sentience / experience claim: functional use of a representation is not experience (design \u00a77)."
+}

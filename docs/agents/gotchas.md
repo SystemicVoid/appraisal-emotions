@@ -79,3 +79,22 @@ Widened to `src tests scripts`; `[tool.ruff] src` still lists `src`/`tests` only
 (it drives first-party import detection, not the file set).
 
 *Fix path:* `environmental` — fixed in place in the justfile; nothing left to eliminate.
+
+### The patching continuation probe cannot vary within a reward-matched cell
+
+E3 forward stores raw continuations so a behavioural readout can be built after a reality sample.
+On the first real run all 30 came back as one of two strings — `" = 30 points"` or `" = 0 points"` —
+and **0 of 10 donor/recipient triples differed between the unpatched baseline, the full-residual
+arm and the `v_rpe` arm**. The greedy continuation restates the REALISED REWARD, and realised
+reward is exactly what a reward-matched cell holds fixed. So the surface has no variance to
+detect by construction, and a grader written against it would have been graded noise. The
+reality-sample rail caught this before anyone built one, which is the rail doing its job.
+
+Read it as a harness limit, not as evidence: the internal readout moved a lot on the same pairs
+(`v_rpe` transfer 0.73 at block 63) while the text did not move at all, and the text COULD NOT
+have moved. "The patch changes no behaviour" is not licensed by this run.
+
+*Fix path:* file an issue to point the continuation probe at a token position whose content is
+free to vary within the cell — a forced-choice or free-report prompt appended after the reveal —
+or drop the probe. As built it consumes GPU and produces a constant. Until then, quote the
+continuation counts only alongside the sentence that they are non-diagnostic by construction.
