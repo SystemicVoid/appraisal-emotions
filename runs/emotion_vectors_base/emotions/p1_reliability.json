@@ -1,0 +1,198 @@
+{
+ "capture": {
+  "model_id": "Qwen/Qwen3.6-27B",
+  "revision": "6a9e13bd6fc8f0983b9b99948120bc37f49c13e9",
+  "n_stories": 1017,
+  "min_token": 50,
+  "gate_max_relative_deviation": 1.6130126899239995e-14,
+  "projections_sha256": "64bd6c36a2c3444dd758012a74673938fb2792ac31d338e2f0a2e2eb9ad08023"
+ },
+ "prereg": "docs/design/p1-prereg.md",
+ "decision_block": 63,
+ "mde80_coefficient": 1.1424563566104957,
+ "blocks": {
+  "63": {
+   "block": 63,
+   "direction": "v_rpe",
+   "n_words": 84,
+   "mean_stories_per_word": 11.964285714285714,
+   "observed_residual_sd": 0.026702397976092418,
+   "within_word_variance_cos": 0.002787400126007286,
+   "between_word_variance_resid": 0.0004800413307237618,
+   "icc_1k_resid": 0.6732526975403686,
+   "icc_1k_raw": 0.9471717210309561,
+   "split_half_exact": {
+    "n_splits": 50,
+    "raw_half_length_r": 0.912476028555833,
+    "raw_spearman_brown": 0.9542352583052981,
+    "residual_half_length_r": 0.5512083519057167,
+    "residual_spearman_brown": 0.7106825478711959
+   },
+   "attenuation": {
+    "lambda_mean_at_observed_k": 0.8370828765679458,
+    "lambda_min": 0.6694716498440322,
+    "lambda_max": 0.9457883184378375,
+    "n_words_with_norm_fully_explained_by_noise": 0,
+    "mean_true_norm": 13.452469354770672,
+    "mean_within_scatter": 817.4459620197399
+   },
+   "prophecy": {
+    "mde80_at_observed_k": 0.030506324304530017,
+    "mde80_floor_k_infinite": 0.025031042287029903,
+    "projected_effect_k_infinite": 0.02218695179216693,
+    "detectable_at_any_k": false,
+    "k_star": null,
+    "max_k_searched": 400,
+    "de_attenuation_undefined": false,
+    "curve": [
+     {
+      "k": 6,
+      "mde80": 0.0351127975364303,
+      "projected_effect": 0.016420792703803287,
+      "detectable": false
+     },
+     {
+      "k": 12,
+      "mde80": 0.03049148757284092,
+      "projected_effect": 0.01858003263464679,
+      "detectable": false
+     },
+     {
+      "k": 24,
+      "mde80": 0.02789519575464377,
+      "projected_effect": 0.020100412616872638,
+      "detectable": false
+     },
+     {
+      "k": 36,
+      "mde80": 0.02697429004536771,
+      "projected_effect": 0.02071473020039259,
+      "detectable": false
+     },
+     {
+      "k": 48,
+      "mde80": 0.02650183978674853,
+      "projected_effect": 0.021048713422963834,
+      "detectable": false
+     },
+     {
+      "k": 400,
+      "mde80": 0.025212068738363538,
+      "projected_effect": 0.022037744640873873,
+      "detectable": false
+     }
+    ]
+   },
+   "gate_vs_shipped_report": {
+    "max_abs_word_cosine_drift": 1.1102230246251565e-16,
+    "threshold": 0.001,
+    "passed": true,
+    "shipped_positive_contrast": 0.01857209937949149,
+    "reconstructed_positive_contrast": 0.01857209937949147,
+    "contrast_drift": 1.734723475976807e-17,
+    "note": "Reconstruction, not a re-test: E1's p stands as published and is not recomputed here. If this drifts, the variance components below describe some other capture."
+   },
+   "topic_fixed_effect_secondary": {
+    "n_topics": 25,
+    "adjusted_positive_contrast": 0.024146559866758937,
+    "adjusted_negative_contrast": 0.0018379383399474989,
+    "shift_from_unadjusted": 0.0055744604872674484,
+    "note": "Topic as a FIXED effect over 1,017 story rows. Inference never comes from this model \u2014 the p stays E1's word-level permutation. Reported because topic composition is a named nuisance, and it routes nothing."
+   },
+   "verdict": "gray_zone",
+   "verdict_note": "ICC_resid 0.673 is between 0.5 and 0.7: no kill and no licence. The prophecy curve governs the recommendation."
+  },
+  "35": {
+   "block": 35,
+   "direction": "v_rpe",
+   "n_words": 84,
+   "mean_stories_per_word": 11.964285714285714,
+   "observed_residual_sd": 0.04130949140941595,
+   "within_word_variance_cos": 0.0028755785760092097,
+   "between_word_variance_resid": 0.001466127214450109,
+   "icc_1k_resid": 0.8591558648324563,
+   "icc_1k_raw": 0.9802235697936098,
+   "split_half_exact": {
+    "n_splits": 50,
+    "raw_half_length_r": 0.9641254416556344,
+    "raw_spearman_brown": 0.9817350981849073,
+    "residual_half_length_r": 0.7741646339656569,
+    "residual_spearman_brown": 0.8727089010169534
+   },
+   "attenuation": {
+    "lambda_mean_at_observed_k": 0.8567372306449522,
+    "lambda_min": 0.7025638307314526,
+    "lambda_max": 0.9474279253375487,
+    "n_words_with_norm_fully_explained_by_noise": 0,
+    "mean_true_norm": 5.950519549880353,
+    "mean_within_scatter": 139.54603197252794
+   },
+   "prophecy": {
+    "mde80_at_observed_k": 0.047194291049033915,
+    "mde80_floor_k_infinite": 0.043744700357418634,
+    "projected_effect_k_infinite": 0.02959323806226613,
+    "detectable_at_any_k": false,
+    "k_star": null,
+    "max_k_searched": 400,
+    "de_attenuation_undefined": false,
+    "curve": [
+     {
+      "k": 6,
+      "mde80": 0.05038984153871313,
+      "projected_effect": 0.022661688700961302,
+      "detectable": false
+     },
+     {
+      "k": 12,
+      "mde80": 0.0471843985850035,
+      "projected_effect": 0.025363571293729386,
+      "detectable": false
+     },
+     {
+      "k": 24,
+      "mde80": 0.045497067373561684,
+      "projected_effect": 0.027195581815638813,
+      "detectable": false
+     },
+     {
+      "k": 36,
+      "mde80": 0.04492054128699239,
+      "projected_effect": 0.02791665243980882,
+      "detectable": false
+     },
+     {
+      "k": 48,
+      "mde80": 0.044629485483000775,
+      "projected_effect": 0.028303605013649383,
+      "detectable": false
+     },
+     {
+      "k": 400,
+      "mde80": 0.043851817170721515,
+      "projected_effect": 0.029426891739556708,
+      "detectable": false
+     }
+    ]
+   },
+   "gate_vs_shipped_report": {
+    "max_abs_word_cosine_drift": 1.6653345369377348e-16,
+    "threshold": 0.001,
+    "passed": true,
+    "shipped_positive_contrast": 0.025353847999197335,
+    "reconstructed_positive_contrast": 0.025353847999197314,
+    "contrast_drift": 2.0816681711721685e-17,
+    "note": "Reconstruction, not a re-test: E1's p stands as published and is not recomputed here. If this drifts, the variance components below describe some other capture."
+   },
+   "topic_fixed_effect_secondary": {
+    "n_topics": 25,
+    "adjusted_positive_contrast": 0.02989776879905031,
+    "adjusted_negative_contrast": 0.00541078121635247,
+    "shift_from_unadjusted": 0.004543920799852975,
+    "note": "Topic as a FIXED effect over 1,017 story rows. Inference never comes from this model \u2014 the p stays E1's word-level permutation. Reported because topic composition is a named nuisance, and it routes nothing."
+   }
+  }
+ },
+ "verdict": "gray_zone",
+ "verdict_note": "ICC_resid 0.673 is between 0.5 and 0.7: no kill and no licence. The prophecy curve governs the recommendation.",
+ "claim_ceiling": "functional measurement-validity, pilot-suggestive. P1 validates or condemns the INSTRUMENT; no outcome here upgrades E1's contrast into a result, and no outcome licenses any welfare, sentience or experience claim. Emotion words are concept labels throughout."
+}
