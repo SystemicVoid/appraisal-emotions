@@ -25,3 +25,4 @@ results/artifacts/*
 # non-redistributable). The provenance manifest is ours and stays; the values do not.
 data/norms/*
 !data/norms/MANIFEST.json
+.claude/worktrees/
