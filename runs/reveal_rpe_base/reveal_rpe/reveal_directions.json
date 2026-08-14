@@ -1,0 +1,33 @@
+{
+  "artifact_contract_version": "reveal_rpe_directions/v2",
+  "backend": "hf",
+  "battery_contract_version": "reveal_probes/v1",
+  "battery_sha256": "160208e6cdf9bb49624a5bca6094f216994196015027f9462c38df4481fa138e",
+  "design_columns": [
+    "intercept",
+    "reward",
+    "ev",
+    "abs_rpe",
+    "reward_x_abs_rpe"
+  ],
+  "direction_families": [
+    "v_rpe",
+    "v_ev",
+    "v_absrpe"
+  ],
+  "directions_dtype": "float64",
+  "directions_sha256": "accea6aeedf3b34a5beb819e6edf1fc6731c11c817e680cec15ca8d4c24907a9",
+  "dtype": "bfloat16",
+  "hidden_size": 5120,
+  "model_id": "Qwen/Qwen3.6-27B",
+  "model_key": "qwen_30b_primary",
+  "model_spec_hash": "c8e6f52ff3fa7cbcbb7d7d16393fadbbaae60c17c44edf6f1803decca118aeae",
+  "n_blocks": 64,
+  "n_estimation": 1488,
+  "revision": "6a9e13bd6fc8f0983b9b99948120bc37f49c13e9",
+  "seed": 7,
+  "selected_block": 35,
+  "source_verdict": "separable-signed-rpe",
+  "states_sha256": "3d6de5a79cd72ebadf2d74584d1f9fc608c872d1eca9acc2be689b11f2ae331c",
+  "tokenizer_id": "Qwen/Qwen3.6-27B"
+}

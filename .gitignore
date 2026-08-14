@@ -1,4 +1,16 @@
-runs/
+# Run outputs split cleanly by size, and the split IS the payload/finding boundary: on the first
+# 27B capture, 5.2 GB of `.npz` residual streams against ~57 KB of `.json` reports. The findings
+# go to the remote so the repo alone shows what was measured; the payloads never do, because a
+# capture is reproducible from the recorded seed, revision and config, and a 5 GB blob in git
+# history is permanent. `battery.json` is the exception on both counts — 4 MB, and it is the
+# rendered stimulus set (regenerable, golden-parity tested), not a result.
+runs/**
+!runs/**/
+!runs/**/*.json
+runs/**/battery.json
+# Smoke runs are FAKE-BACKEND output. They are the right thing to keep locally and the wrong
+# thing to publish: a report named like a finding, holding numbers no model produced.
+runs/*smoke*/**
 __pycache__/
 *.py[cod]
 .venv/

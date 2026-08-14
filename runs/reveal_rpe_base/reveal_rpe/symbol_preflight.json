@@ -1,0 +1,14 @@
+{
+  "affect_flagged": [],
+  "multi_token": [],
+  "note": "2 shared + 2 held_out single-token symbols. Template gated clean.",
+  "passed": true,
+  "valid_held_out": [
+    "GIS",
+    "PIL"
+  ],
+  "valid_shared": [
+    "SIL",
+    "WAN"
+  ]
+}
