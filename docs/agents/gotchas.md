@@ -98,3 +98,41 @@ have moved. "The patch changes no behaviour" is not licensed by this run.
 free to vary within the cell — a forced-choice or free-report prompt appended after the reveal —
 or drop the probe. As built it consumes GPU and produces a constant. Until then, quote the
 continuation counts only alongside the sentence that they are non-diagnostic by construction.
+
+### The E1 planted-signal control only operates in a strong-signal cartoon regime
+
+`tests/test_emotion_mapping.py` builds each synthetic word vector as `valence_j·u + noise`, so
+every valence-0 word is a near-zero-norm vector whose cosine with anything is pure noise. At the
+tests' settings (planted amplitude 1.0 vs noise 0.01) this is invisible; try to re-run the same
+construction with noise calibrated to the OBSERVED word-residual spread (p95 ≈ 0.098) and the
+synthetic p95 comes out ≈ 0.56 — and grows as noise SHRINKS, because the valence-0 rows' cosines
+degenerate. Consequence: the shipped positive control demonstrates recovery at SNR ~100 and
+cannot be extended to ask whether the harness detects an effect of the observed size (+0.025).
+Sensitivity at the claim's scale needs a geometry with per-word idiosyncratic content — see
+`planted_pipeline_power` in `scripts/e1_null_diagnosis.py`, which calibrates content and valence
+components to the observed residual sd and raw-cosine valence footprint.
+
+*Fix path:* covered by `scripts/e1_null_diagnosis.py` (the calibrated-geometry sweep is versioned
+and re-runnable); the tests keep their strong-signal role as machinery checks. Delete this entry
+if the calibrated construction is ever promoted into the test suite as the sensitivity fixture.
+
+### The E1 report's tabled p and its `clears_both_floors` verdict use DIFFERENT nulls
+
+`family_contrasts[].p_value` is a **within-pool** two-sample label permutation
+(`two_sample_permutation_p`) over the 19 words of the two contrasted families. `clears_both_floors`
+compares the max-over-poles statistic to `label_shuffled_floor`, which relabels **all 84**
+residuals. Nothing in the JSON or the printed summary says which is which, and on real data they
+disagree: block 35's positive pole reads **p = 0.117** within-pool and **0.090** whole-set, nine
+Monte-Carlo standard errors apart at `n_permutations=10_000`. The published verdict is the second;
+the p everyone quotes is the first. This already cost a review round — a recomputation of "the
+report's p" implemented the whole-set shuffle and tabled 0.090 beside the report's 0.117 as though
+a covariate had moved it. Both numbers were right; the label was wrong.
+
+Diagnostic rule: before comparing any two p-values here, check they share a null. At these family
+sizes the within-pool null is C(19,9) = 92,378 splits, so it can be **enumerated exactly** rather
+than sampled — `_exact_within_pool` in `scripts/e1_null_diagnosis.py` does that and gates the
+result against the shipped value, which is how the two nulls were told apart in the first place.
+
+*Fix path:* [#3](https://github.com/SystemicVoid/appraisal-emotions/issues/3) — carry a
+`null_kind` on each p and each floor and emit it in the report, so a number cannot be quoted
+without its null.
