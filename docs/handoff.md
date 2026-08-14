@@ -77,26 +77,42 @@ the big calls went the way they did and what to do next.
    `wiring_check` and excluded from the functionally-used claim; forward mode refuses a patch
    at the deepest block; cost arithmetic corrected; small crash and doc fixes.
 
+## What has run (2026-08-14)
+
+The whole chain above executed on two rented H100 sessions: R-A′ re-extraction, E0 (1,020
+stories, G0 passed, first-contact sample read), E1 with 84/84 NRC-VAD coverage, E2, E3 in both
+modes, and then P1. Artifacts are in `runs/reveal_rpe_base/` and `runs/emotion_vectors_base/`;
+the reports of record are `docs/design/p1-report.md` and the run JSONs it cites.
+
+**The headline is an instrument result, not a hypothesis result.** E1's positive-pole family
+contrast reads +0.0186 at block 63 against an MDE80 of 0.0305 — 61% of the smallest effect its
+own test detects — so the null was unreadable in either direction until P1 decomposed it. P1
+re-fed the same 1,017 stories, kept the per-story scalars E0 discarded, and reproduced E0's word
+vectors to 1.6e-14. Verdict `gray_zone`: ICC_resid 0.673, a third of the residual spread is
+story-sampling noise, and the raw-cosine ICC of 0.947 against it says the reliably-measured part
+is mostly the valence shadow E1 regresses out on purpose.
+
 ## Next steps, in order
 
-1. Human taste pass over the §5 expectations table and the §9 prompts (they are AI-drafted;
-   the operator asked for special attention here).
-2. Provision a Lambda instance per runbook §1–2: resolve and pin the 30B model id + revision,
-   download, run the symbol-neutrality preflight — **stop and escalate if it fails**; the 4B
-   calibration does not transfer.
-3. R-A′ re-extraction at 30B (~2k forwards); gates must pass on their own numbers before
-   anything downstream is read.
-4. E0 with the first-contact self-audit: read `first_contact_sample.json` before letting the
-   chain continue, and replace the BLIND story-filter freeze with a reality-sampled decision.
-5. Read the G0 gate. If it fails, the emotion basis is inadequate — iterate E0 (story prompt,
-   site selection), do not spend on E1/E2/E3.
-6. E1 `map-geometry` (optionally with fetched norms) and E2 `expectation-control` — CPU on the
-   captured states.
-7. E3 `patch-reveals`: state mode first (free), then forward mode on-instance. Read the raw
-   continuations by eye before building any grader.
-8. Optional 4B replication for the scale contrast.
-9. Writeup: every number from artifacts; respect the verification caveats in
-   `docs/literature.md`.
+1. **Widen the word families before buying any more compute.** This is P1's actionable finding
+   and the only one with a number attached: at the current story count the families would need
+   ≈26 words each for the observed effect to be detectable, ≈12 each at large k, against 9 and
+   10 now. Adding words is cheap and off-GPU; adding stories is neither and does not close the
+   gap (effect/threshold 0.61 now, 0.89 at infinite k).
+2. **Do not re-capture at larger k.** P(more stories would ever suffice) = 0.189 at the decision
+   block, 0.009 at block 35 — about 4:1 against, priced in `p1_reliability.json` and stated as a
+   lean rather than a proof.
+3. Treat E1's null as `harness_inadequate` for effects below the run's own label-shuffle floor
+   (0.0396); the verdict cap now quotes that floor rather than leaving it implicit.
+4. Block 50 — the sweep's peak — is on P1's pre-registered do-not-look list and stays unopened
+   until a design that names it in advance. Same for the exploratory directions (`v_ev`,
+   `v_absrpe`, `pc1`, `pc2`), which are captured and unanalysed.
+5. The topic fixed-effect lead is unpriced: sweeping topic out *raises* the contrast at both
+   blocks (+30% / +18%), which is the opposite of the usual nuisance worry. Pricing it needs a
+   test nothing here pre-registered.
+6. Human taste pass over the §5 expectations table and the §9 prompts (they are AI-drafted; the
+   operator asked for special attention here) — still outstanding, now against real outputs.
+7. Optional 4B replication for the scale contrast — not run.
 
 ## Key uncertainties and how to tackle them
 
