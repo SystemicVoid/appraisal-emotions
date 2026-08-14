@@ -57,3 +57,24 @@ where ~4,000 lines of pre-data guards and their tests caught nothing).
   cheap run would produce, run first and escalate only what data cannot settle.
 - **Enforcement:** reviews treat pre-first-data guard machinery against unobserved
   failure modes as FINDINGS.
+
+## A floor names the failure mode it can catch
+
+Diagnosticity binds controls exactly as it binds tests. A floor that runs is not a floor sited
+where the claim is exposed, and a floor inherited from a neighbouring experiment usually answers
+that experiment's question rather than this one's.
+
+Earned: E3's random-direction floor came from E1's anisotropy discipline, where it correctly asks
+"would an arbitrary direction score this?". Transplanted into activation patching with a linear
+readout at the patched position, the question the claim was exposed to had become "would the
+additive residual stream produce this without any computation?" — and the random floor cannot see
+that, because a random direction has |cos| ≈ 1/√d with the readout axis and so must score ≈0
+whether or not passthrough is the whole mechanism. The floor read 0.000, the arm read 0.731, and
+the gap between them meant nothing. The identity path, priced afterwards from stored artifacts at
+zero cost, accounted for 80–105% of the arm.
+
+The rule: **every floor states in one sentence which failure mode it can catch**, and review
+checks that the named failure mode is the one the claim is exposed to. When a control is carried
+over from another rung, that sentence is re-derived for the new claim rather than inherited with
+the code. A cheap counterfactual with a point prediction — what would this number be if nothing
+happened? — outranks a sampled floor whenever the theory supplies one.

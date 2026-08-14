@@ -136,3 +136,25 @@ result against the shipped value, which is how the two nulls were told apart in 
 *Fix path:* [#3](https://github.com/SystemicVoid/appraisal-emotions/issues/3) — carry a
 `null_kind` on each p and each floor and emit it in the report, so a number cannot be quoted
 without its null.
+
+### `output_hidden_states` records the PRE-hook value at a forward-hooked block
+
+`backends/hf.py`'s `patched_forward` overwrites one row of `blocks[block]`'s output from a forward
+hook, and its docstring says reading `hidden_states[block + 1]` back "returns the replacement".
+On the installed transformers stack it does not. In the E3 forward run of record every one of the
+eight patch-site rows reads `mean_shift = 0.0` — for **every** arm, including `full_residual`,
+whose patch-site transfer fraction is 1.0 by construction and is reported as exactly 1.0 by state
+mode. The consistent reading is that `output_hidden_states` collects the patched layer before the
+hook's return value replaces the module output.
+
+The patch itself is fine: block-63 rows show large arm-specific structure, which can only come
+from the substitution having propagated, and their denominators reproduce the captured states to
+four decimals. What is broken is the *check* — the wiring row verifies nothing, and it went
+unnoticed for a whole run because the row is labelled "licenses nothing" and nobody read a number
+they had already been told not to trust. `scripts/e3_passthrough_decomposition.py` prints the
+identity-path prediction beside it (1.0 vs the recorded 0.0), which is the evidence.
+
+*Fix path:* `docs/design/e4-prereg.md` §8 — assert the full-residual patch-site shift equals the
+denominator (or re-document the row as pre-hook and move the wiring check to a direct read of the
+hook's own output), and pin the transformers version in the report. `environmental` in origin, but
+the assert is ours to write.

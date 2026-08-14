@@ -90,6 +90,7 @@ __all__ = [
     "build_patch_pairs",
     "format_activation_patching_summary",
     "patch_state",
+    "substituted_value",
 ]
 
 ACTIVATION_PATCHING_CONTRACT_VERSION = "activation_patching/v2"
@@ -393,7 +394,7 @@ def _random_floor(results: list[ArmResult]) -> ArmResult:
     )
 
 
-def _substituted_value(
+def substituted_value(
     arm: str,
     pair: PatchPair,
     block_states: np.ndarray,
@@ -453,7 +454,7 @@ def _state_mode_arms(
                         [
                             float(
                                 (
-                                    _substituted_value(arm, pair, block_states, v_rpe, direction)
+                                    substituted_value(arm, pair, block_states, v_rpe, direction)
                                     - block_states[pair.recipient_row]
                                 )
                                 @ axis
@@ -551,7 +552,7 @@ def _forward_mode_arms(
                 patched, text = _forward_projections(
                     plan,
                     pair.recipient_row,
-                    _substituted_value(arm, pair, plan.block_states, v_rpe, direction),
+                    substituted_value(arm, pair, plan.block_states, v_rpe, direction),
                     continuation=wants_text and arm in _CONTINUATION_ARMS and draw_index == 0,
                 )
                 if text is not None:
