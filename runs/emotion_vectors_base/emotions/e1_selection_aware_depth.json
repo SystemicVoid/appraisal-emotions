@@ -1,0 +1,94 @@
+{
+ "n_draws": 20000,
+ "seed": 11,
+ "sweep_reproduction_max_abs_diff": 2.7755575615628914e-17,
+ "g0_threshold": 0.6,
+ "g0_passing_blocks": "59/64",
+ "g0_failing_blocks": [
+  0,
+  1,
+  3,
+  4,
+  5
+ ],
+ "headline_blocks": [
+  35,
+  63
+ ],
+ "observed_at_headline": {
+  "35": {
+   "positive": 0.025353847999197335,
+   "negative": 0.006022373641057557
+  },
+  "63": {
+   "positive": 0.01857209937949149,
+   "negative": 0.0009860996887185846
+  }
+ },
+ "families": {
+  "all": {
+   "positive": {
+    "argmax_block": 50,
+    "statistic_at_argmax": 0.05382812314027239,
+    "p_selection_aware": 0.27798610069496527,
+    "p_at_that_block_uncorrected": 0.012749362531873407,
+    "null_max_p95": 0.10100213656931853
+   },
+   "negative": {
+    "argmax_block": 1,
+    "statistic_at_argmax": 0.0629990742444363,
+    "p_selection_aware": 0.20333983300834957,
+    "p_at_that_block_uncorrected": 0.13614319284035797,
+    "null_max_p95": 0.1000346632697214
+   },
+   "either_pole": {
+    "statistic": 0.0629990742444363,
+    "p_selection_aware": 0.36223188840557974,
+    "null_max_p95": 0.11618682028584082
+   }
+  },
+  "g0_passing": {
+   "positive": {
+    "argmax_block": 50,
+    "statistic_at_argmax": 0.05382812314027239,
+    "p_selection_aware": 0.16264186790660468,
+    "p_at_that_block_uncorrected": 0.012749362531873407,
+    "null_max_p95": 0.07823275453420801
+   },
+   "negative": {
+    "argmax_block": 28,
+    "statistic_at_argmax": 0.022187333934410768,
+    "p_selection_aware": 0.6232688365581721,
+    "p_at_that_block_uncorrected": 0.08344582770861457,
+    "null_max_p95": 0.0788002188852346
+   },
+   "either_pole": {
+    "statistic": 0.05382812314027239,
+    "p_selection_aware": 0.3016349182540873,
+    "null_max_p95": 0.09148339826308072
+   }
+  },
+  "post_hoc_deep_band_16_63": {
+   "positive": {
+    "argmax_block": 50,
+    "statistic_at_argmax": 0.05382812314027239,
+    "p_selection_aware": 0.022348882555872206,
+    "p_at_that_block_uncorrected": 0.012749362531873407,
+    "null_max_p95": 0.04527792503979553
+   },
+   "negative": {
+    "argmax_block": 28,
+    "statistic_at_argmax": 0.022187333934410768,
+    "p_selection_aware": 0.2918854057297135,
+    "p_at_that_block_uncorrected": 0.08344582770861457,
+    "null_max_p95": 0.045967421118518606
+   },
+   "either_pole": {
+    "statistic": 0.05382812314027239,
+    "p_selection_aware": 0.04594770261486926,
+    "null_max_p95": 0.05301457104920026
+   }
+  }
+ },
+ "note": "p_selection_aware is the p for 'the best block in this family'. Compare it with p_at_that_block_uncorrected at the SAME block: the gap is the price of depth shopping, and it is small only because neighbouring blocks are highly correlated. Nothing here is confirmatory \u2014 the sweep was looked at AFTER the headline blocks came back null, so this is a lead to pre-register on fresh data, not a finding."
+}
