@@ -154,10 +154,27 @@ Sizes (arithmetic on the §1 assumptions; verify with `du -sh runs/`):
 - directions npz: 3 × 49 × 6144 × 4 B ≈ **3.6 MB**
 - JSON metadata, reports, provenance: a few MB
 
-Total ≈ 2.5–4 GB → ~5 min at 100 Mbit/s, ~30 s at 1 Gbit/s (estimates).
+Total ≈ 2.5–4 GB → ~5 min at 100 Mbit/s, ~30 s at 1 Gbit/s (estimates). Measured on the first
+27B capture: 5.2 GB of states npz against ~57 KB of JSON reports, so the payload/finding ratio is
+about 10⁵ and the two deserve different destinations.
 
 ```bash
 rsync -avP <instance>:hackathon/runs/ ./runs/
+```
+
+**Then commit the findings, every stage, before moving on.** `.gitignore` already selects them —
+`runs/**/*.json` minus `battery.json` and minus the fake-backend smoke dirs — so this is
+`git add runs/ && git commit`, and the remote alone then shows what was measured rather than only
+the decisions that led to it. The npz payloads stay local: a capture is reproducible from the
+recorded seed, revision and config, and a 5 GB blob in git history is permanent.
+
+If the instance is the only thing you can reach, the findings alone transfer in a second (note
+the exclude precedes the includes — rsync filters are first-match-wins):
+
+```bash
+rsync -avz --prune-empty-dirs --exclude='battery.json' \
+      --include='*/' --include='*.json' --exclude='*' \
+      <instance>:appraisal-emotions/runs/ ./runs/
 ```
 
 Then **verify before teardown**: each artifact records its own sha256 (states, battery,
