@@ -167,6 +167,43 @@ class GeneratedStory:
         return self.drop_reason is None
 
 
+def story_log_records(stories: tuple[GeneratedStory, ...]) -> list[dict[str, object]]:
+    """The on-disk shape of ``stories.json`` — the ONLY definition of it."""
+
+    return [
+        {
+            "emotion": story.emotion,
+            "topic": story.topic,
+            "story_index": story.story_index,
+            "token_count": story.token_count,
+            "drop_reason": story.drop_reason,
+            "text": story.text,
+        }
+        for story in stories
+    ]
+
+
+def read_story_log(path: Path) -> tuple[GeneratedStory, ...]:
+    """Read ``stories.json`` back, verdicts and order intact.
+
+    A re-capture must see exactly the rows E0 captured — same texts, same order, same drop
+    reasons — or the centring frame it rebuilds is not E0's. Round-tripping through the writer
+    above is what makes that a property of one function rather than of two hand-matched dicts.
+    """
+
+    return tuple(
+        GeneratedStory(
+            emotion=str(row["emotion"]),
+            topic=str(row["topic"]),
+            story_index=int(row["story_index"]),
+            text=str(row["text"]),
+            token_count=int(row["token_count"]),
+            drop_reason=None if row["drop_reason"] is None else str(row["drop_reason"]),
+        )
+        for row in read_json(path)
+    )
+
+
 class FirstContactFailure(RuntimeError):
     """The BLIND story filter dropped too much of its first-contact sample.
 

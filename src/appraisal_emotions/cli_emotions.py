@@ -1,5 +1,5 @@
-"""The E0-E3 command surface: ``extract-emotions`` / ``map-geometry`` / ``expectation-control``
-/ ``patch-reveals``.
+"""The E0-E3 command surface: ``extract-emotions`` / ``extract-story-projections`` /
+``map-geometry`` / ``expectation-control`` / ``patch-reveals``.
 
 NEW module (no parent counterpart). A sibling of ``cli.py`` rather than four more commands in
 it: ``cli.py`` is the ported reveal-RPE surface and stays the size it was extracted at, and the
@@ -30,18 +30,27 @@ from appraisal_emotions.analysis.emotion_mapping import (
 from appraisal_emotions.analysis.emotion_vectors import (
     EmotionVectors,
     FirstContactFailure,
-    GeneratedStory,
     extract_emotion_vectors,
+    read_emotion_vectors,
+    read_story_log,
+    story_log_records,
     write_emotion_vectors,
 )
 from appraisal_emotions.analysis.expectation_control import (
     expectation_control,
     format_expectation_control_summary,
 )
+from appraisal_emotions.analysis.reveal_rpe import read_reveal_rpe_directions
+from appraisal_emotions.analysis.story_projections import (
+    StoryProjectionGateFailure,
+    extract_story_projections,
+    story_projections_path,
+    write_story_projections,
+)
 from appraisal_emotions.backends.base import PatchedForwardBackend
 from appraisal_emotions.backends.factory import create_backend, free_backend
 from appraisal_emotions.config import StudyConfig, load_config, resolve_model_spec
-from appraisal_emotions.core.util import write_json
+from appraisal_emotions.core.util import file_sha256, write_json
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 console = Console()
@@ -56,21 +65,9 @@ def emotion_paths(cfg: StudyConfig) -> dict[str, Path]:
         "vectors": root / "emotion_vectors.json",
         "stories": root / "stories.json",
         "first_contact": root / "first_contact_sample.json",
+        "projections": root / "story_projections.json",
+        "projections_quarantine": root / "story_projections_gate_failed.json",
     }
-
-
-def _story_records(stories: tuple[GeneratedStory, ...]) -> list[dict[str, object]]:
-    return [
-        {
-            "emotion": story.emotion,
-            "topic": story.topic,
-            "story_index": story.story_index,
-            "token_count": story.token_count,
-            "drop_reason": story.drop_reason,
-            "text": story.text,
-        }
-        for story in stories
-    ]
 
 
 def _print_e0(artifact: EmotionVectors, path: Path) -> None:
@@ -95,6 +92,7 @@ def register(app: typer.Typer) -> None:
     """Attach the four emotion-layer commands to the shared app."""
 
     app.command("extract-emotions")(extract_emotions)
+    app.command("extract-story-projections")(extract_story_projections_command)
     app.command("map-geometry")(map_geometry_command)
     app.command("expectation-control")(expectation_control_command)
     app.command("patch-reveals")(patch_reveals_command)
@@ -136,17 +134,85 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
     except FirstContactFailure as failure:
         # The BLIND filter's compensation: write the sample a human must READ, record the cap,
         # and stop before the capture pass rather than scoring a basis built from the survivors.
-        write_json(paths["first_contact"], _story_records(failure.sample))
+        write_json(paths["first_contact"], story_log_records(failure.sample))
         console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
         console.print(f"  first-contact sample written to {paths['first_contact']}")
         raise typer.Exit(code=1) from failure
     finally:
         free_backend(backend)
 
-    write_json(paths["stories"], _story_records(stories))
-    write_json(paths["first_contact"], _story_records(stories[: ev.first_contact_n]))
+    write_json(paths["stories"], story_log_records(stories))
+    write_json(paths["first_contact"], story_log_records(stories[: ev.first_contact_n]))
     write_emotion_vectors(artifact, paths["vectors"])
     _print_e0(artifact, paths["vectors"])
+
+
+def extract_story_projections_command(
+    config: ConfigOption = Path("configs/emotion_vectors_smoke.yaml"),
+    directions: Annotated[
+        Path, typer.Option("--directions", help="reveal_directions.json at the SAME model key")
+    ] = Path("runs/reveal_rpe_base/reveal_rpe/reveal_directions.json"),
+) -> None:
+    """Rung P1: per-story projections onto the fixed directions — E0's within-word error term.
+
+    Re-feeds the stories E0 already generated and stored, with no generation and no new stimulus,
+    and keeps one scalar per story x block x direction plus the same-word Gram. That buys the
+    split-half reliability, the variance decomposition and the attenuation ceiling that E0's
+    word-mean-only artifact cannot support, at ~8 MB instead of the 5 GB of residual states.
+
+    P1 runs NO new test of the family contrast: the point estimate and its p are already fixed by
+    E1's data and are not recomputed here. It measures how much of E1's word-level noise is
+    within-word (fixable by more stories) rather than between-word (not), which is what decides
+    whether a larger capture is worth renting a GPU for.
+    """
+
+    cfg = load_config(config)
+    spec = resolve_model_spec(cfg)
+    paths = emotion_paths(cfg)
+    emotion = read_emotion_vectors(paths["vectors"])
+    stories = read_story_log(paths["stories"])
+    reveal = read_reveal_rpe_directions(directions)
+    if reveal.metadata.model_key != spec.key:
+        raise typer.BadParameter(
+            f"directions are for model {reveal.metadata.model_key!r}, config resolves "
+            f"{spec.key!r}; the geometry comparison needs matched model identity"
+        )
+
+    backend = create_backend(spec)
+    try:
+        artifact = extract_story_projections(
+            cast(StoryCaptureBackend, backend),
+            stories,
+            emotion,
+            reveal,
+            spec=spec,
+            words_file_sha256=file_sha256(cfg.emotion_vectors.words_file),
+            min_token=cfg.emotion_vectors.min_token,
+            fallback_blocks=cfg.emotion_vectors.fallback_blocks,
+        )
+    except StoryProjectionGateFailure as failure:
+        # Quarantine rather than discard: the capture is a rented-GPU cost and the recorded
+        # deviation is the only evidence about WHY the gate fired. Nothing downstream reads
+        # this path, so a quarantined artifact cannot leak into an analysis.
+        write_story_projections(failure.artifact, paths["projections_quarantine"])
+        console.print(f"[red]P1 harness_inadequate[/red]: {failure}")
+        console.print(f"  quarantined capture written to {paths['projections_quarantine']}")
+        raise typer.Exit(code=1) from failure
+    finally:
+        free_backend(backend)
+
+    write_story_projections(artifact, paths["projections"])
+    meta = artifact.metadata
+    console.print(
+        f"P1 story projections: {meta.n_stories} stories x {meta.n_blocks} blocks x "
+        f"{len(meta.direction_names)} directions -> {paths['projections']}"
+    )
+    console.print(
+        f"  faithfulness gate: max relative deviation {meta.gate_max_relative_deviation:.3g} "
+        f"<= {meta.gate_max_relative_deviation_threshold} (word-mean correlation "
+        f"{meta.gate_word_mean_correlation:.6f})"
+    )
+    console.print(f"  payload {story_projections_path(paths['projections'])}")
 
 
 def map_geometry_command(
