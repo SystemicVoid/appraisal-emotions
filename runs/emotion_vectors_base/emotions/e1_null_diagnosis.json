@@ -1,0 +1,408 @@
+{
+ "inputs": {
+  "report": "/home/eugenia/appraisal-emotions/.claude/worktrees/agent-affa2756ebde13c49/runs/emotion_vectors_base/emotions/map_geometry_report.json",
+  "norms": "/home/eugenia/appraisal-emotions/.claude/worktrees/agent-affa2756ebde13c49/data/norms/vad_subset.csv"
+ },
+ "block_35": {
+  "reproduce": {
+   "max_abs_residual_diff": 0.0
+  },
+  "scale": {
+   "raw_cos_valence_footprint(mean_pos_minus_mean_neg)": 0.2087349029200662,
+   "observed_positive_pole_contrast": 0.025353847999197335,
+   "style_control_residual_v_rpe": 0.06642418347822683,
+   "style_over_observed_ratio": 2.6198856867931735,
+   "word_residual_sd": 0.041309491409415956,
+   "subspace_fraction_v_rpe_in_emotion_span": 0.2843888868934205
+  },
+  "power_empirical": {
+   "residual_sd": 0.041309491409415956,
+   "analytic_se_contrast": 0.018980401450381393,
+   "unit_effect_surviving_valence_regression": {
+    "positive": 0.9912896613272997,
+    "negative": 0.9822835678839319
+   },
+   "power_curve": [
+    {
+     "delta": 0.0,
+     "positive": 0.059,
+     "negative": 0.05,
+     "both_floor_max": 0.056
+    },
+    {
+     "delta": 0.01,
+     "positive": 0.132,
+     "negative": 0.134,
+     "both_floor_max": 0.144
+    },
+    {
+     "delta": 0.02,
+     "positive": 0.255,
+     "negative": 0.269,
+     "both_floor_max": 0.299
+    },
+    {
+     "delta": 0.0254,
+     "positive": 0.376,
+     "negative": 0.344,
+     "both_floor_max": 0.441
+    },
+    {
+     "delta": 0.03,
+     "positive": 0.432,
+     "negative": 0.417,
+     "both_floor_max": 0.547
+    },
+    {
+     "delta": 0.04,
+     "positive": 0.635,
+     "negative": 0.64,
+     "both_floor_max": 0.743
+    },
+    {
+     "delta": 0.05,
+     "positive": 0.81,
+     "negative": 0.775,
+     "both_floor_max": 0.913
+    },
+    {
+     "delta": 0.06,
+     "positive": 0.898,
+     "negative": 0.901,
+     "both_floor_max": 0.981
+    },
+    {
+     "delta": 0.08,
+     "positive": 0.986,
+     "negative": 0.982,
+     "both_floor_max": 0.999
+    },
+    {
+     "delta": 0.1,
+     "positive": 1.0,
+     "negative": 0.999,
+     "both_floor_max": 1.0
+    }
+   ],
+   "mde50_positive_pole": 0.0333,
+   "mde80_positive_pole": 0.0494,
+   "mde80_max_criterion": 0.0434,
+   "observed_positive_statistic": 0.025353847999197335,
+   "power_at_observed_positive": 0.376
+  },
+  "arousal": {
+   "valence_only": {
+    "positive": {
+     "statistic": 0.025353847999197335,
+     "p": 0.08969103089691031,
+     "floor_p95": 0.03116153283592572
+    },
+    "negative": {
+     "statistic": 0.006022373641057552,
+     "p": 0.3788621137886211,
+     "floor_p95": 0.030768182995183642
+    },
+    "max_floor_p95": 0.037186451767188496
+   },
+   "valence_plus_arousal": {
+    "positive": {
+     "statistic": 0.027284322697366387,
+     "p": 0.07429257074292571,
+     "floor_p95": 0.03125112253055377
+    },
+    "negative": {
+     "statistic": 0.005494338093108944,
+     "p": 0.37846215378462156,
+     "floor_p95": 0.03167156605780669
+    },
+    "max_floor_p95": 0.03729074829641731
+   },
+   "pairs_valence_only": {
+    "disappointed_vs_sad": -0.07525835534891205,
+    "relieved_vs_calm": 0.003041769508741063,
+    "elated_vs_content": 0.03958017527496947
+   },
+   "pairs_valence_plus_arousal": {
+    "disappointed_vs_sad": -0.07586712267116472,
+    "relieved_vs_calm": 0.00424367401464372,
+    "elated_vs_content": 0.04254730809882894
+   }
+  },
+  "reversal": {
+   "raw_cos": {
+    "disappointed": -0.0781267661683184,
+    "sad": -0.10788643736690974
+   },
+   "valence_norms": {
+    "disappointed": -0.858,
+    "sad": -0.55
+   },
+   "fitted_from_valence": {
+    "disappointed": -0.12694373582388813,
+    "sad": -0.08144505167356741
+   },
+   "residual": {
+    "disappointed": 0.048816969655569725,
+    "sad": -0.026441385693342326
+   },
+   "residual_arousal_partialled": {
+    "disappointed": 0.048260866538583275,
+    "sad": -0.02760625613258144
+   },
+   "outcome_neg_family_mean_residual": -0.003943835380168371,
+   "nonoutcome_neg_family_mean_residual": 0.0020785382608891805
+  }
+ },
+ "block_63": {
+  "reproduce": {
+   "max_abs_residual_diff": 0.0
+  },
+  "scale": {
+   "raw_cos_valence_footprint(mean_pos_minus_mean_neg)": 0.12509374047091384,
+   "observed_positive_pole_contrast": 0.01857209937949149,
+   "style_control_residual_v_rpe": 0.044672757983274525,
+   "style_over_observed_ratio": 2.4053693161153915,
+   "word_residual_sd": 0.026702397976092414,
+   "subspace_fraction_v_rpe_in_emotion_span": 0.21682522230058324
+  },
+  "power_empirical": {
+   "residual_sd": 0.026702397976092414,
+   "analytic_se_contrast": 0.012268905183339104,
+   "unit_effect_surviving_valence_regression": {
+    "positive": 0.9912896613272997,
+    "negative": 0.9822835678839319
+   },
+   "power_curve": [
+    {
+     "delta": 0.0,
+     "positive": 0.05,
+     "negative": 0.048,
+     "both_floor_max": 0.052
+    },
+    {
+     "delta": 0.01,
+     "positive": 0.197,
+     "negative": 0.188,
+     "both_floor_max": 0.242
+    },
+    {
+     "delta": 0.0186,
+     "positive": 0.444,
+     "negative": 0.419,
+     "both_floor_max": 0.532
+    },
+    {
+     "delta": 0.02,
+     "positive": 0.447,
+     "negative": 0.471,
+     "both_floor_max": 0.561
+    },
+    {
+     "delta": 0.03,
+     "positive": 0.758,
+     "negative": 0.72,
+     "both_floor_max": 0.871
+    },
+    {
+     "delta": 0.04,
+     "positive": 0.9,
+     "negative": 0.924,
+     "both_floor_max": 0.981
+    },
+    {
+     "delta": 0.05,
+     "positive": 0.986,
+     "negative": 0.978,
+     "both_floor_max": 0.999
+    },
+    {
+     "delta": 0.06,
+     "positive": 0.997,
+     "negative": 0.994,
+     "both_floor_max": 1.0
+    },
+    {
+     "delta": 0.08,
+     "positive": 1.0,
+     "negative": 1.0,
+     "both_floor_max": 1.0
+    },
+    {
+     "delta": 0.1,
+     "positive": 1.0,
+     "negative": 1.0,
+     "both_floor_max": 1.0
+    }
+   ],
+   "mde50_positive_pole": 0.0217,
+   "mde80_positive_pole": 0.033,
+   "mde80_max_criterion": 0.0277,
+   "observed_positive_statistic": 0.01857209937949149,
+   "power_at_observed_positive": 0.444
+  },
+  "arousal": {
+   "valence_only": {
+    "positive": {
+     "statistic": 0.01857209937949149,
+     "p": 0.06419358064193581,
+     "floor_p95": 0.020095617531461614
+    },
+    "negative": {
+     "statistic": 0.0009860996887185846,
+     "p": 0.45565443455654436,
+     "floor_p95": 0.020311651696442282
+    },
+    "max_floor_p95": 0.023834586790828855
+   },
+   "valence_plus_arousal": {
+    "positive": {
+     "statistic": 0.011094084374682156,
+     "p": 0.1797820217978202,
+     "floor_p95": 0.019937069375467728
+    },
+    "negative": {
+     "statistic": 0.003031533257144816,
+     "p": 0.40005999400059994,
+     "floor_p95": 0.019693066285877244
+    },
+    "max_floor_p95": 0.023421596189622213
+   },
+   "pairs_valence_only": {
+    "disappointed_vs_sad": -0.06112955729599421,
+    "relieved_vs_calm": -0.011985716567604207,
+    "elated_vs_content": 0.051625964469578026
+   },
+   "pairs_valence_plus_arousal": {
+    "disappointed_vs_sad": -0.058771395764759926,
+    "relieved_vs_calm": -0.016641493687093216,
+    "elated_vs_content": 0.04013228169863695
+   }
+  },
+  "reversal": {
+   "raw_cos": {
+    "disappointed": -0.05522487004610282,
+    "sad": -0.08928762728646815
+   },
+   "valence_norms": {
+    "disappointed": -0.858,
+    "sad": -0.55
+   },
+   "fitted_from_valence": {
+    "disappointed": -0.07769802875759753,
+    "sad": -0.05063122870196865
+   },
+   "residual": {
+    "disappointed": 0.02247315871149471,
+    "sad": -0.0386563985844995
+   },
+   "residual_arousal_partialled": {
+    "disappointed": 0.024627316679474896,
+    "sad": -0.03414407908528503
+   },
+   "outcome_neg_family_mean_residual": -0.009416090111248719,
+   "nonoutcome_neg_family_mean_residual": -0.008429990422530134
+  }
+ },
+ "power_planted_pipeline": {
+  "hidden": 436,
+  "c_valence": 0.16706943951070855,
+  "target_resid_sd": 0.04790264604794424,
+  "calibrated_resid_sd": 0.04210712956357625,
+  "target_footprint": 0.2087349029200662,
+  "calibrated_footprint": 0.2032280270719229,
+  "n_seeds_per_scale": 24,
+  "ladder": [
+   {
+    "planted_amp": 0.0,
+    "mean_realized_positive_statistic": 0.0071240355699284845,
+    "power_positive_p05": 0.125,
+    "power_clears_both_floors": 0.16666666666666666
+   },
+   {
+    "planted_amp": 0.013,
+    "mean_realized_positive_statistic": 0.017137365058959523,
+    "power_positive_p05": 0.16666666666666666,
+    "power_clears_both_floors": 0.25
+   },
+   {
+    "planted_amp": 0.026,
+    "mean_realized_positive_statistic": 0.027125769175123535,
+    "power_positive_p05": 0.375,
+    "power_clears_both_floors": 0.2916666666666667
+   },
+   {
+    "planted_amp": 0.033,
+    "mean_realized_positive_statistic": 0.0324921081547744,
+    "power_positive_p05": 0.4166666666666667,
+    "power_clears_both_floors": 0.4583333333333333
+   },
+   {
+    "planted_amp": 0.04,
+    "mean_realized_positive_statistic": 0.037849053955351764,
+    "power_positive_p05": 0.5416666666666666,
+    "power_clears_both_floors": 0.5833333333333334
+   },
+   {
+    "planted_amp": 0.052,
+    "mean_realized_positive_statistic": 0.047008382462017044,
+    "power_positive_p05": 0.7083333333333334,
+    "power_clears_both_floors": 0.7916666666666666
+   },
+   {
+    "planted_amp": 0.065,
+    "mean_realized_positive_statistic": 0.05689303071539884,
+    "power_positive_p05": 0.7083333333333334,
+    "power_clears_both_floors": 0.9166666666666666
+   },
+   {
+    "planted_amp": 0.078,
+    "mean_realized_positive_statistic": 0.06673365440129723,
+    "power_positive_p05": 0.875,
+    "power_clears_both_floors": 1.0
+   },
+   {
+    "planted_amp": 0.104,
+    "mean_realized_positive_statistic": 0.08626459997354757,
+    "power_positive_p05": 1.0,
+    "power_clears_both_floors": 1.0
+   }
+  ],
+  "binary_report_observed_positive": 0.02931774851229345
+ },
+ "selection": {
+  "word_residual_corr_b35_b63": 0.8085722509110921,
+  "g0_selected_block": 63,
+  "g0_rho_at_selected": 0.7835924569114536,
+  "g0_runner_up": [
+   34,
+   0.7801514556368973
+  ],
+  "g0_rho_range_blocks_16_to_63": [
+   0.7200576294564112,
+   0.7835924569114536
+  ],
+  "positive_pole_sign_positive_blocks_20_to_63": "41/44",
+  "positive_pole_argmax_block_from_20": [
+   50,
+   0.05382812314027239
+  ],
+  "positive_pole_at_headline": {
+   "35": 0.025353847999197335,
+   "63": 0.01857209937949149
+  },
+  "note": "The sweep has no per-block floors and word-level cosines are only reported at the two headline blocks, so whether the mid-band peak clears its own selection-aware floor is NOT computable from the shipped report \u2014 it needs the emotion_vectors npz."
+ },
+ "topics": {
+  "topics_per_word_min_max": [
+   11,
+   12
+  ],
+  "pairwise_shared_topics_min_mean_max": [
+   2,
+   5.715720022948939,
+   10
+  ],
+  "disappointed_sad_shared_topics": 6,
+  "note": "Each word draws a random 12 of 25 topics (per-word seed), so topic composition is a word-level nuisance that the grand-mean subtraction does not cancel; at stories_per_emotion=25 the grid is fully crossed and it cancels exactly."
+ }
+}

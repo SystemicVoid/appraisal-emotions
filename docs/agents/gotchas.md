@@ -98,3 +98,20 @@ have moved. "The patch changes no behaviour" is not licensed by this run.
 free to vary within the cell — a forced-choice or free-report prompt appended after the reveal —
 or drop the probe. As built it consumes GPU and produces a constant. Until then, quote the
 continuation counts only alongside the sentence that they are non-diagnostic by construction.
+
+### The E1 planted-signal control only operates in a strong-signal cartoon regime
+
+`tests/test_emotion_mapping.py` builds each synthetic word vector as `valence_j·u + noise`, so
+every valence-0 word is a near-zero-norm vector whose cosine with anything is pure noise. At the
+tests' settings (planted amplitude 1.0 vs noise 0.01) this is invisible; try to re-run the same
+construction with noise calibrated to the OBSERVED word-residual spread (p95 ≈ 0.098) and the
+synthetic p95 comes out ≈ 0.56 — and grows as noise SHRINKS, because the valence-0 rows' cosines
+degenerate. Consequence: the shipped positive control demonstrates recovery at SNR ~100 and
+cannot be extended to ask whether the harness detects an effect of the observed size (+0.025).
+Sensitivity at the claim's scale needs a geometry with per-word idiosyncratic content — see
+`planted_pipeline_power` in `scripts/e1_null_diagnosis.py`, which calibrates content and valence
+components to the observed residual sd and raw-cosine valence footprint.
+
+*Fix path:* covered by `scripts/e1_null_diagnosis.py` (the calibrated-geometry sweep is versioned
+and re-runnable); the tests keep their strong-signal role as machinery checks. Delete this entry
+if the calibrated construction is ever promoted into the test suite as the sensitivity fixture.
