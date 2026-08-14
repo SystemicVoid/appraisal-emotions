@@ -81,8 +81,17 @@ map-geometry run=smoke_rpe_dir emo=smoke_emo_dir norms="":
 # Numeric valence/arousal norms (Warriner 2013 / NRC-VAD). The ONLY recipe that touches the
 # network; NRC-VAD is research-use-only and non-redistributable, so the subset is fetched, never
 # vendored. Optional: without it the run uses the §5 minted binary labels.
+# Warriner alone covers 62/84 of the §5 words, which is BELOW the all-or-nothing threshold
+# map-geometry applies — so this default lands on the binary fallback. Use `fetch-norms-nrc` for
+# the configuration that actually reaches 84/84.
 fetch-norms out="data/norms":
     uv run --frozen python scripts/fetch_norms.py --out {{out}}
+
+# 84/84 coverage: NRC-VAD v2.x alone (one protocol, one scale, 80/84) plus the recorded four-word
+# verb-lemma backoff. NRC-VAD is RESEARCH USE ONLY and non-redistributable — download it yourself
+# from https://saifmohammad.com/WebPages/nrc-vad.html and pass the URL or a file:// path.
+fetch-norms-nrc url out="data/norms":
+    uv run --frozen python scripts/fetch_norms.py --skip-warriner --lemma-backoff --nrc-vad-url "{{url}}" --out {{out}}
 
 # E2: expectation vs situation on the certified reward-matched cells (outcome fixed, stated EV
 # varies). Sign-congruent within-cell slope => the emotion-probe readout tracks EXPECTATION;

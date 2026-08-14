@@ -1,0 +1,53 @@
+{
+  "generated": "2026-08-14",
+  "lemma_backoff": [
+    {
+      "arousal": -0.192,
+      "lemma": "deflate",
+      "source": "nrc_vad_v2",
+      "valence": -0.704,
+      "word": "deflated"
+    },
+    {
+      "arousal": -0.667,
+      "lemma": "disillusion",
+      "source": "nrc_vad_v2",
+      "valence": -0.667,
+      "word": "disillusioned"
+    },
+    {
+      "arousal": 0.593,
+      "lemma": "dumbfound",
+      "source": "nrc_vad_v2",
+      "valence": -0.381,
+      "word": "dumbfounded"
+    },
+    {
+      "arousal": 0.368,
+      "lemma": "thwart",
+      "source": "nrc_vad_v2",
+      "valence": -0.438,
+      "word": "thwarted"
+    }
+  ],
+  "missing_words": [],
+  "n_words_covered": 84,
+  "n_words_requested": 84,
+  "note": "Norm VALUES are never hand-entered anywhere in this repo. Partial coverage is reported, not patched: map-geometry uses numeric norms only when every word is covered, and otherwise falls back to the binary labels in data/emotion_words.json. Any word under `lemma_backoff` carries its VERB LEMMA's rating, not the inflected form's \u2014 a recorded substitution, not a measurement of that word.",
+  "sources": [
+    {
+      "covered_words": 80,
+      "fetched": "2026-08-14",
+      "member": "NRC-VAD-Lexicon-v2.1/NRC-VAD-Lexicon-v2.1.txt",
+      "name": "nrc_vad_v2",
+      "scale": "-1..1 (detected)",
+      "sha256": "8bcd04831ffda149f683f8d3091c76a3aee138ee3aa1924b67b50b9416d37df0",
+      "terms": "NRC-VAD is RESEARCH USE ONLY and may NOT be redistributed; each user downloads it from https://saifmohammad.com/WebPages/nrc-vad.html. Only the subset is written here.",
+      "url": "http://saifmohammad.com/WebDocs/Lexicons/NRC-VAD-Lexicon-v2.1.zip"
+    }
+  ],
+  "subset_csv": "data/norms/vad_subset.csv",
+  "subset_csv_sha256": "310abaff0ce306737b949bd05d390c6c254f519a1482a139e6d959b46ef62c06",
+  "words_file": "data/emotion_words.json",
+  "words_file_sha256": "e684880eaf93dec52f5aecc09be86b988a1da8c188464db313305a4a921be11b"
+}
