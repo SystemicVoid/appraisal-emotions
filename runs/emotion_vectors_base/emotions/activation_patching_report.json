@@ -1,0 +1,130 @@
+{
+  "arm_notes": {
+    "full_residual": "Ceiling: the donor's whole reveal-token state. 1.0 by construction here.",
+    "random_component": "Floor: unit random directions, same substitution, reported at the 95th percentile over n_random_draws draws \u2014 a floor, not a single lucky or unlucky direction.",
+    "same_condition_donor": "No-op negative control: a different rendering of the recipient's OWN condition. Its shift should sit near zero \u2014 the transfer fraction is reported against the SAME donor-minus-recipient denominator so the arms are on one scale.",
+    "v_rpe_component": "Is the transfer carried by the certified signed-RPE direction?"
+  },
+  "arms": [
+    {
+      "arm": "full_residual",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0618414876126536,
+      "mean_shift": 1.0618414876126536,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 1.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "v_rpe_component",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0618414876126536,
+      "mean_shift": 0.21193733775584092,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.209156372466672,
+      "wiring_check": true
+    },
+    {
+      "arm": "random_component",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0618414876126536,
+      "mean_shift": 0.002736068584109162,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 200,
+      "readout_block": 63,
+      "transfer_fraction": 0.0025895248108637123,
+      "wiring_check": true
+    },
+    {
+      "arm": "same_condition_donor",
+      "axis": "pc1_affect_concept_valence",
+      "mean_donor_minus_recipient": 1.0618414876126536,
+      "mean_shift": 0.05881567874237943,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.0031148800289498334,
+      "wiring_check": true
+    },
+    {
+      "arm": "full_residual",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.8675105793213185,
+      "mean_shift": 0.8675105793213185,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 1.0,
+      "wiring_check": true
+    },
+    {
+      "arm": "v_rpe_component",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.8675105793213185,
+      "mean_shift": 0.19202985632602274,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.18631109928517664,
+      "wiring_check": true
+    },
+    {
+      "arm": "random_component",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.8675105793213185,
+      "mean_shift": 0.002712789988109155,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 200,
+      "readout_block": 63,
+      "transfer_fraction": 0.003143810286697134,
+      "wiring_check": true
+    },
+    {
+      "arm": "same_condition_donor",
+      "axis": "elated_minus_disappointed",
+      "mean_donor_minus_recipient": 0.8675105793213185,
+      "mean_shift": -0.01515701765378773,
+      "mode": "state",
+      "n_pairs": 248,
+      "n_random_draws": 0,
+      "readout_block": 63,
+      "transfer_fraction": 0.04906446219699865,
+      "wiring_check": true
+    }
+  ],
+  "artifact_contract_version": "activation_patching/v2",
+  "battery_sha256": "160208e6cdf9bb49624a5bca6094f216994196015027f9462c38df4481fa138e",
+  "block": 63,
+  "continuations": [],
+  "directions_sha256": "accea6aeedf3b34a5beb819e6edf1fc6731c11c817e680cec15ca8d4c24907a9",
+  "emotion_selected_block": 63,
+  "emotion_vectors_sha256": "14161298f04009150994f18b0bbb83d6c91fce85b6b54cc2bd1f66226a6dca2a",
+  "identification_limit": "Within a reward-matched cell EV and signed RPE are perfectly anti-correlated (reward is fixed), so E3 identifies 'the expectation manipulation transfers', NOT 'signed RPE rather than EV transfers'. That separation is R-A\u2032's two matched contests and E2. Patching across EV-matched pairs (same draw, opposite outcome) is the documented complement, not built.",
+  "mode": "state",
+  "mode_note": "STATE-LEVEL PREVIEW (zero forwards). The donor's reveal-token residual is substituted at the patch block and the emotion-axis projection OF THAT SUBSTITUTED VECTOR is read. Nothing propagates and nothing is generated, so this measures what the substitution puts in, not what the model does with it \u2014 full_residual transfers 1.0 BY CONSTRUCTION and is a wiring check, not a result. Caps at present-and-separable. Re-run with mode=forward on the real model for the causal tier.",
+  "model_key": null,
+  "n_no_op_pairs": 248,
+  "n_pairs": 248,
+  "n_random_draws": 200,
+  "n_reward_cells": 60,
+  "readout_blocks": [
+    63
+  ],
+  "seed": 7,
+  "sensitivity_gate": "G0=pass",
+  "states_sha256": "3d6de5a79cd72ebadf2d74584d1f9fc608c872d1eca9acc2be689b11f2ae331c",
+  "symbol_confound": null,
+  "symbol_matched": true,
+  "verdict_cap": "present-and-separable, pilot-suggestive. The STATE-LEVEL preview says how much of the donor-recipient difference along an emotion axis the substitution carries; it runs no forward, so it cannot show the model using it. Re-run with mode=forward on the real model for the functionally-used tier."
+}

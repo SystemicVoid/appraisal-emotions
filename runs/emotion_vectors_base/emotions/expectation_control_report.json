@@ -1,0 +1,38 @@
+{
+  "alpha": 0.05,
+  "artifact_contract_version": "expectation_control/v1",
+  "axes": [
+    {
+      "axis": "pc1_affect_concept_valence",
+      "description": "PC1 of the emotion basis, oriented toward positive affect-concept valence.",
+      "mean_per_cell_slope": 0.04667026430598221,
+      "n_cells": 60,
+      "n_rows": 960,
+      "p_value": 9.999000099990002e-05,
+      "pooled_within_cell_slope": 0.026065509850479965,
+      "reads_expectation": true,
+      "sign_congruent": true
+    },
+    {
+      "axis": "elated_minus_disappointed",
+      "description": "The design's e_disappointed - e_elated contrast, sign-flipped so positive means better-than-expected (fixed before data; see module docstring).",
+      "mean_per_cell_slope": 0.04143191466393988,
+      "n_cells": 60,
+      "n_rows": 960,
+      "p_value": 9.999000099990002e-05,
+      "pooled_within_cell_slope": 0.019984239309624452,
+      "reads_expectation": true,
+      "sign_congruent": true
+    }
+  ],
+  "battery_sha256": "160208e6cdf9bb49624a5bca6094f216994196015027f9462c38df4481fa138e",
+  "block": 63,
+  "emotion_selected_block": 63,
+  "emotion_vectors_sha256": "14161298f04009150994f18b0bbb83d6c91fce85b6b54cc2bd1f66226a6dca2a",
+  "n_permutations": 10000,
+  "scope_note": "The options block is NOT byte-identical inside a reward-matched cell \u2014 EV differs by construction. The varying text is numeric point values on a surface that passes the zero-emotion-lexicon audit: exactly the variation an expectation-tracker must use and a surface-affect detector should ignore.",
+  "seed": 7,
+  "sensitivity_gate": "G0=pass",
+  "states_sha256": "3d6de5a79cd72ebadf2d74584d1f9fc608c872d1eca9acc2be689b11f2ae331c",
+  "verdict_cap": "present-and-separable, pilot-suggestive. A sign-congruent within-cell slope says the emotion-probe readout tracks the EXPECTATION manipulation with the outcome text fixed; a null within cells is what the situational-context rival predicts. Neither licenses any welfare / sentience / experience claim."
+}
