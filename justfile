@@ -63,12 +63,29 @@ extract-emotions-smoke:
 extract-emotions:
     {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_base.yaml
 
+# P1 CONTRACT SMOKE: the story-projection re-capture on the fake backend. Numbers meaningless;
+# what it exercises is the faithfulness gate and the artifact binding.
+extract-story-projections-smoke rpe=smoke_rpe_dir:
+    {{parallel_test_env}} uv run appraisal-emotions extract-story-projections --config configs/emotion_vectors_smoke.yaml --directions {{rpe}}/reveal_directions.json
+
+# P1 REAL: re-feed the 1,017 stories E0 already generated and keep one scalar per story x block x
+# direction plus the within-word Gram. NO generation, no new stimulus, no new seed — so this is a
+# decomposition of the published emotion basis, not a second measurement of it, and the run refuses
+# (quarantining the capture) if it cannot reproduce E0's word vectors. ~1,017 read-only forwards,
+# a fraction of E0's cost; the payload is ~8 MB and syncs back, unlike the 5 GB of states.
+# What it buys: the within-word variance E0 discarded, and therefore whether E1's null is an
+# absence or an instrument too coarse to see it. Scored by `scripts/p1_reliability.py` against the
+# thresholds in docs/design/p1-prereg.md. GPU runs gate behind explicit human approval.
+extract-story-projections rpe="runs/reveal_rpe_base/reveal_rpe":
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-story-projections --config configs/emotion_vectors_base.yaml --directions {{rpe}}/reveal_directions.json
+
 # E1: the headline valence-residual geometry. EVERY word's residual is tabled; the §5 recorded
 # expectations (two family contrasts, the three-level outcome ordering, three named pairs) get
 # effect sizes and one-sided permutation p-values in their recorded direction — no Holm, no
 # confirmatory caste. A flat residual with G0 or P5c failed is harness_inadequate, never a
 # falsification; with every gate passed it licenses exactly one discard — "stop investing in
-# appraisal-residual geometry on story-mean emotion bases at this scale". Defaults point at the
+# appraisal-residual geometry on story-mean emotion bases at this scale" — and only for effects at
+# or above the run's own label-shuffle floor, which the verdict cap quotes. Defaults point at the
 # smoke artifacts: `just map-geometry <rpe_dir> <emotions_dir>` scores a real capture.
 # Pass `norms=data/norms/vad_subset.csv` (after `just fetch-norms`) to upgrade the valence scale
 # from the minted binary labels to graded norms. Coverage is ALL-OR-NOTHING: anything short of

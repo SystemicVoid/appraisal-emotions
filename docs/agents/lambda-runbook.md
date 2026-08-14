@@ -99,6 +99,11 @@ just extract-rpe-smoke                     # fake backend; contract only, number
 just extract-rpe                           # R-A′ recipe at 30B: 1,984 reveal forwards
 # read the reality sample of ~10 story generations before the capture pass (skills/reality-sample)
 just extract-emotions                      # E0: (84 + 1) × 12 = 1,020 generations, ≤1,020 forwards
+just extract-story-projections              # P1: re-feed the SAME 1,017 stories, keep per-story
+                                           # projections + the within-word Gram. ~1,017 forwards,
+                                           # no generation. Refuses if it cannot reproduce E0's
+                                           # word vectors. ~8 MB out, so it syncs where states
+                                           # could not. Scored off-GPU by scripts/p1_reliability.py.
 just fetch-norms                           # OPTIONAL, and the only step that uses the network.
                                            # Upgrades the valence scale to graded norms — but only
                                            # on FULL coverage of the 84 words; short of that the
@@ -134,6 +139,7 @@ Wall-clock estimates on H100 at 30 tok/s decode and ~0.1 s per capture forward (
 | `extract-rpe` | 1,984 forwards × ~0.1 s ≈ 200 s, plus artifact writes | 10–20 min |
 | E0 generation | 1,020 stories × ~160 new tokens = 163,200 tokens ÷ 30 tok/s | ~1.5 h (H100); ~2.3 h at 20 tok/s on A100 |
 | E0 capture | ≤1,020 forwards × ~0.1 s (dropped stories are not captured) | ~5 min |
+| P1 re-capture | 1,017 forwards, no generation — E0's capture half without E0's generation half | ~5 min |
 | E3 patching, state mode | CPU arithmetic over the captured states; no forwards | < 1 min |
 | E3 patching, forward mode | 60 pairs × (5 + 5 random draws) = 600 patched forwards (~1 min) + continuations for the first `--max-continuations` (10) pairs × 3 arms × ≤40 tokens ≈ 1,200 tokens (~1 min) | 3–10 min |
 | Optional 4B contrast | 8 GB of weights → decode ceiling ~7× higher; the same chain | ~20–30 min |
