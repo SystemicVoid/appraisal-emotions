@@ -10,9 +10,10 @@ story log). No model, no forwards, no new capture. It answers, in order:
 3. **power_empirical** — the missing power analysis. Noise = the OBSERVED word residuals
    (label-permuted, the same exchangeability the report's own floor uses); a known family effect
    delta is planted on the cosines, the valence regression is re-fit (so the covariate absorbs its
-   share, as it would for a real effect), and detection = clearing the one-sided 5% permutation
-   bar — the report's own criterion. Sweeping delta gives the minimum detectable effect (MDE) in
-   the report's own units, which is what the observed +0.0254 must be judged against.
+   share, as it would for a real effect), and detection is counted under each of the report's
+   criteria separately (see the note on nulls below). Sweeping delta gives the minimum detectable
+   effect (MDE) in the report's own units, which is what the observed +0.0254 must be judged
+   against.
 4. **power_planted** — the same question through the FULL map_geometry pipeline (regression,
    permutations, BOTH anisotropy floors), on a planted artifact whose geometry is calibrated to
    the observed instrument: per-word idiosyncratic content sized to the observed word-residual
@@ -29,13 +30,33 @@ story log). No model, no forwards, no new capture. It answers, in order:
    itself a sensitivity finding (docs/agents/experiment-gating.md: "the harness runs" is not
    sensitivity at the claim's scale).
 5. **arousal** — the regression re-run with the arousal column the norms CSV already carries
-   (both directions of every change reported; symmetric-amendment discipline).
+   (both directions of every change reported; symmetric-amendment discipline). The p reported
+   here is the EXACT within-pool test — see the note on nulls — so it is directly comparable to
+   the report's tabled p, and the valence-only run is gated against it.
 6. **reversal** — the `disappointed`/`sad` named-pair reversal decomposed into raw cosine,
    valence-predicted, and residual parts.
 7. **selection** — how much the G0 block-selection criterion actually discriminates, and where
    the family contrast sits over depth relative to the two headline blocks.
 8. **topics** — per-word story-topic composition (each word draws a different random 12 of 25
    topics, which does NOT cancel in the grand-mean subtraction).
+
+**The report uses two different nulls, and conflating them is easy.** Both are honoured here and
+each number says which one it is:
+
+* the tabled ``family_contrasts[].p_value`` is a **within-pool** two-sample label permutation
+  (``valence_residual.two_sample_permutation_p``) over the 19 words of the two contrasted
+  families only — 9 outcome against 10 controls;
+* the ``clears_both_floors`` **verdict** is a **whole-set** relabelling of all 84 residuals,
+  scored by the max over poles (``valence_residual.label_shuffled_floor``), and-ed with the
+  random-direction floor.
+
+They are not interchangeable, and the size of the gap is emitted rather than asserted: block 35's
+positive pole appears as ``arousal.valence_only.positive.p_exact_within_pool`` next to
+``arousal.verdict_floor_valence_only.p_per_pole_under_this_null.positive``, roughly 0.117 against
+0.090 on the SAME residuals. The within-pool p is computed by **complete enumeration** of all
+C(19,9) = 92,378 splits rather than by sampling, so a p difference between two designs carries no
+Monte-Carlo error at all and needs no seed; the whole-set null stays sampled because that is what
+the report does, and the recomputed floor is gated against the shipped ``label_shuffled_p95``.
 
 Writes ``e1_null_diagnosis.json`` next to the report and prints a summary. Nothing here is a new
 headline statistic: it is the sensitivity accounting that decides whether the E1 null routes to
@@ -48,12 +69,19 @@ import argparse
 import json
 import sys
 from collections import defaultdict
+from itertools import chain, combinations
+from math import comb, sqrt
 from pathlib import Path
+from statistics import NormalDist
 
 import numpy as np
 
 from appraisal_emotions.analysis.emotion_mapping import read_valence_norms
-from appraisal_emotions.analysis.valence_residual import ols_residuals
+from appraisal_emotions.analysis.valence_residual import (
+    FLOOR_QUANTILE,
+    ols_residuals,
+    two_sample_statistic,
+)
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 REPO = Path(__file__).resolve().parents[1]
@@ -99,26 +127,121 @@ def _pole_stats(resid: np.ndarray, rows: dict) -> dict[str, float]:
     }
 
 
-def _perm_p_and_floor(resid: np.ndarray, rows: dict, rng, n: int = 10_000) -> dict:
-    """One-sided permutation p per pole plus the p95 floor of each pole and of the max."""
+Z95 = NormalDist().inv_cdf(0.975)
 
-    stats = {pole: [] for pole, *_ in POLES}
-    for _ in range(n):
+
+def _wilson_ci95(hits: int, n: int) -> list[float]:
+    """Wilson 95% interval — the one that stays inside [0, 1] at the rates a null rung produces."""
+
+    p = hits / n
+    denominator = 1.0 + Z95**2 / n
+    centre = (p + Z95**2 / (2 * n)) / denominator
+    half = Z95 * sqrt(p * (1.0 - p) / n + Z95**2 / (4 * n**2)) / denominator
+    return [round(centre - half, 4), round(centre + half, 4)]
+
+
+def _mean_ci95(values: np.ndarray) -> list[float]:
+    half = Z95 * float(values.std(ddof=1)) / sqrt(values.size)
+    return [round(float(values.mean()) - half, 5), round(float(values.mean()) + half, 5)]
+
+
+# --------------------------------------------------------------- the report's within-pool null
+
+# Complete enumeration is only sane while the pooled families stay small. At the §5 sizes this is
+# C(19,9) = 92,378 rows; the guard fires long before the indicator matrix stops being free.
+MAX_ENUMERATED_SPLITS = 2_000_000
+_SPLIT_CACHE: dict[tuple[int, int], np.ndarray] = {}
+
+
+def _split_indicator(n_left: int, n_right: int) -> np.ndarray:
+    """(n_splits, n_left+n_right) 0/1 rows: which pooled words are called the outcome family.
+
+    Row 0 is the OBSERVED labelling — ``itertools.combinations`` is lexicographic, so the first
+    row is (0..n_left-1), and the pool is built outcome-first. That matters: the observed
+    statistic is then read off row 0 of the same matrix product as every null draw, so the
+    ``>=`` comparison is exact arithmetic rather than a float tie needing a tolerance.
+    """
+
+    key = (n_left, n_right)
+    if key not in _SPLIT_CACHE:
+        total = n_left + n_right
+        n_splits = comb(total, n_left)
+        if n_splits > MAX_ENUMERATED_SPLITS:
+            raise ValueError(
+                f"C({total},{n_left}) = {n_splits} splits exceeds {MAX_ENUMERATED_SPLITS}; "
+                "use valence_residual.two_sample_permutation_p (sampled) instead"
+            )
+        picks = np.fromiter(
+            chain.from_iterable(combinations(range(total), n_left)), dtype=np.int64
+        ).reshape(n_splits, n_left)
+        if not np.array_equal(picks[0], np.arange(n_left)):
+            raise AssertionError("combinations() is no longer lexicographic")
+        indicator = np.zeros((n_splits, total))
+        np.put_along_axis(indicator, picks, 1.0, axis=1)
+        _SPLIT_CACHE[key] = indicator
+    return _SPLIT_CACHE[key]
+
+
+def _exact_pole_p(resid: np.ndarray, rows: dict, pole: tuple) -> tuple[float, float, int]:
+    """``(statistic, exact one-sided p, n_splits)`` for one pole under the report's own test.
+
+    ``valence_residual.two_sample_permutation_p`` pools the two contrasted families and reshuffles
+    the group labels 10,000 times. Every one of those relabellings is a row of
+    :func:`_split_indicator`, so enumerating them gives the exact p the report's 10,000 draws
+    estimate — no seed, no Monte-Carlo error, and therefore a p difference between two designs
+    that means something at the third decimal.
+    """
+
+    _, outcome, control, sign = pole
+    left, right = rows[outcome], rows[control]
+    pooled = np.concatenate([resid[left], resid[right]])
+    left_sum = _split_indicator(left.size, right.size) @ pooled
+    draws = sign * (left_sum / left.size - (pooled.sum() - left_sum) / right.size)
+    return float(draws[0]), float(np.count_nonzero(draws >= draws[0]) / draws.size), int(draws.size)
+
+
+def _exact_within_pool(resid: np.ndarray, rows: dict) -> dict[str, dict[str, float]]:
+    """:func:`_exact_pole_p` over both poles, with the repo kernel's value as a cross-check."""
+
+    out: dict[str, dict[str, float]] = {}
+    for pole in POLES:
+        statistic, p_exact, n_splits = _exact_pole_p(resid, rows, pole)
+        canonical = two_sample_statistic(resid, rows[pole[1]], rows[pole[2]], pole[3])
+        out[pole[0]] = {
+            "statistic": statistic,
+            "p_exact_within_pool": p_exact,
+            "n_splits_enumerated": n_splits,
+            "statistic_vs_repo_kernel": float(abs(statistic - canonical)),
+        }
+    return out
+
+
+def _whole_set_floor(resid: np.ndarray, rows: dict, rng, n_draws: int) -> dict[str, float]:
+    """p95 of the max-over-poles contrast under a whole-set relabelling — the VERDICT criterion.
+
+    Mirrors ``valence_residual.label_shuffled_floor``: shuffle all 84 residuals (residualize
+    first, then permute), score with the same max-over-poles headline the report uses, take
+    ``FLOOR_QUANTILE``. This is what ``clears_both_floors`` reads, and it is a different question
+    from the tabled per-pole p above.
+    """
+
+    per_pole = {pole: np.empty(n_draws) for pole, *_ in POLES}
+    for k in range(n_draws):
         drawn = _pole_stats(rng.permutation(resid), rows)
         for pole, *_ in POLES:
-            stats[pole].append(drawn[pole])
+            per_pole[pole][k] = drawn[pole]
     observed = _pole_stats(resid, rows)
-    out = {}
-    for pole, *_ in POLES:
-        draws = np.array(stats[pole])
-        out[pole] = {
-            "statistic": observed[pole],
-            "p": float((np.sum(draws >= observed[pole]) + 1) / (n + 1)),
-            "floor_p95": float(np.quantile(draws, 0.95)),
-        }
-    max_draws = np.maximum(np.array(stats["positive"]), np.array(stats["negative"]))
-    out["max_floor_p95"] = float(np.quantile(max_draws, 0.95))
-    return out
+    max_draws = np.maximum(per_pole["positive"], per_pole["negative"])
+    return {
+        "max_over_poles_p95": float(np.quantile(max_draws, FLOOR_QUANTILE, method="linear")),
+        "n_draws": n_draws,
+        # NOT a test the report runs. Emitted so the gap between the two nulls is a measurement
+        # rather than an assertion: read it against p_exact_within_pool on the same residuals.
+        "p_per_pole_under_this_null": {
+            pole: float((np.count_nonzero(per_pole[pole] >= observed[pole]) + 1) / (n_draws + 1))
+            for pole, *_ in POLES
+        },
+    }
 
 
 # ------------------------------------------------------------------ 3. empirical power
@@ -132,8 +255,21 @@ def empirical_power(
     Noise pool = the observed residuals, label-permuted — identical exchangeability to the
     report's own label-shuffle floor, so this measures the power of the test as fielded, against
     the noise it actually saw. The plant is +delta on outcome_pos and -delta on outcome_neg (the
-    theory-expected two-pole structure); detection per pole is a one-sided 5% permutation test —
-    the report's own criterion (its p95 label floor IS that test's critical value).
+    theory-expected two-pole structure).
+
+    Detection is counted under all three criteria the report can be read by, because they are not
+    the same test and they do not give the same MDE (see the note on nulls in the module
+    docstring):
+
+    * ``verdict_clears_label_floor`` — max over poles against the whole-set p95 floor. This is
+      what ``clears_both_floors`` reads, so it is the criterion the published NULL was declared
+      under, and its MDE is the headline.
+    * ``positive_pole_within_pool`` — the exact within-pool p < 0.05. This is the test behind the
+      p-values the report TABLES and everyone quotes.
+    * ``positive_pole_whole_set`` / ``negative_pole_whole_set`` — per-pole against a whole-set
+      floor. Not a criterion the report uses; kept because it isolates one pole at the floor's
+      scale, and because it is what an earlier revision of this script reported as though it were
+      the tabled test.
     """
 
     rng = np.random.default_rng(seed)
@@ -148,9 +284,15 @@ def empirical_power(
 
     deltas = sorted({0.0, 0.01, 0.02, round(observed, 4), 0.03, 0.04, 0.05, 0.06, 0.08, 0.10})
     n_floor = 300
+    keys = (
+        "positive_pole_whole_set",
+        "negative_pole_whole_set",
+        "verdict_clears_label_floor",
+        "positive_pole_within_pool",
+    )
     curve = []
     for delta in deltas:
-        hits = {"positive": 0, "negative": 0, "both_floor_max": 0}
+        hits = dict.fromkeys(keys, 0)
         for _ in range(n_sims):
             cos_sim = rng.permutation(resid_obs) + delta * plant
             resid_sim = ols_residuals(cos_sim, design)
@@ -161,11 +303,15 @@ def empirical_power(
                 for pole, *_ in POLES:
                     draws[pole][k] = drawn[pole]
             for pole, *_ in POLES:
-                if sim_stat[pole] > np.quantile(draws[pole], 0.95):
-                    hits[pole] += 1
-            max_floor = np.quantile(np.maximum(draws["positive"], draws["negative"]), 0.95)
+                if sim_stat[pole] > np.quantile(draws[pole], FLOOR_QUANTILE):
+                    hits[f"{pole}_pole_whole_set"] += 1
+            max_floor = np.quantile(
+                np.maximum(draws["positive"], draws["negative"]), FLOOR_QUANTILE
+            )
             if max(sim_stat.values()) > max_floor:
-                hits["both_floor_max"] += 1
+                hits["verdict_clears_label_floor"] += 1
+            if _exact_pole_p(resid_sim, rows, POLES[0])[1] < 0.05:
+                hits["positive_pole_within_pool"] += 1
         curve.append({"delta": delta, **{k: v / n_sims for k, v in hits.items()}})
 
     def mde(target: float, key: str) -> float | None:
@@ -177,18 +323,21 @@ def empirical_power(
         return None
 
     sd = float(resid_obs.std(ddof=1))
+    n_left, n_right = rows["outcome_pos"].size, rows["nonoutcome_pos"].size
+    at_observed = next(c for c in curve if abs(c["delta"] - round(observed, 4)) < 1e-9)
     return {
         "residual_sd": sd,
-        "analytic_se_contrast": sd * float(np.sqrt(1 / 9 + 1 / 10)),
+        "analytic_se_contrast": sd * sqrt(1 / n_left + 1 / n_right),
         "unit_effect_surviving_valence_regression": absorption,
+        "n_floor_draws_per_sim": n_floor,
+        "n_sims": n_sims,
         "power_curve": curve,
-        "mde50_positive_pole": mde(0.5, "positive"),
-        "mde80_positive_pole": mde(0.8, "positive"),
-        "mde80_max_criterion": mde(0.8, "both_floor_max"),
+        # One MDE per criterion, because the three criteria are three different tests. The
+        # verdict row is the headline: it is the one the published null was declared under.
+        "mde80_by_criterion": {key: mde(0.8, key) for key in keys},
+        "mde50_by_criterion": {key: mde(0.5, key) for key in keys},
         "observed_positive_statistic": observed,
-        "power_at_observed_positive": next(
-            c["positive"] for c in curve if abs(c["delta"] - round(observed, 4)) < 1e-9
-        ),
+        "power_at_observed_by_criterion": {key: at_observed[key] for key in keys},
     }
 
 
@@ -196,7 +345,12 @@ def empirical_power(
 
 
 def planted_pipeline_power(
-    scratch: Path, *, target_resid_sd: float, target_footprint: float, seeds: int
+    scratch: Path,
+    *,
+    target_resid_sd: float,
+    target_footprint: float,
+    seeds: int,
+    null_seeds: int,
 ) -> dict:
     """A calibrated-geometry planted artifact swept over amplitude through the REAL map_geometry.
 
@@ -262,8 +416,13 @@ def planted_pipeline_power(
 
     ladder = []
     for amp in [0.0, 0.013, 0.026, 0.033, 0.04, 0.052, 0.065, 0.078, 0.104]:
+        # The amp=0 rung is not a rung, it is the calibration: it measures this sweep's type-I
+        # rate, and every power number above it is only as trustworthy as that. It gets the seed
+        # budget that makes 0.05 distinguishable from 0.12; the rest are a shape, and their
+        # confidence intervals are reported so the shape is not read as precision.
+        n_seeds = null_seeds if amp == 0.0 else seeds
         realized, detected_p, detected_floors = [], 0, 0
-        for seed in range(seeds):
+        for seed in range(n_seeds):
             block = run(amp, 100 + seed).blocks[0]
             positive = next(c for c in block.family_contrasts if c.pole == "positive")
             realized.append(positive.statistic)
@@ -272,11 +431,46 @@ def planted_pipeline_power(
         ladder.append(
             {
                 "planted_amp": amp,
+                "n_seeds": n_seeds,
                 "mean_realized_positive_statistic": float(np.mean(realized)),
-                "power_positive_p05": detected_p / seeds,
-                "power_clears_both_floors": detected_floors / seeds,
+                "mean_realized_ci95": _mean_ci95(np.array(realized)),
+                "power_positive_p05": detected_p / n_seeds,
+                "power_positive_p05_ci95": _wilson_ci95(detected_p, n_seeds),
+                "power_clears_both_floors": detected_floors / n_seeds,
+                "power_clears_both_floors_ci95": _wilson_ci95(detected_floors, n_seeds),
             }
         )
+    null_rung = ladder[0]
+    nominal = 0.05
+    calibration = {
+        "nominal_type1_rate": nominal,
+        "n_seeds": null_rung["n_seeds"],
+        "observed_within_pool_p05": null_rung["power_positive_p05"],
+        "observed_within_pool_p05_ci95": null_rung["power_positive_p05_ci95"],
+        "observed_clears_both_floors": null_rung["power_clears_both_floors"],
+        "observed_clears_both_floors_ci95": null_rung["power_clears_both_floors_ci95"],
+        "mean_statistic_at_zero_plant": null_rung["mean_realized_positive_statistic"],
+        "mean_statistic_at_zero_plant_ci95": null_rung["mean_realized_ci95"],
+        "nominal_inside_both_intervals": bool(
+            null_rung["power_positive_p05_ci95"][0]
+            <= nominal
+            <= null_rung["power_positive_p05_ci95"][1]
+            and null_rung["power_clears_both_floors_ci95"][0]
+            <= nominal
+            <= null_rung["power_clears_both_floors_ci95"][1]
+        ),
+        "zero_inside_statistic_interval": bool(
+            null_rung["mean_realized_ci95"][0] <= 0.0 <= null_rung["mean_realized_ci95"][1]
+        ),
+        "note": (
+            "Both detection rates and the mean statistic are measured with NO effect planted, so "
+            "all three should cover their null values. If they do not, the ladder above is not a "
+            "power curve and nothing built on it holds. An earlier revision ran this rung at 24 "
+            "seeds and read 0.125 / 0.167 against a nominal 0.05 with no interval reported: "
+            "inside binomial noise, but indistinguishable from a real bias at that seed count, "
+            "which is why the null rung now carries the seed budget instead of the shape rungs."
+        ),
+    }
     return {
         "hidden": hidden,
         "c_valence": c_v,
@@ -285,6 +479,8 @@ def planted_pipeline_power(
         "target_footprint": target_footprint,
         "calibrated_footprint": check_footprint,
         "n_seeds_per_scale": seeds,
+        "n_seeds_at_zero_plant": null_seeds,
+        "null_calibration": calibration,
         "ladder": ladder,
     }
 
@@ -331,14 +527,40 @@ def _diagnose_block(
         frame, design, rows, observed=observed_positive, n_sims=n_sims, seed=1000 + block
     )
 
-    # 5. arousal partialled (both directions of every change reported)
+    # 5. arousal partialled (both directions of every change reported). The p is the EXACT
+    # within-pool test, i.e. the report's own; the gate below checks the valence-only run against
+    # the shipped Monte-Carlo p, so a design change of 0.03 cannot be confused with a null change.
     arousal_vec = np.array([arousal[w] for w in labels])
     design3 = np.column_stack([design, arousal_vec])
     resid3 = ols_residuals(frame["cos"], design3)
+    exact_valence_only = _exact_within_pool(resid, rows)
+    n_permutations = report["n_permutations"]
+    gate = {}
+    for pole, *_ in POLES:
+        shipped = next(
+            c["p_value"] for c in frame["entry"]["family_contrasts"] if c["pole"] == pole
+        )
+        exact = exact_valence_only[pole]["p_exact_within_pool"]
+        gate[pole] = {
+            "p_exact": exact,
+            "p_shipped_monte_carlo": shipped,
+            "monte_carlo_standard_errors_apart": round(
+                abs(exact - shipped) / sqrt(max(exact * (1.0 - exact), 1e-12) / n_permutations), 2
+            ),
+        }
     arousal_out = {
-        "valence_only": _perm_p_and_floor(resid, rows, np.random.default_rng(3000 + block)),
-        "valence_plus_arousal": _perm_p_and_floor(
-            resid3, rows, np.random.default_rng(2000 + block)
+        "gate_vs_shipped_report": gate,
+        "valence_only": exact_valence_only,
+        "valence_plus_arousal": _exact_within_pool(resid3, rows),
+        # Drawn at n_permutations, not the report's n_null_draws: a p95 from 1,000 draws has
+        # enough sampling error to muddy the gate below, and this floor costs nothing to sharpen.
+        "verdict_floor_valence_only": {
+            **_whole_set_floor(resid, rows, np.random.default_rng(3000 + block), n_permutations),
+            "shipped_label_shuffled_p95": frame["entry"]["label_shuffled_p95"],
+            "shipped_n_null_draws": report["n_null_draws"],
+        },
+        "verdict_floor_valence_plus_arousal": _whole_set_floor(
+            resid3, rows, np.random.default_rng(2000 + block), n_permutations
         ),
         "pairs_valence_only": {},
         "pairs_valence_plus_arousal": {},
@@ -388,6 +610,12 @@ def main() -> None:
     parser.add_argument("--n-sims", type=int, default=1000)
     parser.add_argument("--planted-seeds", type=int, default=24)
     parser.add_argument(
+        "--null-seeds",
+        type=int,
+        default=400,
+        help="seeds at planted amplitude 0 — the type-I calibration, which needs the precision",
+    )
+    parser.add_argument(
         "--scratch", type=Path, required=True, help="scratch dir for the planted sweep"
     )
     args = parser.parse_args()
@@ -420,6 +648,7 @@ def main() -> None:
         target_resid_sd=float(b35_resid.std(ddof=1)),
         target_footprint=float(b35_cos[b35_val > 0].mean() - b35_cos[b35_val < 0].mean()),
         seeds=args.planted_seeds,
+        null_seeds=args.null_seeds,
     )
     out["power_planted_pipeline"]["binary_report_observed_positive"] = binary_b35[
         "family_contrasts"
