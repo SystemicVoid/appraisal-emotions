@@ -69,6 +69,18 @@ class WordProjectionStats:
 
         return self.mean_u / self.word_norm
 
+    def select(self, index: np.ndarray) -> WordProjectionStats:
+        """The same statistics over a subset (or bootstrap resample) of the words."""
+
+        return WordProjectionStats(
+            labels=tuple(self.labels[position] for position in index),
+            counts=self.counts[index],
+            mean_u=self.mean_u[index],
+            word_norm=self.word_norm[index],
+            within_var_u=self.within_var_u[index],
+            within_scatter=self.within_scatter[index],
+        )
+
 
 def word_projection_stats(
     artifact: StoryProjections, labels: tuple[str, ...], *, block: int, direction: str
@@ -228,6 +240,11 @@ def attenuation(stats: WordProjectionStats) -> dict[str, float]:
         "n_words_with_norm_fully_explained_by_noise": int(np.sum(true_norm_sq <= 0.0)),
         "mean_true_norm": float(np.sqrt(true_norm_sq).mean()),
         "mean_within_scatter": float(stats.within_scatter.mean()),
+        # Every word, not the interesting tail: a writeup that names its least reliable words has
+        # to be checkable against the full table, or naming four of them is a selection.
+        "per_word_lambda": {
+            label: float(value) for label, value in zip(stats.labels, lam, strict=True)
+        },
     }
 
 
@@ -309,6 +326,63 @@ def prophecy(
         "max_k_searched": max_k,
         "de_attenuation_undefined": False,
         "curve": [row for row in curve if row["k"] in (6, 12, 24, 36, 48, max_k)],
+    }
+
+
+def floor_bootstrap(
+    stats: WordProjectionStats,
+    design: np.ndarray,
+    *,
+    observed_effect: float,
+    rng: np.random.Generator,
+    n_resamples: int,
+) -> dict[str, object]:
+    """How firm is `k -> infinity` never suffices? Resample the WORDS and ask again.
+
+    `prophecy` compares two point estimates, and the losing side of that comparison — the MDE80
+    floor `2.4865 * sqrt(sigma^2_tau,resid)` — is a variance component estimated from 84 words. Its
+    sampling error is large enough to matter at a gap this narrow, so reporting `detectable_at_any_k
+    = False` without it would state a lean as a proof.
+
+    Words are the resampling unit because they are the exchangeable ones: the design row (valence)
+    travels with the word, and both the floor and the de-attenuation are recomputed inside each
+    draw. What does NOT vary is E1's contrast — P1 re-tests nothing, so `observed_effect` is held
+    fixed and this quantifies uncertainty in the THRESHOLD it is compared against, not in itself.
+    Read `p_floor_below_effect` as: the fraction of word-sets like this one in which infinite
+    stories WOULD suffice.
+    """
+
+    n_words = len(stats.labels)
+    floors, effects = [], []
+    for _ in range(n_resamples):
+        index = rng.integers(0, n_words, n_words)
+        drawn = stats.select(index)
+        components, _ = variance_components(drawn, design[index])
+        lam = lambda_at(drawn, components.mean_k)
+        if not np.isfinite(lam) or lam <= 0.0:
+            continue  # de-attenuation undefined for this word-set; it carries no comparison
+        floors.append(MDE80_COEFFICIENT * sqrt(max(components.between_word_variance_resid, 0.0)))
+        effects.append(observed_effect / lam)
+    floor_draws = np.asarray(floors)
+    effect_draws = np.asarray(effects)
+    return {
+        "n_resamples": n_resamples,
+        "n_usable": int(floor_draws.size),
+        "resampling_unit": "word",
+        "mde80_floor_ci95": [
+            float(np.quantile(floor_draws, 0.025)),
+            float(np.quantile(floor_draws, 0.975)),
+        ],
+        "de_attenuated_effect_ci95": [
+            float(np.quantile(effect_draws, 0.025)),
+            float(np.quantile(effect_draws, 0.975)),
+        ],
+        "p_floor_below_effect": float(np.mean(floor_draws <= effect_draws)),
+        "note": (
+            "Post-hoc uncertainty on the prophecy's floor, computed after the pre-registered "
+            "verdict was recorded and routing nothing. E1's contrast is held fixed: this is the "
+            "error bar on the threshold, not a re-test."
+        ),
     }
 
 

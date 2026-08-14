@@ -37,6 +37,7 @@ from appraisal_emotions.analysis.story_projections import read_story_projections
 from appraisal_emotions.analysis.story_reliability import (
     MDE80_COEFFICIENT,
     attenuation,
+    floor_bootstrap,
     half_sample_cosines,
     prophecy,
     split_half_reliability,
@@ -208,6 +209,16 @@ def _block_report(artifact, labels, design, rows, contrasts, by_block, block, ar
         ),
     }
 
+    # Post-hoc, routes nothing, and stated in the report beside the point estimate it qualifies:
+    # `detectable_at_any_k` is a comparison of two estimates and the floor's error bar is wide.
+    summary["floor_bootstrap"] = floor_bootstrap(
+        stats,
+        design,
+        observed_effect=positive["statistic"],
+        rng=np.random.default_rng(args.seed + block),
+        n_resamples=args.n_bootstrap,
+    )
+
     if block == DECISION_BLOCK:
         verdict, note = _verdict(components.icc_1k_resid, summary["prophecy"])
         summary["verdict"] = verdict
@@ -242,6 +253,7 @@ def main() -> None:
     parser.add_argument("--n-splits", type=int, default=50)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--max-k", type=int, default=400)
+    parser.add_argument("--n-bootstrap", type=int, default=4000)
     parser.add_argument(
         "--exploratory",
         action="store_true",

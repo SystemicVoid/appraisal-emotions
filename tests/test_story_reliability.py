@@ -16,6 +16,8 @@ Everything is synthetic; the hidden dimension is small and no model is involved.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -26,6 +28,7 @@ from appraisal_emotions.analysis.story_projections import (
 from appraisal_emotions.analysis.story_reliability import (
     MDE80_COEFFICIENT,
     attenuation,
+    floor_bootstrap,
     half_sample_cosines,
     lambda_at,
     prophecy,
@@ -344,3 +347,47 @@ def test_topic_adjustment_removes_a_planted_topic_shift(planted, design):
     adjusted_correlation = abs(float(np.corrcoef(adjusted, share)[0, 1]))
     assert raw_correlation > 0.3
     assert adjusted_correlation < raw_correlation / 3
+
+
+def test_floor_bootstrap_brackets_the_point_estimate_and_prices_the_comparison(
+    artifact, design
+) -> None:
+    """The bootstrap must price the FLOOR's sampling error, not restate the point estimate.
+
+    Three properties pin it: the interval brackets the floor computed on the full word set, an
+    effect far above every draw is called detectable with probability 1, and an effect of zero
+    with probability 0. Without the last two, a constant would pass.
+    """
+
+    stats = word_projection_stats(artifact, LABELS, block=0, direction=DIRECTION)
+    components, _ = variance_components(stats, design)
+    floor = MDE80_COEFFICIENT * math.sqrt(max(components.between_word_variance_resid, 0.0))
+
+    priced = floor_bootstrap(
+        stats, design, observed_effect=floor, rng=np.random.default_rng(0), n_resamples=400
+    )
+    low, high = priced["mde80_floor_ci95"]
+    assert low <= floor <= high
+    assert priced["n_usable"] == 400
+    # The effect sits AT the point-estimate floor, so about half the word-sets fall each side.
+    assert 0.2 < priced["p_floor_below_effect"] < 0.8
+
+    certain = floor_bootstrap(
+        stats, design, observed_effect=1e6, rng=np.random.default_rng(0), n_resamples=200
+    )
+    impossible = floor_bootstrap(
+        stats, design, observed_effect=0.0, rng=np.random.default_rng(0), n_resamples=200
+    )
+    assert certain["p_floor_below_effect"] == 1.0
+    assert impossible["p_floor_below_effect"] == 0.0
+
+
+def test_per_word_lambda_table_agrees_with_its_own_summary(artifact) -> None:
+    """The report names its least reliable words from this table, so it must match min/max exactly."""
+
+    stats = word_projection_stats(artifact, LABELS, block=0, direction=DIRECTION)
+    summary = attenuation(stats)
+    per_word = summary["per_word_lambda"]
+    assert tuple(per_word) == LABELS
+    assert min(per_word.values()) == pytest.approx(summary["lambda_min"])
+    assert max(per_word.values()) == pytest.approx(summary["lambda_max"])
