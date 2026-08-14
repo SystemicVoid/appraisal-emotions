@@ -187,21 +187,27 @@ exists*, so a truncated transfer is recoverable.
 GPU-hours, not dollars — read the current rate off the Lambda console at provision time; this
 doc deliberately pins no price.
 
-| Block | Hours (estimate) |
-|---|---|
-| Provision + download + preflight | 0.5 |
-| `extract-rpe` at 30B | 0.3 |
-| E0 (generation + capture) | 1.5–2.5 |
-| E1/E2 analysis (CPU, instance idle) | 0.5 |
-| E3 patching (state preview) | 0 (CPU) |
-| E3 patching (forward mode) | 0.25 |
-| Optional 4B contrast | 0.5 |
-| Slack: false starts, a re-run after a failed gate, sync | 2–4 |
-| **Total** | **~5–8 GPU-hours of work; budget 8–12 h of billed uptime** |
+| Block | Hours (estimate) | Measured, Qwen3.6-27B, 2026-08-14 |
+|---|---|---|
+| Provision + download + preflight | 0.5 | **0.5** (launch 08:44 → first capture 09:15) |
+| `extract-rpe` at 30B | 0.3 | 0.2 |
+| E0 (generation + capture) | 1.5–2.5 | **2.9** (09:15 → 12:09, 1020 stories) |
+| E1/E2 analysis (CPU, instance idle) | 0.5 | 0.4 |
+| E3 patching (state preview) | 0 (CPU) | 0 |
+| E3 patching (forward mode) | 0.25 | 0.3 |
+| Optional 4B contrast | 0.5 | not run |
+| Slack: false starts, a re-run after a failed gate, sync | 2–4 | 0.5 |
+| **Total** | **~5–8 GPU-hours of work; budget 8–12 h of billed uptime** | **4.9 h billed, single session** |
 
 Bill ≈ billed hours × posted on-demand rate. Two habits keep it near the low end: stop the
 instance between working sessions (analysis after §4's sync does not need a GPU), and do not
 leave it running through a writeup.
+
+The measured column landed inside the estimate because the whole chain ran in one unbroken
+session. E0 dominates and is the only block that scales with the stimulus set; everything else is
+rounding. Note what the estimate got wrong in the *other* direction: the slack line was budgeted
+at 2–4 h and cost 0.5, because the provisioning traps were already written down (§2, and the
+`cu129` gotcha) rather than rediscovered.
 
 ## 6. Teardown discipline
 
@@ -217,3 +223,27 @@ leave it running through a writeup.
 
 An instance left running overnight with the work already synced is pure loss — and the sync,
 not the instance, is what the project needs.
+
+## 7. Keep-alive vs relaunch, with the measured break-even
+
+The tempting argument for keeping an idle instance is "setup was slow, don't pay it twice."
+Measure both sides before believing it.
+
+**Cost of a relaunch** (measured 2026-08-14, and the reason §5's first row is 0.5 h): register
+key → launch → wait for boot → `uv sync` → download weights → preflight = **~30 minutes of
+wall-clock, ~0.5 billed hours.** Weights are the bulk of it and are not an artifact (§6.4). The
+firewall rule and the registered SSH key persist on the Lambda account across terminations, so a
+relaunch skips those steps entirely — leave them in place.
+
+**Cost of keeping it idle** = the posted rate, every hour, including the hours spent writing
+code, reviewing a PR, or sleeping.
+
+So the break-even is blunt: **keep the instance only while the next GPU command is less than ~30
+minutes away.** If the next step is "write the analysis," "wait for a review," or "decide what to
+run," the instance is a pure loss and terminating is strictly cheaper — a relaunch costs half an
+idle hour, and any of those steps costs more than that. Design work and CPU analysis are exactly
+the wrong things to hold a GPU through.
+
+The corollary that actually saves money: **batch GPU work.** Land the code, review it, and get it
+green on CPU first; then launch once and run the whole queue. This run's 4.9 h had no idle gap
+larger than a few minutes, which is why it landed at the bottom of the §5 budget.
