@@ -10,9 +10,9 @@ placement), ``token_ids``, ``render_hf_chat_prompt`` (the ONE HF prompt-renderin
 ``_hidden_vector_to_numpy``, ``_first_row_token_ids``, ``_load_hf_tokenizer``,
 ``_decoder_blocks_and_final_norm``).
 
-Dropped: the logprob readouts, greedy decode, all patching / steering forwards, window capture,
-token-offset resolution, the attention-mask artifact, the peft unwrap, and the ``HFTokenizer``
-audit adapter — the reveal capture is read-only and needs none of them.
+Dropped: the logprob readouts, all steering forwards, window capture, token-offset resolution,
+the attention-mask artifact, the peft unwrap, and the ``HFTokenizer`` audit adapter — the reveal
+capture is read-only and needs none of them.
 
 Ported LATER for the E0 emotion layer, mechanically (only the imports and the
 ``GenerationResult`` origin change): ``generate_with_metadata`` + ``_encode_for_generation``
@@ -20,6 +20,10 @@ from the parent's hf.py L272-304 / L753-754 @ 10c4662. ``mean_hidden_states`` is
 parent has no token-mean read): it is ``hidden_states`` with the position select replaced by a
 mean over positions ``>= min_token`` inside the same single forward, which is what makes the
 Sofroniew story-mean recipe cost one forward per story instead of one per token.
+
+``patched_forward`` is also NEW here (design §4 E3): one forward hook on a decoder block that
+overwrites the residual at one position, so the substituted value propagates through the
+remaining blocks and into the KV cache the optional greedy continuation decodes from.
 
 ``torch`` / ``transformers`` are imported lazily inside the constructor, so importing this
 module (and therefore the CLI and the fake-backend path) costs nothing without the ``hf`` extra.
@@ -34,6 +38,7 @@ import numpy as np
 from appraisal_emotions.backends.base import (
     GenerationResult,
     HiddenStateResult,
+    PatchedForwardResult,
     RenderedPrompt,
     normalize_hidden_state_layer,
     resolve_hidden_state_position,
@@ -239,6 +244,103 @@ class HFBackend:
             prompt=prompt,
             text=self.tokenizer.decode(new_tokens, skip_special_tokens=True),
             generated_token_count=int(new_tokens.shape[0]),
+        )
+
+    def patched_forward(
+        self,
+        prompt: str,
+        *,
+        block: int,
+        position: int | str,
+        replacement: np.ndarray,
+        layers: tuple[int, ...],
+        max_new_tokens: int = 0,
+    ) -> PatchedForwardResult:
+        """Run with the residual at decoder ``block``'s output, ``position``, replaced.
+
+        Mechanism: a single forward hook on ``blocks[block]`` that overwrites one row of the
+        block's output hidden state — which IS ``hidden_states[block + 1]``, so reading that index
+        back returns the replacement and propagated effects start at ``block + 2``. The hook is
+        registered and removed around the call in a ``finally``, the same lifetime discipline the
+        capture path uses for its reads: a hook that outlives its call would silently patch the
+        next unrelated forward.
+
+        Not one forward when a continuation is asked for: the states pass is one prefill, and
+        ``generate`` then runs its OWN prefill (also patched, since the hook is still registered)
+        plus its decode steps. The hook is a no-op once the sequence is shorter than the patched
+        index, which is exactly those decode steps — ``generate``'s prefill has already written
+        the patched value into every downstream block's KV cache, so the continuation decodes from
+        the patched state without the hook having to fire again.
+        """
+
+        if type(max_new_tokens) is not int or max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be a non-negative builtin int")
+        vector = np.asarray(replacement, dtype=np.float64)
+        if vector.ndim != 1:
+            raise ValueError("patched_forward replacement must be a 1-D residual vector")
+        torch = self._torch
+        blocks, _norm = _decoder_blocks_and_final_norm(self.model)
+        if not 0 <= block < len(blocks):
+            raise ValueError(f"block {block} out of range for {len(blocks)} decoder blocks")
+
+        encoded = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
+        position_index = _resolve_hf_hidden_state_position(
+            tokenizer=self.tokenizer,
+            prompt=prompt,
+            encoded_input_ids=encoded["input_ids"],
+            position=position,
+        )
+        prompt_length = int(encoded["input_ids"].shape[1])
+        model_inputs = self._move_to_model_device(encoded)
+        patch = torch.as_tensor(vector, device=self.model.device)
+
+        def substitute(_module: Any, _args: Any, output: Any) -> Any:
+            hidden = output[0] if isinstance(output, tuple) else output
+            # Sequence length is the prefill-vs-decode proxy. It relies on position_index >= 1:
+            # at position 0 a 1-token decode step would satisfy 1 > 0 and be re-patched. Every
+            # shipped call site passes position="last" on a multi-token reveal prompt, so the
+            # constraint holds by construction; a caller wanting position 0 must be prefill-only.
+            if hidden.shape[1] <= position_index:
+                return output  # decode step: this position is already cached, patched.
+            hidden = hidden.clone()
+            hidden[:, position_index, :] = patch.to(hidden.dtype)
+            return (hidden, *output[1:]) if isinstance(output, tuple) else hidden
+
+        handle = blocks[block].register_forward_hook(substitute)
+        try:
+            with torch.no_grad():
+                output = self.model(**model_inputs, output_hidden_states=True)
+                if output.hidden_states is None:
+                    raise RuntimeError("model did not return hidden states")
+                layer_indices = tuple(
+                    normalize_hidden_state_layer(layer, len(output.hidden_states))
+                    for layer in layers
+                )
+                states = np.stack(
+                    [
+                        _hidden_vector_to_numpy(
+                            output.hidden_states[layer][0, position_index], torch
+                        )
+                        for layer in layer_indices
+                    ],
+                    axis=0,
+                )
+                continuation = None
+                generated_token_count = 0
+                if max_new_tokens > 0:
+                    generated = self.model.generate(
+                        **model_inputs, max_new_tokens=max_new_tokens, do_sample=False
+                    )
+                    new_tokens = generated[0, prompt_length:]
+                    continuation = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+                    generated_token_count = int(new_tokens.shape[0])
+        finally:
+            handle.remove()
+        return PatchedForwardResult(
+            layers=layers,
+            states=states,
+            continuation=continuation,
+            generated_token_count=generated_token_count,
         )
 
     def _encode_for_generation(self, prompt: str) -> Any:

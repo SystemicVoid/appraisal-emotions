@@ -6,7 +6,7 @@ not to be used.
 
 Vocabulary policy: prefer standard literature terms (computational psychiatry — Rutledge 2014,
 Blain & Rutledge 2020; RL — Sutton & Barto; appraisal theory — OCC 1988, Mellers 1997;
-functional emotions — Sofroniew et al. 2026; pre-registration vocabulary). Minting a *new*
+functional emotions — Sofroniew et al. 2026; measurement-validity vocabulary). Minting a *new*
 project term requires an entry here justifying why no standard term fits. A meaning-preserving
 rename is a terminology-only edit; splitting an operationally overloaded term is a spec
 amendment to `docs/design/experiment.md`, never laundered through a terminology edit.
@@ -120,9 +120,11 @@ licenses the second; neither licenses affect or welfare.
 _Avoid_: "functional" or "valence" for a decode-only result.
 
 **Estimation / selection / confirmation partitions**:
-The seeded split that breaks pre-registration circularity: directions are fit on **estimation**
-only; the block is selected on **selection** (held-out); every headline statistic is computed
-once, on the never-touched **confirmation** partition.
+The seeded split that stops direction fitting and block selection from reusing the same rows:
+directions are fit on **estimation** only, and the block is selected on **selection** (held-out).
+The reveal battery is a pilot surface and routes rows to those two partitions only
+(`stimuli/reveal_probes.py`); the **confirmation** partition is named here so it stays reserved
+and is never touched by this scaffold.
 _Avoid_: train/val/test.
 
 **Recipe-pinned direction**:

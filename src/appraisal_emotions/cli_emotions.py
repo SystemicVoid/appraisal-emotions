@@ -1,10 +1,11 @@
-"""``extract-emotions`` / ``map-geometry`` / ``expectation-control`` — the E0-E2 command surface.
+"""The E0-E3 command surface: ``extract-emotions`` / ``map-geometry`` / ``expectation-control``
+/ ``patch-reveals``.
 
-NEW module (no parent counterpart). A sibling of ``cli.py`` rather than three more commands in
+NEW module (no parent counterpart). A sibling of ``cli.py`` rather than four more commands in
 it: ``cli.py`` is the ported reveal-RPE surface and stays the size it was extracted at, and the
 emotion tiers carry their own artifact paths, options and licence language. :func:`register`
 attaches the commands to the one shared Typer app, so ``appraisal-emotions --help`` lists all
-four in one place.
+five in one place.
 """
 
 from __future__ import annotations
@@ -16,6 +17,12 @@ import typer
 from rich.console import Console
 
 from appraisal_emotions.activation.capture import StoryCaptureBackend
+from appraisal_emotions.analysis.activation_patching import (
+    DEFAULT_CONTINUATION_TOKENS,
+    DEFAULT_MAX_CONTINUATIONS,
+    activation_patching,
+    format_activation_patching_summary,
+)
 from appraisal_emotions.analysis.emotion_mapping import (
     format_map_geometry_summary,
     map_geometry,
@@ -31,6 +38,7 @@ from appraisal_emotions.analysis.expectation_control import (
     expectation_control,
     format_expectation_control_summary,
 )
+from appraisal_emotions.backends.base import PatchedForwardBackend
 from appraisal_emotions.backends.factory import create_backend, free_backend
 from appraisal_emotions.config import StudyConfig, load_config, resolve_model_spec
 from appraisal_emotions.core.util import write_json
@@ -84,17 +92,18 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
 
 
 def register(app: typer.Typer) -> None:
-    """Attach the three emotion-layer commands to the shared app."""
+    """Attach the four emotion-layer commands to the shared app."""
 
     app.command("extract-emotions")(extract_emotions)
     app.command("map-geometry")(map_geometry_command)
     app.command("expectation-control")(expectation_control_command)
+    app.command("patch-reveals")(patch_reveals_command)
 
 
 def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.yaml")) -> None:
     """Rung E0: emotion-concept basis + the G0 sensitivity gate (design §4 E0).
 
-    Generates stories per pre-registered §5 word ("without naming the emotion"), drops the ones
+    Generates stories per §5 word ("without naming the emotion"), drops the ones
     that name the target anyway or are too short for the capture window, re-feeds the story text
     alone, and averages the residual stream from ``min_token`` onward — the downscaled Sofroniew
     recipe. G0 (PC1 of the basis vs the valence labels, |rho| >= threshold) is the manipulation
@@ -154,11 +163,12 @@ def map_geometry_command(
 ) -> None:
     """Rung E1: valence-residual geometry — the headline (design §4 E1).
 
-    Confirmatory readouts are ONLY the §5 pre-registered ones (the three P2 matched pairs, the P4
-    surprise-vs-arousal-matched contrast, P5a, P5c); everything else, including the full-set P1
-    correlation, is written into the report's ``exploratory`` block and must be labeled so
-    downstream. A null P2 with G0 or P5c failed is ``harness_inadequate``, NOT evidence against
-    appraisal inheritance. Licence capped at present-and-separable.
+    EVERY word's valence residual is reported. The §5 recorded expectations — the two family
+    contrasts, the three-level outcome ordering, the three named pairs — additionally carry an
+    effect size and a one-sided permutation p in their recorded direction; there is no
+    multiple-comparison correction and no confirmatory/exploratory caste. A flat residual with G0
+    or P5c failed is ``harness_inadequate``, NOT evidence against appraisal inheritance. Licence
+    capped at present-and-separable.
     """
 
     report = map_geometry(
@@ -200,4 +210,83 @@ def expectation_control_command(
     )
     write_json(out, report)
     console.print(format_expectation_control_summary(report))
+    console.print(f"\nwritten to {out}")
+
+
+def patch_reveals_command(
+    states: Annotated[Path, typer.Option("--states", help="reveal_states.json")],
+    battery: Annotated[Path, typer.Option("--battery", help="battery.json")],
+    directions: Annotated[Path, typer.Option("--directions", help="reveal_directions.json")],
+    emotions: Annotated[Path, typer.Option("--emotions", help="emotion_vectors.json")],
+    out: Annotated[Path, typer.Option("--out", help="Report JSON path.")],
+    mode: Annotated[
+        str, typer.Option("--mode", help="'state' (zero forwards) or 'forward' (causal tier).")
+    ] = "state",
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Run YAML naming the model. REQUIRED for --mode forward."),
+    ] = None,
+    block: Annotated[
+        int | None, typer.Option("--block", help="Defaults to the emotion artifact's block.")
+    ] = None,
+    seed: SeedOption = 7,
+    max_pairs: Annotated[
+        int | None, typer.Option("--max-pairs", help="Defaults to 480 (state) / 60 (forward).")
+    ] = None,
+    random_draws: Annotated[
+        int | None,
+        typer.Option("--random-draws", help="Random-direction floor draws; 200 / 5 by mode."),
+    ] = None,
+    continuation_tokens: Annotated[
+        int,
+        typer.Option("--continuation-tokens", help="Greedy continuation cap; 0 disables."),
+    ] = DEFAULT_CONTINUATION_TOKENS,
+    max_continuations: Annotated[
+        int,
+        typer.Option("--max-continuations", help="Pairs that get continuations stored."),
+    ] = DEFAULT_MAX_CONTINUATIONS,
+) -> None:
+    """Rung E3: in-distribution activation patching on the reward-matched cells (design §4 E3).
+
+    Substitutes a donor reveal-token state into a recipient from the same reward-matched cell
+    (same realised reward and |RPE|, opposite signed RPE, same template family and outcome symbol)
+    across four arms: the full-residual ceiling, the certified ``v_rpe`` component, a
+    random-direction floor, and a same-condition donor as the no-op control.
+
+    ``--mode state`` is the zero-forward preview: pure arithmetic over the captured states, no
+    model, capped at present-and-separable. ``--mode forward`` is the causal tier — it re-runs each
+    recipient's real prompt with the value substituted at the reveal token and reads the emotion
+    axes downstream, where the patch has propagated; that is the only tier that can earn
+    functionally-used, and it needs ``--config`` to name the model. Continuations are stored raw
+    and UNSCORED: no grader exists and none may be written before a reality sample of that surface.
+    """
+
+    backend = None
+    spec = None
+    if mode == "forward":
+        if config is None:
+            raise typer.BadParameter("--mode forward needs --config to name the model")
+        spec = resolve_model_spec(load_config(config))
+        backend = create_backend(spec)
+    try:
+        report = activation_patching(
+            states,
+            battery,
+            directions,
+            emotions,
+            mode=mode,
+            backend=cast(PatchedForwardBackend | None, backend),
+            model_key=None if spec is None else spec.key,
+            block=block,
+            seed=seed,
+            max_pairs=max_pairs,
+            n_random_draws=random_draws,
+            continuation_tokens=continuation_tokens,
+            max_continuations=max_continuations,
+        )
+    finally:
+        if backend is not None:
+            free_backend(backend)
+    write_json(out, report)
+    console.print(format_activation_patching_summary(report))
     console.print(f"\nwritten to {out}")

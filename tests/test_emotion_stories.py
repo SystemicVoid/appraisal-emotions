@@ -12,6 +12,8 @@ module that defines them (``docs/agents/rails.md``, clause 2).
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from appraisal_emotions.stimuli.emotion_lexicon import emotion_words_in
@@ -39,11 +41,46 @@ def test_prompt_scaffolding_is_affect_free_outside_the_emotion_slot(template):
     assert emotion_words_in(scaffolding) == ()
 
 
-def test_story_prompt_carries_the_lexical_control_clause():
+def test_story_prompt_names_its_target_exactly_once_and_nothing_else():
+    """The 2606.26987 lexical control, tested FUNCTIONALLY rather than by retyping the clause."""
+
     rendered = STORY_PROMPT_TEMPLATE.format(topic=STORY_TOPICS[0], emotion="elated")
-    # The 2606.26987 clause: the target word is named as a prohibition, and only there.
-    assert 'Do not use the word "elated"' in rendered
+    # The emotion is the target, named once; the committed lexicon sees it and nothing else.
+    assert rendered.count("elated") == 1
     assert emotion_words_in(rendered) == ("elated",)
+    # Substituting a different emotion changes exactly that one occurrence — the slot is the
+    # ONLY place the template mentions the target.
+    other = STORY_PROMPT_TEMPLATE.format(topic=STORY_TOPICS[0], emotion="disappointed")
+    assert rendered.replace("elated", "disappointed") == other
+
+
+def test_style_control_renders_without_an_emotion_argument_at_all():
+    rendered = STYLE_CONTROL_PROMPT_TEMPLATE.format(topic=STORY_TOPICS[0])
+    assert emotion_words_in(rendered) == ()
+    assert "{" not in rendered
+
+
+def test_the_two_prompts_share_their_shape():
+    """Design §9 holds the two surfaces to one shape — checked BY COMPARING THEM TO EACH OTHER.
+
+    No line of either template is retyped here (docs/agents/rails.md): the story prompt is the
+    reference and the style control is measured against it, so the test cannot drift from the
+    constants and cannot pass by agreeing with a stale copy of them.
+    """
+
+    story = STORY_PROMPT_TEMPLATE.format(topic=STORY_TOPICS[0], emotion="elated").splitlines()
+    style = STYLE_CONTROL_PROMPT_TEMPLATE.format(topic=STORY_TOPICS[0]).splitlines()
+    assert len(story) == len(style) == 3
+    # Closer: byte-identical. Opening and middle: a shared prefix, then each surface's own tail.
+    assert story[2] == style[2]
+    for line_index, minimum in ((0, 40), (1, 60)):
+        prefix = os.path.commonprefix([story[line_index], style[line_index]])
+        assert len(prefix) >= minimum, f"line {line_index} shares only {len(prefix)} chars"
+    # The style control keeps a character (or P5c measures a no-character vector, not a register
+    # vector); only the story prompt has a target word to forbid synonyms of, so only it is longer
+    # in the middle sentence.
+    assert "character" in style[0]
+    assert len(story[1]) > len(style[1])
 
 
 def test_style_control_prompt_names_no_emotion_at_all():

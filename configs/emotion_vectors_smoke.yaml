@@ -6,8 +6,8 @@
 # are a deterministic hash of the text and its "stories" are seeded templates, so the G0 number
 # and every downstream statistic are MEANINGLESS and must never be read as evidence.
 #
-# Tiny numbers throughout: 3 stories per word, a 20-token capture window, a 160-byte generation
-# cap (the fake tokenizer is byte-level). The fake backend reports no fixed depth, so
+# Tiny numbers throughout: 2 stories per word over the 84-word set, a 20-token capture window, a
+# 160-byte generation cap (the fake tokenizer is byte-level). The fake backend reports no fixed depth, so
 # fallback_blocks pins the same 4 blocks the reveal smoke uses — which is what lets the smoke
 # emotion artifact and the smoke directions artifact be compared by map-geometry.
 
@@ -33,7 +33,7 @@ model:
 emotion_vectors:
   seed: 7
   words_file: data/emotion_words.json
-  stories_per_emotion: 3
+  stories_per_emotion: 2
   min_token: 20
   max_tokens: 160
   temperature: 1.0

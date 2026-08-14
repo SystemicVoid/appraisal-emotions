@@ -40,14 +40,21 @@ so a situation-projector predicts β_rpe ≈ 0 within cells and an expectation-t
 The OCC prospect branch: relief and disappointment attach to the *disconfirmation of a prospect*
 — the sign of the prediction error — not to outcome valence; satisfaction and fears-confirmed
 attach to confirmation. This is why P2's matched pairs are `disappointed < sad`, `relieved > calm`,
-`elated > content` (each in its pre-registered direction on the signed `v_RPE` axis — §5
-amendment record): within each pair valence is matched and only prospect-disconfirmation differs.
+`elated > content` (each in its recorded direction on the signed `v_RPE` axis — design §5): within
+each pair valence is matched and only prospect-disconfirmation differs. The confirmation branch is
+what grounds the design's `outcome_confirm` words (satisfied, gratified, vindicated, resigned) and
+turns the prediction into a three-level ordering: positive-disconfirmation > confirmation >
+negative-disconfirmation on the signed residual. English has no common single-word
+"fears-confirmed" adjective; `resigned` is the design's nearest stand-in, recorded as a gap.
 
 **Mellers et al. 1997.** *Psychological Science* — decision affect theory.
 
 Quantifies OCC's prospect branch: emotional response to a gamble outcome scales with
 **surprise-weighted disconfirmation**, i.e. with (1 − p) — the |RPE| term. Motivates P4's claim
-that `v_absrpe` should pick out the surprise family rather than a valence pole.
+that `v_absrpe` should pick out the surprise family rather than a valence pole. It also separates
+**disappointment** (comparison to the unobtained outcome of the *same* gamble) from **regret**
+(comparison to the outcome of the *unchosen option*) — the grounding for `regretful` sitting in
+the design's outcome family while being reported as a within-family discriminant.
 
 **Rutledge et al. 2014.** PNAS, doi:10.1073/pnas.1407535111.
 
@@ -76,6 +83,21 @@ first two *by construction* and lacks the second two *by construction*. This is 
 keeps the honest claim shape at "emotion concepts inherit appraisal geometry" and forbids "the
 model has an emotion at the reveal token": `v_RPE` is at most an **emotion input**.
 
+## Norms (fetched, never transcribed)
+
+**Warriner, Kuperman & Brysbaert 2013** — valence/arousal/dominance norms for 13,915 English
+lemmas (*Behavior Research Methods* 45(4)) — and the **NRC-VAD Lexicon v1.0** (Mohammad 2018,
+ACL), research-use-only and non-redistributable. Full citations, URLs and licence terms live in
+`scripts/fetch_norms.py`, which is the only thing here that touches the network; the fetched
+subset plus a manifest lands in `data/norms/`. These upgrade the design's minted binary valence
+labels to graded valence/arousal — **all-or-nothing across the word set, not word by word**. A
+numeric scale for some words and a binary label for others would put the two groups' residuals on
+incommensurable scales, and every E1 readout is a comparison *between* words, so anything less
+than full coverage falls the whole set back to the binary labels. **Coverage is a run-time fact,
+not a claim:** the word set was chosen to favour common affect-lexicon items, but which words are
+actually covered is whatever the fetch reports. The map-geometry report records the scale it used
+(`valence_source`) and the words that blocked an upgrade (`norms_missing_words`).
+
 ## Method sources (recipe only)
 
 **Chen et al. 2025 — "Persona Vectors."** arXiv:2507.21509.
@@ -96,34 +118,36 @@ skeptical corpus on self-report and this arm licenses nothing on its own.
 
 - **arXiv:2606.26987** — open-model replication of the Sofroniew recipe. Reports that ~9 stories
   per emotion suffice, and adds the **"without naming the emotion"** clause to the story prompt as
-  a lexical control. We adopt both (~24 stories, the clause) — see the caveat below about which
-  paper the clause originates in.
+  a lexical control. We adopt both (12 stories per word over an 84-word set, and the clause) — see
+  the caveat below about which paper the clause originates in.
 - **arXiv:2604.04064** — emotion vectors in small language models. Best extraction site around
   ~50% depth; generation-based extraction beats prompt-based. Also documents a **Qwen cross-lingual
-  steering hazard** (steering drifts output language), which E3 must expect and log since our model
-  is Qwen3-4B.
+  steering hazard** (steering drifts output language) — no longer a live hazard for E3, which
+  patches rather than steers, but still worth logging if any continuation drifts language.
 - **arXiv:2604.11050** — shared emotion geometry across small language models; supports treating
   the valence/arousal organization as model-general rather than a Claude artifact.
-- **arXiv:2604.03147** — steering within a valence–arousal subspace; relevant to E3's norm and
-  direction conventions.
+- **arXiv:2604.03147** — steering within a valence–arousal subspace; background for the
+  documented steering extensions, not for E3 as designed.
 - **arXiv:2502.05489** (ACL Findings 2025) — steering on *appraisal* concepts specifically; the
   nearest prior work to our hypothesis on the causal side.
 - **arXiv:2604.23719** — AIPsy-Affect, a keyword-free affect battery; a template for probing
   affect without emotion lexicon, which our affect-neutral gamble surface achieves differently.
 - **arXiv:2603.22295** — affect *reception* vs *categorization*; a reminder that recognizing an
   emotion concept in text and instantiating one are separable capacities.
-- **arXiv:2510.11328** — emotion circuits; source of the steering **norm convention** we follow
-  (unit vector × strength × per-block residual norm).
+- **arXiv:2510.11328** — emotion circuits; source of a steering **norm convention** (unit vector ×
+  strength × per-block residual norm). Not used now that E3 patches instead of steering; kept for
+  the documented steering extensions.
 - **arXiv:2605.30232** — "How's it going?", a functional welfare axis. The nearest neighbor to
   this project in spirit; notably it performs **no EV/RPE decomposition**, which is the gap we
   fill.
 - **arXiv:2607.12631** — prompt-induced emotion is behaviorally inert in sequential gambling.
-  This is why E3 uses activation steering and never prompt induction.
+  This is why E3 intervenes on activations and never by prompt induction.
 - **CAIS AI-Wellbeing** (ai-wellbeing.org) — experienced vs decision utility; includes a probe
   decodability figure. Numbers here need primary verification (below).
 - **arXiv:2602.06801** and **arXiv:2602.06256** — steering non-identifiability and safety
-  caveats. Read before interpreting any E3 result: a steering effect does not identify the
-  steered feature.
+  caveats. Read before interpreting any E3 result: an intervention effect does not identify the
+  intervened-on feature. Patching narrows this (donor values are in-distribution) but does not
+  remove it.
 
 ## Verification caveats
 
@@ -134,7 +158,8 @@ primary sources before citing any of this in a writeup, poster, or paper. Specif
 - **CAIS probe decodability percentage** — the figure was read off a secondary summary; needs the
   primary source.
 - **Sofroniew steering strength** — secondary sources disagree between 0.5 and 0.05; the
-  discrepancy is unresolved and matters for E3's dose grid.
+  discrepancy is unresolved. It no longer touches E3 (patching has no dose parameter) but would
+  matter to any steering extension.
 - **The "without naming the emotion" clause** — it is unclear whether this is in the original
   Sofroniew recipe or an addition by the 2606.26987 replication. We use it either way (it is a
   lexical control we want), but the attribution above is provisional.

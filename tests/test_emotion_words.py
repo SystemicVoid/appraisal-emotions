@@ -1,16 +1,21 @@
-"""Integrity of the pre-registered §5 word set (``data/emotion_words.json``).
+"""Integrity of the §5 word set and its recorded expectations (``data/emotion_words.json``).
 
-The word list and its minted binary valence labels are DATA: the design doc fixes them before
-any emotion vector is extracted, and ``docs/agents/rails.md`` forbids restating them in code. So
-these tests never spell a word list of their own — every expected name is read out of the file's
-own ``confirmatory`` block, and what is checked is internal consistency: the confirmatory
-readouts must reference words the list actually carries, every §5 family must be populated, and
-the P2 pairs must really be valence-matched (an unmatched pair would make P2's within-valence
-permutation meaningless).
+The word list, its minted binary valence labels and the recorded directional expectations are
+DATA: the design doc fixes them before any emotion vector is extracted, and
+``docs/agents/rails.md`` forbids restating them in code. So these tests never spell a word list of
+their own — every expected name is read out of the file's own ``expectations`` block — and what is
+checked is internal consistency: the expectation readouts must reference words and families the
+list actually carries, every §5 family must be populated, and the named pairs must really be
+valence-matched (an unmatched pair would make the within-valence permutation meaningless).
+
+The one external check is against the design table itself: §5 states the per-family counts, so
+``test_family_counts_match_the_design_table`` parses them out of the doc rather than restating
+them here.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -21,7 +26,9 @@ from appraisal_emotions.stimuli.emotion_stories import (
     read_emotion_words,
 )
 
-WORDS_PATH = Path(__file__).resolve().parents[1] / "data" / "emotion_words.json"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+WORDS_PATH = REPO_ROOT / "data" / "emotion_words.json"
+DESIGN_PATH = REPO_ROOT / "docs" / "design" / "experiment.md"
 
 
 @pytest.fixture(scope="module")
@@ -29,10 +36,28 @@ def words():
     return read_emotion_words(WORDS_PATH)
 
 
-def test_every_pre_registered_category_is_populated(words):
+def test_every_design_family_is_populated(words):
     assert words.words, "the word set is empty"
     for category in EMOTION_CATEGORIES:
         assert words.words_in_category(category), f"§5 family {category!r} has no words"
+
+
+def test_family_counts_match_the_design_table(words):
+    """§5's own count line is the source of truth; it is READ, not restated (rails.md)."""
+
+    counts = DESIGN_PATH.read_text(encoding="utf-8")
+    sentence = counts[counts.index("**84 words**") : counts.index("plus the `style_control`")]
+    expected = {
+        family: int(number) for family, number in re.findall(r"([a-z_]+)\s+(\d+)", sentence)
+    }
+    assert set(expected) == set(EMOTION_CATEGORIES), (
+        f"the §5 count line names {sorted(expected)}, the loader knows {sorted(EMOTION_CATEGORIES)}"
+    )
+    assert sum(expected.values()) == 84
+    actual = {family: len(words.words_in_category(family)) for family in EMOTION_CATEGORIES}
+    assert actual == expected
+    assert len(words.words) == 84
+    assert len(set(words.labels)) == 84
 
 
 def test_valence_labels_are_the_committed_ternary_vocabulary(words):
@@ -42,46 +67,74 @@ def test_valence_labels_are_the_committed_ternary_vocabulary(words):
     assert all(word.valence == 0 for word in words.words if word.category == "surprise")
 
 
-def test_confirmatory_words_all_appear_in_the_word_list(words):
+def test_expectation_readouts_reference_words_and_families_that_exist(words):
     labels = set(words.labels)
-    for outcome, control, _sign in words.confirmatory_pairs():
-        assert outcome in labels, f"P2 pair references unknown word {outcome!r}"
-        assert control in labels, f"P2 pair references unknown word {control!r}"
+    families = set(EMOTION_CATEGORIES)
+    for pair in words.expected_pairs():
+        assert pair.outcome in labels, f"pair references unknown word {pair.outcome!r}"
+        assert pair.control in labels, f"pair references unknown word {pair.control!r}"
+    for contrast in words.expected_family_contrasts():
+        assert {contrast.outcome_family, contrast.control_family} <= families
+    assert set(words.outcome_ordering()) <= families
     for key in ("surprise", "arousal_matched"):
-        for word in words.confirmatory_set(key):
-            assert word in labels, f"P4 {key} references unknown word {word!r}"
-    assert str(words.confirmatory["p5a"]) in labels
+        assert set(words.p4_words(key)) <= labels, f"P4 {key} references an unknown word"
+    assert str(words.expectations["p5a"]) in labels
     # P5c names the pseudo-emotion, which must NOT be an emotion word.
-    assert str(words.confirmatory["p5c"]) == STYLE_CONTROL_LABEL
+    assert str(words.expectations["p5c"]) == STYLE_CONTROL_LABEL
     assert STYLE_CONTROL_LABEL not in labels
 
 
-def test_p2_pairs_are_valence_matched(words):
+def test_named_pairs_are_valence_matched(words):
     valence = words.valence_by_word
-    for outcome, control, _sign in words.confirmatory_pairs():
-        assert valence[outcome] == valence[control], (
-            f"pair {outcome}/{control} is not valence-matched; P2 residualizes on valence and "
-            "permutes within the valence-matched set, so an unmatched pair has no null"
+    for pair in words.expected_pairs():
+        assert valence[pair.outcome] == valence[pair.control], (
+            f"pair {pair.outcome}/{pair.control} is not valence-matched; the readout residualizes "
+            "on valence and permutes within the valence-matched set, so an unmatched pair has no "
+            "null"
         )
 
 
-def test_p2_predicted_signs_follow_the_signed_rpe_axis(words):
-    """§5 amendment record (2026-08-13, pre-data): the predicted direction of each pair is the
-    pole of the signed v_RPE axis its outcome-disconfirmation concept occupies under OCC —
-    which, on this word set, is exactly the outcome word's minted valence label."""
+def test_expected_signs_follow_the_signed_rpe_axis(words):
+    """The recorded direction of each pair is the pole of the signed v_RPE axis its
+    outcome-disconfirmation concept occupies under OCC — which, on this word set, is exactly the
+    outcome word's minted valence label."""
 
     valence = words.valence_by_word
-    for outcome, control, sign in words.confirmatory_pairs():
-        assert sign == valence[outcome], (
-            f"pair {outcome}/{control} registers predicted_sign={sign} but {outcome!r} has "
-            f"valence {valence[outcome]}; the OCC prediction ties the pole to the outcome "
-            "word's disconfirmation sign"
+    for pair in words.expected_pairs():
+        assert pair.expected_sign == valence[pair.outcome], (
+            f"pair {pair.outcome}/{pair.control} records expected_sign={pair.expected_sign} but "
+            f"{pair.outcome!r} has valence {valence[pair.outcome]}; the OCC expectation ties the "
+            "pole to the outcome word's disconfirmation sign"
         )
+
+
+def test_family_contrasts_are_valence_matched_and_signed_by_pole(words):
+    valence = words.valence_by_word
+    for contrast in words.expected_family_contrasts():
+        poles = {
+            valence[word]
+            for family in (contrast.outcome_family, contrast.control_family)
+            for word in words.words_in_category(family)
+        }
+        assert len(poles) == 1, f"{contrast.pole} contrast is not valence-matched: {poles}"
+        assert contrast.expected_sign == poles.pop()
+
+
+def test_outcome_ordering_runs_positive_to_negative(words):
+    """The OCC three-level structure: disconfirmed-positive > confirmed > disconfirmed-negative."""
+
+    ordering = words.outcome_ordering()
+    assert len(ordering) == 3
+    assert ordering[1] == "outcome_confirm"
+    valence = words.valence_by_word
+    first = {valence[word] for word in words.words_in_category(ordering[0])}
+    last = {valence[word] for word in words.words_in_category(ordering[-1])}
+    assert first == {1} and last == {-1}
 
 
 def test_p4_contrast_sets_are_disjoint(words):
-    surprise = set(words.confirmatory_set("surprise"))
-    controls = set(words.confirmatory_set("arousal_matched"))
+    surprise = set(words.p4_words("surprise"))
+    controls = set(words.p4_words("arousal_matched"))
     assert surprise and controls
     assert not surprise & controls
 

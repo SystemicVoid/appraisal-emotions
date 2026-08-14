@@ -7,7 +7,7 @@ what lets the smoke config's single-letter symbols pass the preflight), the iden
 ``render_prompt``, ``hidden_states`` and its ``_hidden_vector`` / ``_extract_score`` /
 ``_stable_unit`` feature recipe, all byte-identical.
 
-Dropped: the logprob readout, residual patching, additive steering, window capture, the CVT
+Dropped: the logprob readout, additive steering, window capture, the CVT
 score parsers and the tradeoff-score branch of ``_extract_score`` (a tradeoff score needs both a
 ``N points`` and an ``intensity N/10`` marker; the reveal surface never renders an intensity
 marker, so that branch is unreachable on this path and the score falls through to
@@ -22,6 +22,10 @@ shape) and it truncates mid-sentence at ``max_tokens`` (the length shape). It is
 exerciser for the parse/filter path, NOT a reality sample — the real story shapes are unread
 until a GPU run is authorized, so the filter is frozen BLIND (see
 ``analysis.emotion_vectors`` first-contact checkpoint).
+
+Added for the E3 causal tier: ``patched_forward`` — a synthetic propagation of a residual
+substitution whose only job is to exercise the plumbing (see its docstring; the numbers mean
+nothing, but a self-patch is exactly inert and a real patch really does move downstream layers).
 
 The states this produces are a deterministic hash of the prompt, so smoke-run gate numbers are
 MEANINGLESS and must never be read as evidence — the smoke exercises the contract, not the
@@ -39,6 +43,7 @@ import numpy as np
 from appraisal_emotions.backends.base import (
     GenerationResult,
     HiddenStateResult,
+    PatchedForwardResult,
     RenderedPrompt,
     resolve_hidden_state_position,
 )
@@ -47,7 +52,7 @@ from appraisal_emotions.core.schema import ModelSpec
 _HIDDEN_SIZE = 8
 
 # Generic scaffolding sentences for the synthetic stories. Deliberately free of any word in the
-# §5 pre-registered set, so a drop is caused by the echo branch below and never by scaffolding.
+# §5 word set, so a drop is caused by the echo branch below and never by scaffolding.
 _STORY_SENTENCES: tuple[str, ...] = (
     "The overhead light buzzed once and then settled.",
     "A cart rolled past with one wheel out of true.",
@@ -64,6 +69,8 @@ _STORY_SENTENCE_COUNT = 8
 # 1 generation in _ECHO_MODULUS names the prompt's quoted term (the instruction-violation shape).
 _ECHO_MODULUS = 6
 _QUOTED_TERM_PATTERN = re.compile(r'"([^"\n]{1,40})"')
+# Weight the injected vector carries in a downstream synthetic state (``patched_forward``).
+_PATCH_MIX = 0.75
 
 
 class FakeBackend:
@@ -162,6 +169,80 @@ class FakeBackend:
         return GenerationResult(
             prompt=prompt, text=text, generated_token_count=len(self.token_ids(text))
         )
+
+    def patched_forward(
+        self,
+        prompt: str,
+        *,
+        block: int,
+        position: int | str,
+        replacement: np.ndarray,
+        layers: tuple[int, ...],
+        max_new_tokens: int = 0,
+    ) -> PatchedForwardResult:
+        """Synthetic propagation of a residual substitution — PLUMBING ONLY.
+
+        These semantics exist so the E3 forward path can be exercised without a GPU. They are NOT
+        a model: nothing here computes anything, and no number this returns means anything. What
+        they DO reproduce faithfully are the three contract properties E3's readouts depend on,
+        under the SAME index convention the HF backend and the capture path use (decoder block
+        ``l`` is ``hidden_states`` index ``l + 1``):
+
+        - the patch site itself, index ``block + 1``, returns EXACTLY the replacement — that is
+          what "replace the residual at this block's output" means, and it is what the HF hook
+          does;
+        - indices ``block + 2`` onward carry the patch as a DELTA off the unpatched state,
+          ``base_layer + _PATCH_MIX * (replacement - base_at_patch_site)``, so an injected
+          difference genuinely propagates downstream and can be measured;
+        - indices at or before ``block`` are untouched, since the patch is downstream of them.
+
+        Because the propagation is a delta, a self-patch — ``replacement`` equal to the position's
+        own unpatched value at ``block + 1`` — is exactly inert at EVERY requested layer. That is
+        the protocol's self-patch invariant and design §4 E3's wiring check, and it is what lets
+        the unpatched baseline be measured through this same code path instead of assumed.
+
+        The optional continuation is a seeded template story keyed on the injected vector, so a
+        different patch yields different text and an identical patch yields identical text.
+        """
+
+        if type(max_new_tokens) is not int or max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be a non-negative builtin int")
+        vector = np.asarray(replacement, dtype=np.float64)
+        if vector.ndim != 1:
+            raise ValueError("patched_forward replacement must be a 1-D residual vector")
+        if block < 0:
+            raise ValueError("block must be non-negative")
+        position_index = resolve_hidden_state_position(
+            position, token_count=len(self.token_ids(prompt))
+        )
+        # The unpatched value AT the patch site: the delta the substitution actually injects is
+        # measured against this, which is what makes a self-patch inert rather than merely small.
+        at_site = self._hidden_vector(prompt, layer=block + 1, position_index=position_index)
+        delta = vector - at_site
+        rows = []
+        for layer in layers:
+            if layer == block + 1:
+                rows.append(vector)
+                continue
+            base = self._hidden_vector(prompt, layer=layer, position_index=position_index)
+            rows.append(base + _PATCH_MIX * delta if layer >= block + 2 else base)
+        continuation = None
+        generated_token_count = 0
+        if max_new_tokens > 0:
+            continuation = self._patched_continuation(prompt, vector, max_new_tokens)
+            generated_token_count = len(self.token_ids(continuation))
+        return PatchedForwardResult(
+            layers=layers,
+            states=np.stack(rows, axis=0),
+            continuation=continuation,
+            generated_token_count=generated_token_count,
+        )
+
+    def _patched_continuation(self, prompt: str, vector: np.ndarray, max_new_tokens: int) -> str:
+        digest = hashlib.sha256(prompt.encode() + vector.tobytes()).digest()
+        rng = random.Random(int.from_bytes(digest[:8], "big"))
+        sentences = [rng.choice(_STORY_SENTENCES) for _ in range(_STORY_SENTENCE_COUNT)]
+        return " ".join(sentences).encode("utf-8")[:max_new_tokens].decode("utf-8", errors="ignore")
 
     def _hidden_vector(self, prompt: str, *, layer: int, position_index: int) -> np.ndarray:
         vector = np.zeros(_HIDDEN_SIZE, dtype=np.float64)

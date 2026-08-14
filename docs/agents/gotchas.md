@@ -18,7 +18,8 @@ before scoping the analysis: `backends/base.py` is the inventory.
 
 *Fix path:* `environmental` — the extraction was scoped to the reveal arm deliberately
 (`backends/base.py` docstring lists what was dropped and why). The inventory is now complete for
-E0-E2; E3 steering will hit the same wall for the additive-hook forward.
+E0-E3 as built — E3 patching is state-level arithmetic over the captured states and needs no new
+read shape. Propagating a patch downstream (design §4 E3's other half) would hit the same wall.
 
 ### `just` is not installed in the agent container
 

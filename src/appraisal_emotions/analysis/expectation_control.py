@@ -59,8 +59,12 @@ from appraisal_emotions.stimuli.reveal_probes import RevealProbeBattery
 
 __all__ = [
     "EXPECTATION_CONTROL_CONTRACT_VERSION",
+    "PAIR_AXIS",
+    "PC1_AXIS",
     "AxisResult",
     "ExpectationControlReport",
+    "align_reveals",
+    "emotion_axes",
     "expectation_control",
     "format_expectation_control_summary",
 ]
@@ -80,8 +84,12 @@ class _CellDesign:
     rpe: np.ndarray  # signed RPE aligned to ``rows``
 
 
-def _align_reveals(states: RevealRpeStates, battery: RevealProbeBattery) -> tuple[Comparison, ...]:
-    """The battery reveals in the states artifact's capture row order (fail-closed on a mismatch)."""
+def align_reveals(states: RevealRpeStates, battery: RevealProbeBattery) -> tuple[Comparison, ...]:
+    """The battery reveals in the states artifact's capture row order (fail-closed on a mismatch).
+
+    Shared with E3 patching (``analysis.activation_patching``): both tiers read the same battery
+    through the same row alignment, so a mismatch fails the same way in both.
+    """
 
     by_id = {comparison.comparison_id: comparison for comparison in battery.reveals}
     missing = [rid for rid in states.metadata.reveal_ids if rid not in by_id]
@@ -210,7 +218,9 @@ _SCOPE_NOTE = (
 )
 
 
-def _axes(emotion: EmotionVectors, block: int) -> dict[str, tuple[np.ndarray, str]]:
+def emotion_axes(emotion: EmotionVectors, block: int) -> dict[str, tuple[np.ndarray, str]]:
+    """The two emotion-space readout axes at ``block`` — shared by E2 and E3 patching."""
+
     words = emotion.word_vectors[:, block, :]
     components, _scores = valence_oriented_pc_axes(words, emotion.word_valence)
     pair = emotion.row("elated")[block] - emotion.row("disappointed")[block]
@@ -250,12 +260,12 @@ def expectation_control(
     if not 0 <= matched_block < states.metadata.n_blocks:
         raise ValueError(f"block {matched_block} out of range for {states.metadata.n_blocks}")
 
-    reveals = _align_reveals(states, battery)
+    reveals = align_reveals(states, battery)
     design = _cell_design(reveals)
     block_states = np.asarray(states.states[:, matched_block, :])[design.rows]
 
     results: list[AxisResult] = []
-    for name, (axis, description) in _axes(emotion, matched_block).items():
+    for name, (axis, description) in emotion_axes(emotion, matched_block).items():
         projection = block_states @ axis
         slope = _pooled_slope(projection, design, design.rpe)
         p_value = _cluster_permutation_p(

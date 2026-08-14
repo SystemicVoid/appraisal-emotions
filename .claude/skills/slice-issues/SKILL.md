@@ -80,6 +80,7 @@ Before finalizing, verify:
 - Each slice creates a useful vertical result, not a horizontal layer task.
 - `HITL` marks a real human gate, and every GPU run or model download is one.
 - Dependencies are explicit and acyclic.
-- Titles and bodies use `CONTEXT.md` vocabulary, and any confirmatory work names itself
-  confirmatory (the §5 contrasts) rather than drifting into unlabeled exploratory scope.
+- Titles and bodies use `CONTEXT.md` vocabulary, and a slice touching a §5 readout says which
+  recorded expectation it serves rather than drifting into unnamed scope. There is no
+  confirmatory/exploratory caste to sort work into (operator decision, 2026-08-13).
 - The response does not claim tracker actions that did not happen.

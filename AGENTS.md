@@ -18,7 +18,8 @@ and experiment names (E0–E3, P1–P5c). Read it before proposing work.
     When a cheap test IS diagnostic, let it kill. (Here: G0 is the sensitivity gate for all of
     E1; a null with G0 or P5c failed is `harness_inadequate`, never evidence against inheritance.)
   - **The dual: a cheap, authorized run outranks more building — harness cost is capped by run
-    cost.** E0+E1 is ~1–2 GPU-hours; the harness must cost less than that. Before first data,
+    cost.** E0+E1 is a few GPU-hours on one rented instance (`docs/agents/lambda-runbook.md`
+    §5); the harness must cost less than that. Before first data,
     build only what the verdict reads; guard machinery, diagnostics, and their tests are licensed
     by a failure observed in a real run of this harness, a trust boundary, or a data-loss path —
     never by "each piece is individually defensible." Stop and report — don't keep building —
@@ -31,12 +32,16 @@ and experiment names (E0–E3, P1–P5c). Read it before proposing work.
   Sofroniew et al. 2026 bracket, inherited verbatim (design doc §7). Emotion words are *concept
   labels*, never state attributions: write "the `disappointed` concept vector," never "the model
   is disappointed."
-- **Confirmatory vs exploratory (binding).** The §5 pre-registered contrasts — the three P2
-  matched pairs, the P4 surprise-vs-arousal-matched contrast, P5a, P5c — are fixed before any
-  emotion vector is extracted and are not renegotiated after seeing data. *Everything else is
-  exploratory and must be labeled so* in code, artifacts, and prose, including the full-set P1
-  correlation. A post-hoc amendment to a confirmatory readout must pass the symmetric-amendment
-  test in `docs/agents/rails.md`.
+- **Recorded expectations (binding).** The §5 directional expectations — literature-grounded,
+  written down before any emotion vector is extracted — are a record of what we thought before we
+  looked, not a contract with a referee (operator decision, 2026-08-13, replacing the earlier
+  confirmatory/exploratory caste). Analyse the data directly and honestly: effect sizes lead,
+  every word is shown, permutation p-values where they are cheap, no multiple-comparison
+  bureaucracy, no readout that "may not be reported." Reporting a result the expectations did not
+  anticipate is fine; quietly rewriting an expectation is not — a change to a readout that has
+  already met data must pass the symmetric-amendment test in `docs/agents/rails.md`. What makes a
+  null readable stays binding: the G0 sensitivity gate, the P5c scale control, the label-shuffle
+  and random-direction floors, and the synthetic planted-signal positive control.
 - **Before writing or reviewing ANY parser, grader, readout grammar, or string literal
   reproducing text held in a file: read `docs/agents/rails.md`.** Two headline rails: never
   hand-copy text that already exists in a file (a prompt template, a stimulus, a word list, a

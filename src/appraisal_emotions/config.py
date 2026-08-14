@@ -103,13 +103,13 @@ class RevealRpeConfig(ConfigModel):
 class EmotionVectorsConfig(ConfigModel):
     """Rung E0 emotion-concept basis extraction (design §4 E0).
 
-    NEW block (no parent counterpart). ``words_file`` is the sole authority for the §5 word set
-    and its minted valence labels — the list is never restated in code or config.
+    NEW block (no parent counterpart). ``words_file`` is the sole authority for the §5 word set,
+    its minted valence labels and the recorded expectations — never restated in code or config.
     """
 
     seed: int = 7
     words_file: Path = Path("data/emotion_words.json")
-    stories_per_emotion: int = 24
+    stories_per_emotion: int = 12
     min_token: int = 50
     max_tokens: int = 320
     temperature: float = 1.0

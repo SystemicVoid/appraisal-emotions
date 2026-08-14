@@ -31,10 +31,12 @@ check: lint test
 extract-rpe-smoke:
     {{parallel_test_env}} uv run appraisal-emotions extract-rpe --config configs/reveal_rpe_smoke.yaml
 
-# REAL capture: base Qwen3-4B-Instruct-2507, ~2k read-only forwards at the reveal token.
-# Reproduces the parent program's R-A′ recipe (same stimuli, same estimator, same gates) but
-# INHERITS NO CERTIFICATION: a fresh run earns whatever verdict its own gates return, capped at
-# present-and-separable. GPU runs and model downloads gate behind explicit human approval.
+# REAL capture on the design §2 primary (~27-32B dense instruct Qwen 3.x; registry key
+# qwen_30b_primary, resolved on the instance per docs/agents/lambda-runbook.md §2): 1,984
+# read-only forwards at the reveal token. Reproduces the parent program's R-A′ recipe (same
+# stimuli, same estimator, same gates) but INHERITS NO CERTIFICATION: a fresh run earns whatever
+# verdict its own gates return, capped at present-and-separable. GPU runs and model downloads
+# gate behind explicit human approval.
 extract-rpe:
     {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-rpe --config configs/reveal_rpe_base.yaml
 
@@ -51,7 +53,9 @@ extract-rpe:
 extract-emotions-smoke:
     {{parallel_test_env}} uv run appraisal-emotions extract-emotions --config configs/emotion_vectors_smoke.yaml
 
-# E0 REAL: base Qwen3-4B-Instruct-2507, ~936 short generations + ~936 read-only forwards.
+# E0 REAL on the design §2 primary: (84 words + 1 style control) x 12 = 1,020 short generations
+# plus <=1,020 read-only forwards. Read the ~10-generation reality sample first (skills/
+# reality-sample) — the story filter is still frozen BLIND against this model.
 # G0 is the SENSITIVITY GATE for all of E1/E2. G0 fail => gate_verdict=harness_inadequate, and
 # every downstream null records harness_inadequate too: the emotion basis failed, not the
 # inheritance hypothesis, and the claim stays OPEN. G0 pass licenses E1's nulls to mean something
@@ -59,15 +63,26 @@ extract-emotions-smoke:
 extract-emotions:
     {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_base.yaml
 
-# E1: the headline valence-residual geometry. Confirmatory = ONLY the §5 pre-registered readouts
-# (three P2 matched pairs, the P4 surprise-vs-arousal-matched contrast, P5a, P5c); everything
-# else, including the full-set P1 correlation, lands in the report's exploratory block and is
-# labeled so. A null P2 with G0 or P5c failed is harness_inadequate, never a falsification; a
-# null P2 with every gate passed licenses exactly one discard — "stop investing in
-# appraisal-residual geometry at 4B on story-mean emotion bases". Defaults point at the smoke
-# artifacts: `just map-geometry <rpe_dir> <emotions_dir>` scores a real capture.
-map-geometry run=smoke_rpe_dir emo=smoke_emo_dir:
-    {{parallel_test_env}} uv run appraisal-emotions map-geometry --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --words data/emotion_words.json --out {{emo}}/map_geometry_report.json --seed 7 --permutations 10000 --null-draws 1000
+# E1: the headline valence-residual geometry. EVERY word's residual is tabled; the §5 recorded
+# expectations (two family contrasts, the three-level outcome ordering, three named pairs) get
+# effect sizes and one-sided permutation p-values in their recorded direction — no Holm, no
+# confirmatory caste. A flat residual with G0 or P5c failed is harness_inadequate, never a
+# falsification; with every gate passed it licenses exactly one discard — "stop investing in
+# appraisal-residual geometry on story-mean emotion bases at this scale". Defaults point at the
+# smoke artifacts: `just map-geometry <rpe_dir> <emotions_dir>` scores a real capture.
+# Pass `norms=data/norms/vad_subset.csv` (after `just fetch-norms`) to upgrade the valence scale
+# from the minted binary labels to graded norms. Coverage is ALL-OR-NOTHING: anything short of
+# full coverage falls the whole set back to the binary labels and the report names the words that
+# blocked it (`norms_missing_words`), because a mixed scale makes between-word residuals
+# incommensurable. Empty (the default) means binary labels, which are always available.
+map-geometry run=smoke_rpe_dir emo=smoke_emo_dir norms="":
+    NORMS='{{norms}}'; {{parallel_test_env}} uv run appraisal-emotions map-geometry --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --words data/emotion_words.json --out {{emo}}/map_geometry_report.json --seed 7 --permutations 10000 --null-draws 1000 ${NORMS:+--norms "$NORMS"}
+
+# Numeric valence/arousal norms (Warriner 2013 / NRC-VAD). The ONLY recipe that touches the
+# network; NRC-VAD is research-use-only and non-redistributable, so the subset is fetched, never
+# vendored. Optional: without it the run uses the §5 minted binary labels.
+fetch-norms out="data/norms":
+    uv run --frozen python scripts/fetch_norms.py --out {{out}}
 
 # E2: expectation vs situation on the certified reward-matched cells (outcome fixed, stated EV
 # varies). Sign-congruent within-cell slope => the emotion-probe readout tracks EXPECTATION;
@@ -75,3 +90,20 @@ map-geometry run=smoke_rpe_dir emo=smoke_emo_dir:
 # two REPRESENTATIONAL readings only — no causal arm, no use claim.
 expectation-control run=smoke_rpe_dir emo=smoke_emo_dir:
     {{parallel_test_env}} uv run appraisal-emotions expectation-control --states {{run}}/reveal_states.json --battery {{run}}/battery.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/expectation_control_report.json --seed 7 --permutations 10000
+
+# E3 PREVIEW (mode=state, zero forwards, seconds). Donor and recipient are real reveals with the
+# same realised reward, |RPE|, template family and outcome symbol and OPPOSITE signed RPE, so the
+# patched value is in-distribution by construction. State mode reads the substituted vector's own
+# projection: full_residual transfers 1.0 BY CONSTRUCTION, so this is a wiring / pair-selection
+# check capped at present-and-separable, never a functional-use claim. Run it before spending GPU.
+patch-reveals run=smoke_rpe_dir emo=smoke_emo_dir:
+    {{parallel_test_env}} uv run appraisal-emotions patch-reveals --states {{run}}/reveal_states.json --battery {{run}}/battery.json --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/activation_patching_report.json --seed 7
+
+# E3 CAUSAL TIER (mode=forward). Re-runs each recipient's real prompt with the donor's value
+# substituted at the reveal token and reads the emotion axes DOWNSTREAM, where the patch has
+# propagated; the unpatched baseline is a self-patch, which is also the design's wiring check.
+# This is the only tier that can earn functionally-used, and only on the real model. Continuations
+# are stored RAW and UNSCORED — no grader may be written before a reality sample of that surface.
+# GPU runs gate behind explicit human approval.
+patch-reveals-forward config run=smoke_rpe_dir emo=smoke_emo_dir:
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions patch-reveals --mode forward --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/activation_patching_forward.json --seed 7

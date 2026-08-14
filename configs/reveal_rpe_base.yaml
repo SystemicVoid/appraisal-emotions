@@ -5,14 +5,15 @@
 # block is dropped (the parent's StudyConfig required it; this one does not), and adapter_dir is
 # gone because this scaffold is base-side by construction.
 #
-# BASE Qwen3-4B-Instruct-2507 only, NO adapter. Read-only residual-stream capture at the
+# BASE weights only, NO adapter, on the design §2 primary (registry key `qwen_30b_primary`; the
+# runbook resolves its repo id and revision on the instance). Read-only residual-stream capture at the
 # byte-pinned outcome-reveal token — no steering, no training, no GPU write. Tests whether a
 # SIGNED reward-prediction-error direction is present and separable from realised reward, EV, and
 # unsigned surprise |RPE|. The licence is capped to PRESENT-AND-SEPARABLE: R-A has no causal arm
 # and licenses no functional / welfare / experience claim.
 #
-# This run reproduces the R-A' RECIPE. It does not inherit the R-A' CERTIFICATION: a fresh
-# capture earns whatever verdict its own gates return.
+# This run reproduces the R-A' RECIPE. It does not inherit the R-A' CERTIFICATION: at ~30B every
+# gate value is re-earned, including the selected block (20/36 was a 4B number).
 #
 # Offline contract: run with HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 (see `just extract-rpe`);
 # the registry pins the model revision with local_files_only true. Outputs live under the
@@ -32,12 +33,19 @@ provenance:
     - "reward = ev + signed_rpe exactly, so signed RPE is entangled with realised reward; the
       identifiable claims are signed-beyond-unsigned (the matched-sign conjunction) and gradient
       orientation. Incremental-variance-over-value is structurally ill-posed and is NOT gated."
+    - "SYMBOL NEUTRALITY IS NOT RE-CALIBRATED AT 30B (design §2). The frozen SIL/WAN/GIS/PIL
+      calibration in data/symbol_calibration/qwen3_4b_instruct_2507 is a BEHAVIOURAL property of
+      the 4B checkpoint and this scaffold does not port the calibration assay, so at the resolved
+      model it is a recorded known gap. The run-time preflight still gates single-token-ness, and
+      balanced rendering (both orders x both strata x four templates at equal weight) puts symbol
+      identity in the design intercept rather than the signed-RPE slope -- that MITIGATES the gap,
+      it does not remove it."
   decision_affected:
     - docs/design/experiment.md
 
 model:
   registry_path: configs/model_registry.yaml
-  key: qwen3_4b_instruct_2507
+  key: qwen_30b_primary
 
 reveal_rpe:
   seed: 7
@@ -57,8 +65,10 @@ reveal_rpe:
   renderings_per_reveal: 8
   reward_matched_augment: true
   # FROZEN 2026-06-28 neutrality-calibrated nonce pairs (data/symbol_calibration/
-  # qwen3_4b_instruct_2507), single-token leading-space on the pinned tokenizer; the run-time
-  # preflight re-gates them.
+  # qwen3_4b_instruct_2507), single-token leading-space on the 4B tokenizer; the run-time preflight
+  # re-gates single-token-ness on the resolved model. The NEUTRALITY calibration itself is a 4B
+  # behavioural property and does NOT transfer — a recorded known gap (design §2), mitigated by
+  # balanced rendering, not removed.
   shared_symbols: [SIL, WAN]
   held_out_symbols: [GIS, PIL]
   partitions: [estimation, selection]

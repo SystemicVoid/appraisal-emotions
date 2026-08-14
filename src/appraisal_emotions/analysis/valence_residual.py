@@ -1,4 +1,4 @@
-"""The per-block valence-residual estimands: P2, P4, P5a, P5c and their two nulls.
+"""The per-block valence-residual estimands: the §5 expectation readouts, P4, P5a, P5c, floors.
 
 NEW module (no parent counterpart). Split out of ``emotion_mapping`` along the seam between the
 ESTIMANDS (what is computed at one block, from one pair of artifacts) and the RUN (which blocks,
@@ -10,10 +10,17 @@ after regressing that cosine on affect-concept valence across the word set — t
 alignment an emotion word has with an appraisal direction beyond what its valence predicts. Every
 estimator here is a statement about that residual, never about the raw cosine (which is
 near-certain and uninformative: any positive-value direction has a positive-valence component).
+
+Every word's residual is reported. The §5 *recorded expectations* — the named pairs, the two
+family contrasts, the three-level outcome ordering — additionally get an effect size and a cheap
+one-sided permutation p in the recorded direction. There is no multiple-comparison correction and
+no confirmatory/exploratory caste (operator decision, 2026-08-13): effect sizes lead, p-values
+follow, and a readout the expectations did not anticipate is still reported.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,31 +31,47 @@ from appraisal_emotions.analysis.emotion_vectors import EmotionVectors, valence_
 from appraisal_emotions.analysis.reveal_rpe import DIRECTION_FAMILIES, RevealRpeDirections
 from appraisal_emotions.core.schema import StrictModel
 from appraisal_emotions.core.stats import add_one_p
-from appraisal_emotions.stimuli.emotion_stories import STYLE_CONTROL_LABEL, EmotionWordSet
+from appraisal_emotions.stimuli.emotion_stories import (
+    STYLE_CONTROL_LABEL,
+    EmotionWordSet,
+    ExpectedFamilyContrast,
+    ExpectedPair,
+)
 
 __all__ = [
     "FLOOR_QUANTILE",
     "BlockGeometry",
+    "ExpectedPairResult",
+    "FamilyContrastResult",
+    "OutcomeOrderingResult",
     "P4Result",
     "P5aResult",
     "P5cStyleResult",
-    "PairResult",
+    "ResidualStatistic",
     "block_geometry",
     "cosines",
-    "label_shuffled_pair_floor",
+    "expected_pair_results",
+    "family_contrast_results",
+    "family_contrast_statistics",
+    "family_rows",
+    "label_shuffled_floor",
     "norm_fraction",
     "ols_residuals",
-    "p2_matched_pairs",
-    "p4_contrast",
+    "outcome_ordering_result",
     "p4_surprise_contrast",
     "p5a_discriminant_null",
+    "pair_pool_rows",
     "p5c_style_control",
-    "pair_statistics",
-    "random_direction_pair_floor",
+    "random_direction_residual_floor",
     "spearman",
+    "two_sample_permutation_p",
+    "two_sample_statistic",
 ]
 
 FLOOR_QUANTILE = 0.95
+
+#: A scalar read off one block's residual vector — what the two null floors resample.
+ResidualStatistic = Callable[[np.ndarray], float]
 
 # --------------------------------------------------------------------------------------
 # Small numeric kernels
@@ -74,18 +97,6 @@ def _predict_at(y: np.ndarray, design: np.ndarray, row: np.ndarray) -> float:
     return float(row @ coef)
 
 
-def _holm(p_values: list[float]) -> list[float]:
-    """Holm-Bonferroni adjusted p-values in input order (monotone non-decreasing, clipped at 1)."""
-
-    order = sorted(range(len(p_values)), key=lambda index: p_values[index])
-    adjusted = [0.0] * len(p_values)
-    running = 0.0
-    for rank, index in enumerate(order):
-        running = max(running, (len(p_values) - rank) * p_values[index])
-        adjusted[index] = min(1.0, running)
-    return adjusted
-
-
 def spearman(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     result = spearmanr(x, y)
     return (
@@ -99,6 +110,15 @@ def norm_fraction(vector: np.ndarray, basis: np.ndarray) -> float:
 
     coef = np.linalg.lstsq(basis.T, vector, rcond=None)[0]
     return float(np.linalg.norm(basis.T @ coef) / np.linalg.norm(vector))
+
+
+def family_rows(words: EmotionWordSet, index: dict[str, int]) -> dict[str, np.ndarray]:
+    """Row indices of each §5 family, in word-file order."""
+
+    rows: dict[str, list[int]] = {}
+    for word in words.words:
+        rows.setdefault(word.category, []).append(index[word.word])
+    return {family: np.asarray(members) for family, members in rows.items()}
 
 
 # --------------------------------------------------------------------------------------
@@ -115,7 +135,6 @@ class BlockGeometry:
     cos_style: dict[str, float]
     family_vectors: dict[str, np.ndarray]
     components: np.ndarray
-    scores: np.ndarray
     centered_words: np.ndarray
 
 
@@ -126,7 +145,7 @@ def block_geometry(
     center = words.mean(axis=0)  # per-block mean-centring (anisotropy discipline, §6)
     centered = words - center
     style = emotion.row(STYLE_CONTROL_LABEL)[block] - center
-    components, scores = valence_oriented_pc_axes(words, emotion.word_valence)
+    components, _scores = valence_oriented_pc_axes(words, emotion.word_valence)
     cos: dict[str, np.ndarray] = {}
     cos_style: dict[str, float] = {}
     family_vectors: dict[str, np.ndarray] = {}
@@ -135,123 +154,244 @@ def block_geometry(
         family_vectors[family] = direction
         cos[family] = cosines(centered, direction)
         cos_style[family] = float(cosines(style[None, :], direction)[0])
-    return BlockGeometry(block, cos, cos_style, family_vectors, components, scores, centered)
+    return BlockGeometry(block, cos, cos_style, family_vectors, components, centered)
 
 
 # --------------------------------------------------------------------------------------
-# P2 — the headline: valence-residual matched pairs
+# Recorded-expectation readouts (design §5): named pairs, family contrasts, outcome ordering
 # --------------------------------------------------------------------------------------
 
 
-class PairResult(StrictModel):
-    """One pre-registered P2 matched pair tested on valence residuals.
+class ExpectedPairResult(StrictModel):
+    """One §5 named pair on the valence residuals, read in its recorded direction.
 
-    One-sided in the pair's pre-registered direction (§5 amendment record, 2026-08-13,
-    pre-data): ``statistic = predicted_sign * (residual_outcome - residual_control)``, so a
-    positive statistic always means the theory-predicted split, whichever pole the outcome
-    word is registered on.
+    ``statistic = expected_sign * (residual_outcome - residual_control)``, so a positive statistic
+    always means the recorded split, whichever pole the outcome word sits on. The permutation is
+    one-sided in that direction and shuffles residuals WITHIN the §5 pool: the same-pole words of
+    the outcome / non-outcome / confirmation families, NOT every word of that valence.
     """
 
     outcome: str
     control: str
-    predicted_sign: int
-    residual_outcome: float
-    residual_control: float
+    expected_sign: int
     statistic: float
     p_value: float
-    p_holm: float
-    n_valence_matched: int
-    passed: bool
+    n_pool: int
 
 
-def _pair_permutation_p(
-    residuals: np.ndarray,
-    matched: np.ndarray,
-    positions: tuple[int, int],
-    sign: int,
-    *,
-    rng: np.random.Generator,
-    n_permutations: int,
-) -> tuple[float, float]:
-    """One-sided permutation p in the predicted direction, shuffling within the matched set.
+def pair_pool_rows(words: EmotionWordSet, rows: dict[str, np.ndarray]) -> np.ndarray:
+    """Row indices of the §5 pair pool — the families the recorded expectations already name.
 
-    The exchangeability unit is the valence-matched set — the words the §5 pairing declares
-    interchangeable up to prospect-disconfirmation — so the null asks: among words of this
-    valence, how often does a random pair split this far in the predicted direction?
+    The §5 resolution table permutes a named pair inside its *same-pole* outcome/non-outcome pool,
+    not inside every word sharing its binary valence: `hopeful` and `surprised` are not words the
+    pairing declares interchangeable with `elated`. The families are derived from the expectations
+    block (the two family contrasts plus the three-level ordering) rather than listed again here,
+    so the pool cannot drift from the contrasts it belongs to.
     """
 
-    values = residuals[matched]
-    observed = sign * float(values[positions[0]] - values[positions[1]])
-    exceedances = 0
-    for _ in range(n_permutations):
-        shuffled = rng.permutation(values)
-        if sign * float(shuffled[positions[0]] - shuffled[positions[1]]) >= observed:
-            exceedances += 1
-    return observed, add_one_p(exceedances, n_permutations)
+    return np.sort(
+        np.concatenate([rows[family] for family in words.pair_pool_families() if family in rows])
+    )
 
 
 def _matched_positions(
-    binary_valence: np.ndarray, index: dict[str, int], pair: tuple[str, str, int]
+    binary_valence: np.ndarray, index: dict[str, int], pair: ExpectedPair, pool: np.ndarray
 ) -> tuple[np.ndarray, tuple[int, int]]:
-    if binary_valence[index[pair[0]]] != binary_valence[index[pair[1]]]:
-        raise ValueError(f"pre-registered pair {pair} is not valence-matched in the word file")
-    matched = np.flatnonzero(binary_valence == binary_valence[index[pair[0]]])
+    valence = binary_valence[index[pair.outcome]]
+    if binary_valence[index[pair.control]] != valence:
+        raise ValueError(f"recorded pair {pair} is not valence-matched in the word file")
+    matched = pool[binary_valence[pool] == valence]
     lookup = {row: position for position, row in enumerate(matched.tolist())}
-    return matched, (lookup[index[pair[0]]], lookup[index[pair[1]]])
+    missing = [word for word in (pair.outcome, pair.control) if index[word] not in lookup]
+    if missing:
+        raise ValueError(
+            f"recorded pair {pair} names {missing}, which is outside the §5 pair pool "
+            "(the outcome / non-outcome / confirmation families); the permutation has no null"
+        )
+    return matched, (lookup[index[pair.outcome]], lookup[index[pair.control]])
 
 
-def pair_statistics(
+def expected_pair_results(
     residuals: np.ndarray,
-    pairs: tuple[tuple[str, str, int], ...],
+    pairs: tuple[ExpectedPair, ...],
     binary_valence: np.ndarray,
     index: dict[str, int],
-) -> list[float]:
-    """The three observed predicted-direction statistics (no permutation) — sweep / null stat."""
-
-    stats: list[float] = []
-    for outcome, control, sign in pairs:
-        matched, positions = _matched_positions(binary_valence, index, (outcome, control, sign))
-        values = residuals[matched]
-        stats.append(sign * float(values[positions[0]] - values[positions[1]]))
-    return stats
-
-
-def p2_matched_pairs(
-    geometry: BlockGeometry,
-    pairs: tuple[tuple[str, str, int], ...],
-    index: dict[str, int],
-    design: np.ndarray,
-    binary_valence: np.ndarray,
+    pool: np.ndarray,
     *,
     rng: np.random.Generator,
     n_permutations: int,
-    alpha: float,
-) -> tuple[tuple[PairResult, ...], np.ndarray]:
-    residuals = ols_residuals(geometry.cos["v_rpe"], design)
-    raw: list[tuple[tuple[str, str, int], float, float, int]] = []
+) -> tuple[ExpectedPairResult, ...]:
+    """Effect size + one-sided within-pool permutation p for each recorded pair."""
+
+    results: list[ExpectedPairResult] = []
     for pair in pairs:
-        matched, positions = _matched_positions(binary_valence, index, pair)
-        statistic, p_value = _pair_permutation_p(
-            residuals, matched, positions, pair[2], rng=rng, n_permutations=n_permutations
+        matched, (left, right) = _matched_positions(binary_valence, index, pair, pool)
+        values = residuals[matched]
+        observed = pair.expected_sign * float(values[left] - values[right])
+        exceedances = 0
+        for _ in range(n_permutations):
+            shuffled = rng.permutation(values)
+            if pair.expected_sign * float(shuffled[left] - shuffled[right]) >= observed:
+                exceedances += 1
+        results.append(
+            ExpectedPairResult(
+                outcome=pair.outcome,
+                control=pair.control,
+                expected_sign=pair.expected_sign,
+                statistic=observed,
+                p_value=add_one_p(exceedances, n_permutations),
+                n_pool=int(matched.size),
+            )
         )
-        raw.append((pair, statistic, p_value, int(matched.size)))
-    holm = _holm([entry[2] for entry in raw])
-    results = tuple(
-        PairResult(
-            outcome=pair[0],
-            control=pair[1],
-            predicted_sign=pair[2],
-            residual_outcome=float(residuals[index[pair[0]]]),
-            residual_control=float(residuals[index[pair[1]]]),
-            statistic=statistic,
-            p_value=p_value,
-            p_holm=adjusted,
-            n_valence_matched=n_matched,
-            passed=adjusted < alpha and statistic > 0.0,
+    return tuple(results)
+
+
+class FamilyContrastResult(StrictModel):
+    """One pole's family contrast: outcome-disconfirmation words vs valence-matched controls.
+
+    The design's powered statistic (§4 E1 P2). ``statistic = expected_sign * (mean_outcome -
+    mean_control)`` on the valence residuals, with a one-sided two-sample label permutation over
+    the pooled same-pole words.
+    """
+
+    pole: str
+    outcome_family: str
+    control_family: str
+    expected_sign: int
+    n_outcome: int
+    n_control: int
+    mean_residual_outcome: float
+    mean_residual_control: float
+    statistic: float
+    p_value: float
+
+
+def two_sample_statistic(
+    values: np.ndarray, left: np.ndarray, right: np.ndarray, sign: int
+) -> float:
+    """``sign * (mean(values[left]) - mean(values[right]))`` — positive = the recorded direction."""
+
+    return sign * float(values[left].mean() - values[right].mean())
+
+
+def two_sample_permutation_p(
+    values: np.ndarray,
+    left: np.ndarray,
+    right: np.ndarray,
+    sign: int,
+    observed: float,
+    *,
+    rng: np.random.Generator,
+    n_permutations: int,
+) -> float:
+    """One-sided label-permutation p for :func:`two_sample_statistic` over the pooled two sets.
+
+    The one kernel behind every group contrast here (family contrasts, the outcome-ordering trend,
+    P4): pool the two sets, reshuffle the group labels, count draws at least as extreme in the
+    recorded direction.
+    """
+
+    pooled = np.concatenate([values[left], values[right]])
+    exceedances = 0
+    for _ in range(n_permutations):
+        shuffled = rng.permutation(pooled)
+        draw = sign * float(shuffled[: left.size].mean() - shuffled[left.size :].mean())
+        if draw >= observed:
+            exceedances += 1
+    return add_one_p(exceedances, n_permutations)
+
+
+def family_contrast_statistics(
+    residuals: np.ndarray,
+    contrasts: tuple[ExpectedFamilyContrast, ...],
+    rows: dict[str, np.ndarray],
+) -> list[float]:
+    """The signed family-contrast effect sizes — the statistic the null floors resample."""
+
+    return [
+        two_sample_statistic(
+            residuals,
+            rows[contrast.outcome_family],
+            rows[contrast.control_family],
+            contrast.expected_sign,
         )
-        for (pair, statistic, p_value, n_matched), adjusted in zip(raw, holm, strict=True)
+        for contrast in contrasts
+    ]
+
+
+def family_contrast_results(
+    residuals: np.ndarray,
+    contrasts: tuple[ExpectedFamilyContrast, ...],
+    rows: dict[str, np.ndarray],
+    *,
+    rng: np.random.Generator,
+    n_permutations: int,
+) -> tuple[FamilyContrastResult, ...]:
+    observed = family_contrast_statistics(residuals, contrasts, rows)
+    results: list[FamilyContrastResult] = []
+    for contrast, statistic in zip(contrasts, observed, strict=True):
+        left = rows[contrast.outcome_family]
+        right = rows[contrast.control_family]
+        results.append(
+            FamilyContrastResult(
+                pole=contrast.pole,
+                outcome_family=contrast.outcome_family,
+                control_family=contrast.control_family,
+                expected_sign=contrast.expected_sign,
+                n_outcome=int(left.size),
+                n_control=int(right.size),
+                mean_residual_outcome=float(residuals[left].mean()),
+                mean_residual_control=float(residuals[right].mean()),
+                statistic=statistic,
+                p_value=two_sample_permutation_p(
+                    residuals,
+                    left,
+                    right,
+                    contrast.expected_sign,
+                    statistic,
+                    rng=rng,
+                    n_permutations=n_permutations,
+                ),
+            )
+        )
+    return tuple(results)
+
+
+class OutcomeOrderingResult(StrictModel):
+    """The OCC three-level ordering on the SIGNED residual (§5 ``outcome_ordering``).
+
+    Recorded expectation: positive-disconfirmation > confirmation > negative-disconfirmation.
+    ``ordering_holds`` reads the full three-level structure; the permuted trend statistic is the
+    end-to-end contrast (first family mean − last family mean), which is where the power is.
+    """
+
+    families: tuple[str, ...]
+    mean_residuals: tuple[float, ...]
+    ordering_holds: bool
+    trend_statistic: float
+    p_value: float
+
+
+def outcome_ordering_result(
+    residuals: np.ndarray,
+    families: tuple[str, ...],
+    rows: dict[str, np.ndarray],
+    *,
+    rng: np.random.Generator,
+    n_permutations: int,
+) -> OutcomeOrderingResult:
+    members = [rows[family] for family in families]
+    means = [float(residuals[block].mean()) for block in members]
+    observed = means[0] - means[-1]
+    return OutcomeOrderingResult(
+        families=families,
+        mean_residuals=tuple(means),
+        ordering_holds=all(left > right for left, right in zip(means, means[1:], strict=False)),
+        trend_statistic=observed,
+        p_value=two_sample_permutation_p(
+            residuals, members[0], members[-1], 1, observed, rng=rng, n_permutations=n_permutations
+        ),
     )
-    return results, residuals
 
 
 # --------------------------------------------------------------------------------------
@@ -268,7 +408,6 @@ class P4Result(StrictModel):
     mean_cos_arousal_matched: float
     contrast: float
     p_value: float
-    passed: bool
     cos_absrpe_pc1: float
     cos_absrpe_pc2: float
     cos_rpe_pc1: float
@@ -283,10 +422,6 @@ _P4_CAVEAT = (
 )
 
 
-def p4_contrast(cos: np.ndarray, left: np.ndarray, right: np.ndarray) -> float:
-    return float(cos[left].mean() - cos[right].mean())
-
-
 def p4_surprise_contrast(
     geometry: BlockGeometry,
     words: EmotionWordSet,
@@ -294,21 +429,13 @@ def p4_surprise_contrast(
     *,
     rng: np.random.Generator,
     n_permutations: int,
-    alpha: float,
 ) -> P4Result:
-    surprise = words.confirmatory_set("surprise")
-    controls = words.confirmatory_set("arousal_matched")
+    surprise = words.p4_words("surprise")
+    controls = words.p4_words("arousal_matched")
     cos = geometry.cos["v_absrpe"]
     left = np.asarray([index[word] for word in surprise])
     right = np.asarray([index[word] for word in controls])
-    observed = p4_contrast(cos, left, right)
-    pooled = np.concatenate([cos[left], cos[right]])
-    exceedances = 0
-    for _ in range(n_permutations):
-        shuffled = rng.permutation(pooled)
-        if float(shuffled[: left.size].mean() - shuffled[left.size :].mean()) >= observed:
-            exceedances += 1
-    p_value = add_one_p(exceedances, n_permutations)
+    observed = two_sample_statistic(cos, left, right, 1)
     loading = {
         family: cosines(geometry.components[:2], geometry.family_vectors[family])
         for family in ("v_absrpe", "v_rpe")
@@ -319,8 +446,9 @@ def p4_surprise_contrast(
         mean_cos_surprise=float(cos[left].mean()),
         mean_cos_arousal_matched=float(cos[right].mean()),
         contrast=observed,
-        p_value=p_value,
-        passed=p_value < alpha and observed > 0.0,
+        p_value=two_sample_permutation_p(
+            cos, left, right, 1, observed, rng=rng, n_permutations=n_permutations
+        ),
         cos_absrpe_pc1=float(loading["v_absrpe"][0]),
         cos_absrpe_pc2=float(loading["v_absrpe"][1]),
         cos_rpe_pc1=float(loading["v_rpe"][0]),
@@ -331,20 +459,23 @@ def p4_surprise_contrast(
 
 
 class P5aResult(StrictModel):
-    """The discriminant null: ``sad`` should carry NO RPE excess once valence is partialled."""
+    """The discriminant expectation of absence: ``sad`` carries NO RPE excess after partialling."""
 
     word: str
     residual: float
-    ci_low: float
-    ci_high: float
-    n_bootstrap: int
-    includes_zero: bool
+    word_residual_p95: float
+    abs_rank: int
+    n_words: int
+    passed: bool
     note: str
 
 
 _P5A_NOTE = (
-    "P5a is a PREDICTION OF ABSENCE: it passes by the CI covering zero, and it only carries "
-    "information while P2 is positive. A null everywhere is not a P5a pass, it is no signal."
+    "P5a is an EXPECTATION OF ABSENCE: it holds by the word's residual sitting INSIDE the word "
+    "residuals' own spread (the same p95 band P5c uses), and it only carries information while "
+    "the outcome-family contrasts are positive. A null everywhere is not a P5a result, it is no "
+    "signal. It is a within-set comparison, not a confidence interval: there is one measurement "
+    "per word, so nothing here estimates this word's own sampling error."
 )
 
 
@@ -353,30 +484,27 @@ def p5a_discriminant_null(
     word: str,
     index: dict[str, int],
     design: np.ndarray,
-    *,
-    rng: np.random.Generator,
-    n_bootstrap: int,
 ) -> P5aResult:
-    """Word-resampling bootstrap CI on the target word's valence residual."""
+    """The target word's valence residual judged against the word residuals' own spread.
 
-    y = geometry.cos["v_rpe"]
-    observed = float(ols_residuals(y, design)[index[word]])
-    target = index[word]
-    others = np.asarray([row for row in range(len(y)) if row != target])
-    draws: list[float] = []
-    for _ in range(n_bootstrap):
-        resampled = rng.choice(others, size=others.size, replace=True)
-        rows = np.concatenate([np.asarray([target]), resampled])
-        residual = y[rows] - design[rows] @ np.linalg.lstsq(design[rows], y[rows], rcond=None)[0]
-        draws.append(float(residual[0]))
-    low, high = np.quantile(draws, [0.025, 0.975])
+    Same convention as :func:`p5c_style_control`, and for the same reason: the word set gives ONE
+    residual per word, so the only calibrated yardstick available is how far the other words'
+    residuals scatter. The earlier word-resampling bootstrap was replaced (2026-08-13) because it
+    resampled the OTHER words while pinning the target, so the interval never contained the
+    target's own measurement noise and under-covered badly.
+    """
+
+    residuals = ols_residuals(geometry.cos["v_rpe"], design)
+    observed = float(residuals[index[word]])
+    magnitudes = np.abs(residuals)
+    p95 = float(np.quantile(magnitudes, FLOOR_QUANTILE))
     return P5aResult(
         word=word,
         residual=observed,
-        ci_low=float(low),
-        ci_high=float(high),
-        n_bootstrap=n_bootstrap,
-        includes_zero=bool(low <= 0.0 <= high),
+        word_residual_p95=p95,
+        abs_rank=int((magnitudes > abs(observed)).sum()) + 1,
+        n_words=int(residuals.size),
+        passed=bool(abs(observed) <= p95),
         note=_P5A_NOTE,
     )
 
@@ -399,7 +527,7 @@ def p5c_style_control(
 
     The prediction is evaluated at binary valence 0 — the style vector is valence-free, and the
     binary scale (unlike a 1-9 norm scale) has a defined zero, so P5c always uses the binary
-    design even when P2 upgraded to numeric norms.
+    design even when the headline regression upgraded to numeric norms.
     """
 
     neutral = np.zeros(binary_design.shape[1])
@@ -424,46 +552,45 @@ def p5c_style_control(
 
 
 # --------------------------------------------------------------------------------------
-# Nulls (anisotropy discipline, §6)
+# Nulls (anisotropy discipline, §6). Both floors resample the SAME headline statistic.
 # --------------------------------------------------------------------------------------
 
 
-def label_shuffled_pair_floor(
+def label_shuffled_floor(
     geometry: BlockGeometry,
-    pairs: tuple[tuple[str, str, int], ...],
-    index: dict[str, int],
     design: np.ndarray,
-    binary_valence: np.ndarray,
+    statistic: ResidualStatistic,
     *,
     rng: np.random.Generator,
     n_draws: int,
 ) -> float:
-    """95th percentile of the max pair statistic when emotion vectors are re-labelled at random."""
+    """95th percentile of ``statistic`` when the emotion vectors are re-labelled at random.
 
-    cos = geometry.cos["v_rpe"]
-    draws: list[float] = []
-    for _ in range(n_draws):
-        shuffled = rng.permutation(cos)
-        residuals = ols_residuals(shuffled, design)
-        draws.append(max(pair_statistics(residuals, pairs, binary_valence, index)))
+    RESIDUALIZE FIRST, then permute (fixed 2026-08-13). Permuting the raw cosines and residualizing
+    afterwards puts the floor on the RAW cosine scale while the observed statistic lives on the
+    post-residual scale — with any valence component in ``v_rpe`` the raw spread is much the larger
+    of the two, and the floor rejects true effects on scale alone (a reviewer reproduction measured
+    a ~4.4x inflated floor rejecting 40/40 planted effects). Shuffling the residuals themselves is
+    the same null — "this word's residual could have belonged to any word" — on the right scale.
+    """
+
+    residuals = ols_residuals(geometry.cos["v_rpe"], design)
+    draws = [statistic(rng.permutation(residuals)) for _ in range(n_draws)]
     return float(np.quantile(draws, FLOOR_QUANTILE, method="linear"))
 
 
-def random_direction_pair_floor(
+def random_direction_residual_floor(
     geometry: BlockGeometry,
-    pairs: tuple[tuple[str, str, int], ...],
-    index: dict[str, int],
     design: np.ndarray,
-    binary_valence: np.ndarray,
+    statistic: ResidualStatistic,
     *,
     rng: np.random.Generator,
     n_draws: int,
 ) -> float:
-    """95th percentile of the max pair statistic against norm-matched random directions."""
+    """95th percentile of ``statistic`` against norm-matched random directions."""
 
     def score(direction: np.ndarray) -> float:
-        residuals = ols_residuals(cosines(geometry.centered_words, direction), design)
-        return max(pair_statistics(residuals, pairs, binary_valence, index))
+        return statistic(ols_residuals(cosines(geometry.centered_words, direction), design))
 
     return random_direction_floor(
         score,

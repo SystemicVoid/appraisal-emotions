@@ -6,11 +6,18 @@ Kept: ``RenderedPrompt``, ``HiddenStateResult``, ``DecoderDepthBackend``, the re
 ``ModelBackend`` protocol the capture path reads, ``normalize_hidden_state_layer`` and
 ``resolve_hidden_state_position``.
 
-Dropped: the logprob result types and the whole intervention surface (residual patching,
-additive steering, bounded-window patching, greedy decode) with their ``require_*_backend``
-accessors — the reveal capture is read-only, and the emotion layer's E3 steering arm will add
-its own hook when a steered run is authorized. Also dropped: the residual-site policy constants
-(nothing here resolves a patch coordinate).
+Dropped: the logprob result types, additive steering, bounded-window patching, and the
+``require_*_backend`` accessors — the reveal capture is read-only and the steering leg is dropped
+from the design (§4 E3). Also dropped: the residual-site policy constants (nothing here resolves a
+patch coordinate; E3 patches a single ``(block, position)`` it is handed).
+
+Re-added for the E3 causal tier (design §4 E3): ``PatchedForwardResult`` +
+``PatchedForwardBackend`` — ONE forward with the residual stream at ``(block, position)``
+replaced by a caller-supplied vector, returning the downstream residual states at that position
+and, optionally, a short greedy continuation. This is what makes E3 a *causal* tier rather than
+arithmetic over captured states: the substituted value propagates through the remaining blocks
+and into the KV cache the continuation decodes from. Deliberately one method and no grid — a
+steering sweep is a different (dropped) experiment.
 
 Re-added for the E0 emotion layer (design §4 E0 / §3): ``GenerationResult`` +
 ``TextGenerationBackend`` (Sofroniew's emotion basis is GENERATION-based — the model writes the
@@ -108,6 +115,69 @@ class TokenMeanHiddenStateBackend(Protocol):
         single-position read. A prompt with no token at or beyond ``min_token`` MUST raise: an
         empty window is a caller error (the story filter drops short stories before capture),
         never a silently-substituted whole-sequence mean.
+        """
+
+
+@dataclass(frozen=True)
+class PatchedForwardResult:
+    """The residual stream of a patched forward, read at ``(block, position)`` and downstream.
+
+    ``states`` is ``(len(layers), hidden_size)`` — the residual at the SAME position, at each
+    requested ``hidden_states`` index, AFTER the substitution has propagated. ``continuation`` is
+    the greedy text decoded with the patch in place, or ``None`` when none was requested; it is
+    raw model text, deliberately unparsed (``docs/agents/rails.md``: no grader before a reality
+    sample of the surface it would grade).
+    """
+
+    layers: tuple[int, ...]
+    states: np.ndarray
+    continuation: str | None
+    generated_token_count: int
+
+    def __post_init__(self) -> None:
+        states = np.array(self.states, dtype=np.float64, copy=True)
+        if states.shape[0] != len(self.layers):
+            raise ValueError("patched-forward states must carry one row per requested layer")
+        states.flags.writeable = False
+        object.__setattr__(self, "states", states)
+
+
+class PatchedForwardBackend(Protocol):
+    """The E3 causal read: substitute a residual value, then run the forward through it."""
+
+    def patched_forward(
+        self,
+        prompt: str,
+        *,
+        block: int,
+        position: int | str,
+        replacement: np.ndarray,
+        layers: tuple[int, ...],
+        max_new_tokens: int = 0,
+    ) -> PatchedForwardResult:
+        """Replace the residual at decoder ``block``'s output, ``position``, with ``replacement``.
+
+        Index convention, shared with the capture path (``normalize_hidden_state_layer``: post-block
+        ``l`` is ``hidden_states`` index ``l + 1``): ``block`` is 0-based over decoder blocks, and
+        ``layers`` are raw ``hidden_states`` indices. So **the patch site is index ``block + 1``**
+        — reading it back returns the replacement itself, which is a wiring check rather than a
+        measurement — and **propagated effects appear from index ``block + 2`` onward**, which is
+        where a downstream readout must look. ``position`` follows
+        :func:`resolve_hidden_state_position`. ``max_new_tokens = 0`` means no generation.
+
+        Three semantics every implementation must share:
+
+        1. the substitution applies on PREFILL passes only — at decode time that position is
+           already in the KV cache, which the prefill wrote under the patch;
+        2. a self-patch (``replacement`` equal to the position's own unpatched value at index
+           ``block + 1``) leaves EVERY requested layer unchanged. That is design §4 E3's wiring
+           check, and it is what lets the unpatched baseline be measured through this same call
+           rather than assumed;
+        3. requesting a continuation runs a second prefill inside ``generate``, also patched, so
+           the decode proceeds from the patched state.
+
+        This is therefore one *call*, not one forward: a states prefill, plus ``generate``'s own
+        prefill and decode steps whenever ``max_new_tokens > 0``.
         """
 
 

@@ -1,12 +1,33 @@
-# Model registry. Entries copied verbatim from the parent program's
-# configs/model_registry.yaml @ 10c4662 (the Qwen entry at L26-34); the revision pin and
-# local_files_only are what make the R-A' capture reproducible offline.
+# Model registry. One entry per checkpoint the CLI can load; `model.key` in a run config names
+# one. The revision pin plus local_files_only are what make a capture reproducible offline — a
+# branch name is not a pin, and a cache miss must fail loudly rather than pull other weights.
 models:
   fake-functional:
     backend: fake
     model_id: fake-functional-valence
     batch_size: 8
 
+  # PRIMARY (design §2): the current ~27-32B dense instruct release in the Qwen 3.x family.
+  # The repo id and revision are DELIBERATELY unresolved here: this container cannot reach
+  # HuggingFace and inventing a repo id is how a run silently loads the wrong weights. The
+  # runbook's resolution step fills both ON THE LAMBDA INSTANCE against the live hub listing
+  # (docs/agents/lambda-runbook.md §2, steps 1-6) and records any deviation from the
+  # operator-named version in the run config's provenance.known_gaps. The placeholder id below
+  # is not a repo: with local_files_only true it fails closed on the first load attempt.
+  qwen_30b_primary:
+    backend: hf
+    model_id: UNRESOLVED-resolve-on-instance-see-lambda-runbook-section-2
+    tokenizer_id: UNRESOLVED-resolve-on-instance-see-lambda-runbook-section-2
+    revision: null
+    device: cuda
+    dtype: bfloat16
+    batch_size: 1
+    local_files_only: true
+
+  # SECONDARY (design §2): the 4B parent checkpoint, run only after the 30B chain has produced
+  # its verdict — an explicit within-family scale contrast against the superposition hypothesis,
+  # never the headline. Entry copied verbatim from the parent program's
+  # configs/model_registry.yaml @ 10c4662 (the Qwen entry at L26-34).
   qwen3_4b_instruct_2507:
     backend: hf
     model_id: Qwen/Qwen3-4B-Instruct-2507

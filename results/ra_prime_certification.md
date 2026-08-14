@@ -7,6 +7,15 @@ directions. **The certification itself does not transport**: any directions re-e
 here are "directions identified by the R-A′ recipe," never "the certified R-A′ directions,"
 and carry no license until re-gated.
 
+**Scope note (2026-08-13).** Everything below is **Qwen3-4B-pinned recipe provenance**: the
+stimuli, estimator, design matrix, gate bars, and the demonstration that this recipe can certify a
+signed-RPE direction on that checkpoint. The hackathon's headline runs now sit at a ~30B model
+(design `docs/design/experiment.md` §2), where the recipe is re-run end to end and earns its own
+gates — AUROC on the reward-matched and EV-matched cells, split-half stability, and the block
+sweep. No number on this page transfers to that run; the selected block (20/36) and the verdict
+are 4B facts. Symbol neutrality in particular is a *behavioural* property of this checkpoint and
+does not carry over.
+
 ## Headline result
 
 - **Verdict:** `separable-signed-rpe` (certified 2026-07-04; license capped at

@@ -164,6 +164,7 @@ __all__ = [
     "orientation_signature",
     "read_reveal_rpe_directions",
     "read_reveal_rpe_states",
+    "reveal_read_prompt",
     "reveal_rpe_directions_path",
     "reveal_rpe_states_path",
     "selection_aware_sign_null",
@@ -203,8 +204,9 @@ def capture_reveal_states(
     """Residual-stream states at the reveal token for each reveal: ``(n, n_blocks, hidden)``.
 
     Reads at ``position="last"`` after appending ``metadata['read_prefix']`` (the single
-    leading-space outcome symbol), so capture lands on the byte-pinned reveal slot. Read-only:
-    no patching backend and no steering.
+    leading-space outcome symbol) via :func:`reveal_read_prompt`, so capture lands on the
+    byte-pinned reveal slot. Read-only: no steering, and no patch (E3's patched forward reads the
+    same slot through the same helper).
 
     Slot placement is the arm-wide, advisor-validated ``_read_prompt`` convention: under the HF
     chat template (``add_generation_prompt=True``) the read symbol is the assistant-side
@@ -216,21 +218,32 @@ def capture_reveal_states(
     """
 
     layers = decoder_layers(backend, fallback_blocks=fallback_blocks)  # block l at index l+1.
-    resolved: list[tuple[str, int | str]] = []
-    for comparison in reveals:
-        rendered = backend.render_prompt(comparison.prompt).rendered_prompt
-        read_prefix = comparison.metadata.get("read_prefix")
-        if not isinstance(read_prefix, str) or not read_prefix:
-            raise ValueError(
-                f"reveal {comparison.comparison_id!r} is missing metadata['read_prefix']; the "
-                "byte-pinned reveal-token capture must fail closed, not fall back to "
-                "position='last' on the unpinned prompt tail."
-            )
-        # Assistant-side read slot (the validated _read_prompt convention): the single-token
-        # outcome symbol is the natural next token after the chat template's generation header;
-        # its constant prefix is absorbed by the design intercept (see docstring).
-        resolved.append((f"{rendered}{read_prefix}", "last"))
+    resolved: list[tuple[str, int | str]] = [
+        (reveal_read_prompt(backend, comparison), "last") for comparison in reveals
+    ]
     return capture_states(backend, resolved, layers=layers)
+
+
+def reveal_read_prompt(backend: RenderedCaptureBackend, comparison: Comparison) -> str:
+    """The exact byte-pinned string the reveal token is read at the end of.
+
+    ONE spelling of the read slot, shared by the read-only capture above and by E3 patching
+    (``analysis.activation_patching``), which must patch the same position of the same rendered
+    surface the states artifact was captured from — two spellings would be two experiments.
+    """
+
+    rendered = backend.render_prompt(comparison.prompt).rendered_prompt
+    read_prefix = comparison.metadata.get("read_prefix")
+    if not isinstance(read_prefix, str) or not read_prefix:
+        raise ValueError(
+            f"reveal {comparison.comparison_id!r} is missing metadata['read_prefix']; the "
+            "byte-pinned reveal-token capture must fail closed, not fall back to "
+            "position='last' on the unpinned prompt tail."
+        )
+    # Assistant-side read slot (the validated _read_prompt convention): the single-token outcome
+    # symbol is the natural next token after the chat template's generation header; its constant
+    # prefix is absorbed by the design intercept (see capture_reveal_states' docstring).
+    return f"{rendered}{read_prefix}"
 
 
 # --------------------------------------------------------------------------------------

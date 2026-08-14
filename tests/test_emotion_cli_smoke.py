@@ -1,23 +1,28 @@
-"""End-to-end contract smoke for the emotion layer: the E0 -> E1 -> E2 chain on the fake backend.
+"""End-to-end contract smoke for the emotion layer: the E0 -> E1 -> E2 -> E3 chain on the fake
+backend.
 
-Runs the four shipped commands in order through the real CLI, into a tmp run root, using the
+Runs the five shipped commands in order through the real CLI, into a tmp run root, using the
 shipped smoke configs with only their output/registry/word paths redirected. Everything asserted
-here is CONTRACT — artifacts exist, revalidate, and bind to each other by digest; reports carry
-the confirmatory / exploratory split and the inherited gate cap. The fake backend's stories are
-seeded templates and its hidden states are a hash of the text, so every NUMBER in this chain is
-meaningless and none of it is evidence.
+here is CONTRACT — artifacts exist, revalidate, and bind to each other by digest; the reports
+carry every word's residual, the recorded-expectation readouts, the patching arms, and the
+inherited gate cap. The fake backend's stories are seeded templates and its hidden states are a
+hash of the text, so every NUMBER in this chain is meaningless and none of it is evidence.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
+from appraisal_emotions.analysis.activation_patching import ARMS
 from appraisal_emotions.analysis.emotion_vectors import read_emotion_vectors
 from appraisal_emotions.cli import app
+from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RPE_SMOKE = REPO_ROOT / "configs" / "reveal_rpe_smoke.yaml"
@@ -36,18 +41,36 @@ def _config_into(source: Path, tmp_path: Path, name: str) -> Path:
     return path
 
 
-def test_emotion_chain_smoke(tmp_path):
+@dataclass(frozen=True)
+class _Chain:
+    """The E0/R-A artifacts every downstream smoke reads, captured once per module."""
+
+    rpe_dir: Path
+    emotion_dir: Path
+    emotion_config: Path
+
+
+@pytest.fixture(scope="module")
+def chain(tmp_path_factory) -> _Chain:
+    """Run extract-rpe + extract-emotions once; the E1/E2/E3 commands are read-only over them."""
+
+    tmp_path = tmp_path_factory.mktemp("emotion_chain")
     runner = CliRunner()
     rpe_config = _config_into(RPE_SMOKE, tmp_path, "rpe.yaml")
     emotion_config = _config_into(EMOTION_SMOKE, tmp_path, "emotions.yaml")
-
     result = runner.invoke(app, ["extract-rpe", "--config", str(rpe_config)])
     assert result.exit_code == 0, result.output
-    rpe_dir = tmp_path / "runs" / "reveal_rpe_smoke" / "reveal_rpe"
-
     result = runner.invoke(app, ["extract-emotions", "--config", str(emotion_config)])
     assert result.exit_code == 0, result.output
-    emotion_dir = tmp_path / "runs" / "emotion_vectors_smoke" / "emotions"
+    return _Chain(
+        rpe_dir=tmp_path / "runs" / "reveal_rpe_smoke" / "reveal_rpe",
+        emotion_dir=tmp_path / "runs" / "emotion_vectors_smoke" / "emotions",
+        emotion_config=emotion_config,
+    )
+
+
+def test_e0_writes_its_artifacts_and_reports_the_gate_cap(chain):
+    emotion_dir = chain.emotion_dir
     for name in (
         "emotion_vectors.json",
         "emotion_vectors.vectors.npz",
@@ -64,6 +87,11 @@ def test_emotion_chain_smoke(tmp_path):
     # cap rather than a pass — a "pass" here would mean the gate is not doing anything.
     assert emotion.metadata.gate_verdict == "harness_inadequate"
 
+
+def test_e1_map_geometry_shows_every_word_and_the_recorded_expectations(chain):
+    runner = CliRunner()
+    rpe_dir, emotion_dir = chain.rpe_dir, chain.emotion_dir
+    emotion = read_emotion_vectors(emotion_dir / "emotion_vectors.json")
     e1_out = emotion_dir / "map_geometry_report.json"
     result = runner.invoke(
         app,
@@ -90,15 +118,28 @@ def test_emotion_chain_smoke(tmp_path):
     assert e1["emotion_vectors_sha256"] == emotion.metadata.vectors_sha256
     assert e1["sensitivity_gate"] == "G0=harness_inadequate"
     assert e1["verdict_cap"].startswith("harness_inadequate")
-    assert e1["confirmatory"] and e1["exploratory"]
     assert len(e1["block_sweep"]) == emotion.metadata.n_blocks
-    assert {pair["outcome"] for block in e1["confirmatory"] for pair in block["p2_pairs"]} == {
-        "disappointed",
-        "relieved",
-        "elated",
-    }
-    assert "CONFIRMATORY" in result.output and "EXPLORATORY" in result.output
+    words = read_emotion_words(WORDS)
+    for block in e1["blocks"]:
+        # Every word is shown — no readout hides behind a summary statistic.
+        assert {row["word"] for row in block["word_residuals"]} == set(words.labels)
+        assert {c["pole"] for c in block["family_contrasts"]} == {"positive", "negative"}
+        assert block["outcome_ordering"]["families"] == list(words.outcome_ordering())
+        assert {pair["outcome"] for pair in block["expected_pairs"]} == {
+            "disappointed",
+            "relieved",
+            "elated",
+        }
+    # The confirmatory/exploratory caste is gone from the artifact, not merely from the prose.
+    assert "confirmatory" not in e1_out.read_text(encoding="utf-8").lower()
+    assert "all 84 words by valence residual" in result.output
+    assert "recorded expectations" in result.output
 
+
+def test_e2_and_e3_read_the_same_artifacts_and_cap_their_claims(chain):
+    runner = CliRunner()
+    rpe_dir, emotion_dir = chain.rpe_dir, chain.emotion_dir
+    emotion = read_emotion_vectors(emotion_dir / "emotion_vectors.json")
     e2_out = emotion_dir / "expectation_control_report.json"
     result = runner.invoke(
         app,
@@ -125,3 +166,69 @@ def test_emotion_chain_smoke(tmp_path):
     assert e2["sensitivity_gate"] == "G0=harness_inadequate"
     assert len(e2["axes"]) == 2
     assert all(axis["n_cells"] >= 2 for axis in e2["axes"])
+
+    e3_out = emotion_dir / "activation_patching_report.json"
+    result = runner.invoke(
+        app,
+        [
+            "patch-reveals",
+            "--states",
+            str(rpe_dir / "reveal_states.json"),
+            "--battery",
+            str(rpe_dir / "battery.json"),
+            "--directions",
+            str(rpe_dir / "reveal_directions.json"),
+            "--emotions",
+            str(emotion_dir / "emotion_vectors.json"),
+            "--out",
+            str(e3_out),
+            "--seed",
+            "7",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    e3 = json.loads(e3_out.read_text(encoding="utf-8"))
+    assert e3["emotion_vectors_sha256"] == emotion.metadata.vectors_sha256
+    assert e3["sensitivity_gate"] == "G0=harness_inadequate"
+    assert e3["n_pairs"] > 0 and e3["n_reward_cells"] > 0
+    assert {arm["arm"] for arm in e3["arms"]} == set(ARMS)
+    assert len(e3["arms"]) == 2 * len(ARMS)
+    assert e3["mode"] == "state" and e3["continuations"] == []
+    # The mode note is printed with every run, not buried in a docstring.
+    assert "STATE-LEVEL PREVIEW" in result.output
+
+    e3_forward = emotion_dir / "activation_patching_forward.json"
+    result = runner.invoke(
+        app,
+        [
+            "patch-reveals",
+            "--states",
+            str(rpe_dir / "reveal_states.json"),
+            "--battery",
+            str(rpe_dir / "battery.json"),
+            "--directions",
+            str(rpe_dir / "reveal_directions.json"),
+            "--emotions",
+            str(emotion_dir / "emotion_vectors.json"),
+            "--out",
+            str(e3_forward),
+            "--mode",
+            "forward",
+            "--config",
+            str(chain.emotion_config),
+            "--max-pairs",
+            "2",
+            "--random-draws",
+            "2",
+            "--seed",
+            "7",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    forward = json.loads(e3_forward.read_text(encoding="utf-8"))
+    assert forward["mode"] == "forward"
+    assert forward["model_key"] == "fake-functional"
+    # The causal tier reads downstream of the patch, and stores raw continuations for reading.
+    assert max(forward["readout_blocks"]) > forward["block"]
+    assert forward["continuations"]
+    assert "FORWARD-PATCHED" in result.output

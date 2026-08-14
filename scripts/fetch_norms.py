@@ -1,4 +1,4 @@
-"""Fetch numeric valence/arousal norms for the pre-registered word set.
+"""Fetch numeric valence/arousal norms for the §5 word set.
 
 STANDALONE SCRIPT, not package code: it is the only thing in this repo that touches the network,
 it runs once per environment, and nothing imports it.

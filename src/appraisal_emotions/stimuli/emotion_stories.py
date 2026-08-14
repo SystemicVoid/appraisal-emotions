@@ -1,4 +1,4 @@
-"""E0 story stimuli: the pre-registered word set plus the generation-prompt grid.
+"""E0 story stimuli: the §5 word set plus the generation-prompt grid.
 
 NEW module (no parent counterpart — the parent program has no emotion-concept surface).
 
@@ -20,8 +20,8 @@ carried by :data:`STORY_PROMPT_TEMPLATE`:
   passes.
 
 The word set itself is DATA (``data/emotion_words.json``), loaded here and never retyped — the
-§5 list and its minted binary valence labels exist in exactly one place
-(``docs/agents/rails.md``, "load source text; never transcribe it").
+§5 list, its minted binary valence labels and the recorded directional expectations exist in
+exactly one place (``docs/agents/rails.md``, "load source text; never transcribe it").
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import json
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from appraisal_emotions.core.util import file_sha256
 
@@ -43,6 +43,8 @@ __all__ = [
     "STYLE_CONTROL_PROMPT_TEMPLATE",
     "EmotionWord",
     "EmotionWordSet",
+    "ExpectedFamilyContrast",
+    "ExpectedPair",
     "StoryRequest",
     "build_story_grid",
     "read_emotion_words",
@@ -55,6 +57,7 @@ DEFAULT_EMOTION_WORDS_PATH = Path("data/emotion_words.json")
 EmotionCategory = Literal[
     "outcome_pos",
     "outcome_neg",
+    "outcome_confirm",
     "nonoutcome_pos",
     "nonoutcome_neg",
     "prospect",
@@ -66,6 +69,7 @@ EmotionCategory = Literal[
 EMOTION_CATEGORIES: tuple[str, ...] = (
     "outcome_pos",
     "outcome_neg",
+    "outcome_confirm",
     "nonoutcome_pos",
     "nonoutcome_neg",
     "prospect",
@@ -110,37 +114,63 @@ STORY_TOPICS: tuple[str, ...] = (
     "a roadside diner at midnight",
 )
 
-# ONE spelling of the story prompt. Extraction and every test that mentions it import THIS
-# constant; nothing retypes it (rails.md clause 2). The emotion goes in double quotes and is the
-# only affect-bearing text in the rendered prompt.
+# ONE spelling of the story prompt (design §9, which now points HERE rather than quoting a second
+# copy). Extraction and every test that mentions it import THIS constant; nothing retypes it
+# (rails.md clause 2). Three sentences: opening, middle, closer. The emotion appears exactly ONCE,
+# in double quotes, and is the only affect-bearing text in the rendered prompt.
 STORY_PROMPT_TEMPLATE = (
-    "Write one paragraph of about 120 words: a short story set in {topic}.\n"
-    'The main character is experiencing the emotion "{emotion}".\n'
-    "Convey it only through what happens, what the character notices, and what they do.\n"
-    'Do not use the word "{emotion}" anywhere, and do not use an obvious synonym for it.\n'
-    "Do not name any emotion at all.\n"
+    "Write one paragraph of about 120 words: a short story set in {topic}, about a character "
+    'who is experiencing "{emotion}".\n'
+    "Show it only through what happens, what the character notices, and what they do — do not "
+    "name any emotion, and do not use that word or an obvious synonym for it.\n"
     "Write the paragraph and nothing else."
 )
 
-# The P5c control prompt: same length, same topic grid, same "one paragraph" shape, register
-# instead of emotion as the manipulated variable.
+# The P5c control prompt: same three-sentence shape, same opening/middle/closer, same topic grid;
+# register instead of emotion is the manipulated variable, and the character stays (a prompt with
+# no character would make P5c a no-character vector rather than a register vector). The story
+# prompt's extra "or an obvious synonym" clause has no counterpart here — there is no target word.
 STYLE_CONTROL_PROMPT_TEMPLATE = (
-    "Write one paragraph of about 120 words: a short account set in {topic}.\n"
-    "Write it in a strictly formal register: full sentences, no contractions, no slang,\n"
-    "the impersonal third person throughout.\n"
-    "Describe only what happens and what is observable.\n"
-    "Do not name any emotion at all.\n"
+    "Write one paragraph of about 120 words: a short story set in {topic}, about a character "
+    "going about their day, written throughout in a formal register — full sentences, no "
+    "contractions, no slang, third person.\n"
+    "Show it only through what happens, what the character notices, and what they do — do not "
+    "name any emotion.\n"
     "Write the paragraph and nothing else."
 )
 
 
 @dataclass(frozen=True)
 class EmotionWord:
-    """One pre-registered word: its §5 family and its MINTED binary valence label."""
+    """One §5 word: its family and its MINTED binary valence label."""
 
     word: str
     category: str
     valence: int
+
+
+@dataclass(frozen=True)
+class ExpectedPair:
+    """One recorded named-pair expectation: outcome word vs its valence-matched control.
+
+    ``expected_sign`` is the direction the §5 record puts the outcome word's valence residual in
+    relative to its control on ``cos(v_RPE, e_j)``: +1 expects outcome > control, -1 expects
+    outcome < control. It is a record of what we thought before we looked, not a contract.
+    """
+
+    outcome: str
+    control: str
+    expected_sign: int
+
+
+@dataclass(frozen=True)
+class ExpectedFamilyContrast:
+    """One recorded family-contrast expectation: outcome family vs valence-matched control family."""
+
+    pole: str
+    outcome_family: str
+    control_family: str
+    expected_sign: int
 
 
 @dataclass(frozen=True)
@@ -149,7 +179,7 @@ class EmotionWordSet:
 
     version: int
     words: tuple[EmotionWord, ...]
-    confirmatory: dict[str, object]
+    expectations: dict[str, object]
     source_path: Path
     source_sha256: str
 
@@ -161,41 +191,89 @@ class EmotionWordSet:
     def valence_by_word(self) -> dict[str, int]:
         return {word.word: word.valence for word in self.words}
 
+    @property
+    def category_by_word(self) -> dict[str, str]:
+        return {word.word: word.category for word in self.words}
+
     def words_in_category(self, category: str) -> tuple[str, ...]:
         return tuple(word.word for word in self.words if word.category == category)
 
-    def confirmatory_pairs(self) -> tuple[tuple[str, str, int], ...]:
-        """The P2 pairs as ``(outcome, control, predicted_sign)`` triples.
+    def _block(self, key: str) -> object:
+        return self.expectations[key]
 
-        ``predicted_sign`` is the pre-registered direction of the outcome word's valence
-        residual relative to its control on ``cos(v_RPE, e_j)``: +1 predicts outcome > control,
-        -1 predicts outcome < control (§5 amendment record, 2026-08-13, pre-data).
+    def expected_pairs(self) -> tuple[ExpectedPair, ...]:
+        """The §5 named-pair expectations."""
+
+        return tuple(
+            ExpectedPair(
+                outcome=str(entry["outcome"]),
+                control=str(entry["control"]),
+                expected_sign=_sign(entry["expected_sign"]),
+            )
+            for entry in _mappings(self._block("pairs"), "expectations.pairs")
+        )
+
+    def expected_family_contrasts(self) -> tuple[ExpectedFamilyContrast, ...]:
+        """The §5 family-contrast expectations, one per valence pole."""
+
+        return tuple(
+            ExpectedFamilyContrast(
+                pole=str(entry["pole"]),
+                outcome_family=str(entry["outcome"]),
+                control_family=str(entry["control"]),
+                expected_sign=_sign(entry["expected_sign"]),
+            )
+            for entry in _mappings(self._block("family_contrasts"), "expectations.family_contrasts")
+        )
+
+    def pair_pool_families(self) -> tuple[str, ...]:
+        """The families a named pair's permutation draws its null from (§5 resolution table).
+
+        The union of the families the recorded expectations already name — the two family
+        contrasts plus the three-level ordering — so the pool cannot drift from the contrasts.
+        On the shipped word set that is outcome_pos / nonoutcome_pos / outcome_neg /
+        nonoutcome_neg / outcome_confirm.
         """
 
-        pairs = self.confirmatory["p2_pairs"]
-        if not isinstance(pairs, list):
-            raise ValueError("confirmatory.p2_pairs must be a list of pair mappings")
-        triples: list[tuple[str, str, int]] = []
-        for pair in pairs:
-            if not isinstance(pair, dict):
-                raise ValueError(
-                    "confirmatory.p2_pairs entries must be {outcome, control, predicted_sign}"
-                )
-            sign = int(pair["predicted_sign"])
-            if sign not in (-1, 1):
-                raise ValueError(f"predicted_sign must be -1 or +1, got {sign}")
-            triples.append((str(pair["outcome"]), str(pair["control"]), sign))
-        return tuple(triples)
+        families: list[str] = []
+        for contrast in self.expected_family_contrasts():
+            families += [contrast.outcome_family, contrast.control_family]
+        families += list(self.outcome_ordering())
+        return tuple(dict.fromkeys(families))
 
-    def confirmatory_set(self, key: str) -> tuple[str, ...]:
-        block = self.confirmatory["p4"]
+    def outcome_ordering(self) -> tuple[str, ...]:
+        """The OCC three-level family ordering, highest expected signed residual first."""
+
+        return tuple(str(family) for family in cast(list, self._block("outcome_ordering")))
+
+    def p4_words(self, key: str) -> tuple[str, ...]:
+        """The P4 ``surprise`` / ``arousal_matched`` sets, resolved from the named category.
+
+        The expectations block names a CATEGORY, never a word list: membership lives once, in
+        ``words``, so the two can never drift apart.
+        """
+
+        block = self._block("p4")
         if not isinstance(block, dict):
-            raise ValueError("confirmatory.p4 must be a mapping")
-        return tuple(str(word) for word in block[key])
+            raise ValueError("expectations.p4 must be a mapping of role -> category")
+        return self.words_in_category(str(block[key]))
+
+
+def _sign(value: object) -> int:
+    sign = int(cast(int, value))
+    if sign not in (-1, 1):
+        raise ValueError(f"expected_sign must be -1 or +1, got {sign}")
+    return sign
+
+
+def _mappings(block: object, name: str) -> list[dict]:
+    if not isinstance(block, list) or not all(isinstance(entry, dict) for entry in block):
+        raise ValueError(f"{name} must be a list of mappings")
+    return cast(list[dict], block)
 
 
 def read_emotion_words(path: Path = DEFAULT_EMOTION_WORDS_PATH) -> EmotionWordSet:
-    """Load the pre-registered §5 word set; the file is the sole authority for words and labels."""
+    """Load the §5 word set; the file is the sole authority for words, labels and expectations."""
 
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     raw_words = payload["words"]
@@ -222,7 +300,7 @@ def read_emotion_words(path: Path = DEFAULT_EMOTION_WORDS_PATH) -> EmotionWordSe
     return EmotionWordSet(
         version=int(payload["version"]),
         words=words,
-        confirmatory=dict(payload["confirmatory"]),
+        expectations=dict(payload["expectations"]),
         source_path=Path(path),
         source_sha256=file_sha256(Path(path)),
     )
