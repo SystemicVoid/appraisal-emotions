@@ -1,11 +1,11 @@
-"""The E0-E3 command surface: ``extract-emotions`` / ``extract-story-projections`` /
-``map-geometry`` / ``expectation-control`` / ``patch-reveals``.
+"""The E0-E4 command surface: ``extract-emotions`` / ``extract-story-projections`` /
+``map-geometry`` / ``expectation-control`` / ``patch-reveals`` / ``behavioral-transfer``.
 
 NEW module (no parent counterpart). A sibling of ``cli.py`` rather than four more commands in
 it: ``cli.py`` is the ported reveal-RPE surface and stays the size it was extracted at, and the
 emotion tiers carry their own artifact paths, options and licence language. :func:`register`
-attaches the commands to the one shared Typer app, so ``appraisal-emotions --help`` lists all
-five in one place.
+attaches the commands to the one shared Typer app, so ``appraisal-emotions --help`` lists them
+all in one place.
 """
 
 from __future__ import annotations
@@ -22,6 +22,16 @@ from appraisal_emotions.analysis.activation_patching import (
     DEFAULT_MAX_CONTINUATIONS,
     activation_patching,
     format_activation_patching_summary,
+)
+from appraisal_emotions.analysis.behavioral_transfer import (
+    DEFAULT_MAX_PAIRS,
+    DEFAULT_MAX_PER_CELL,
+    DEFAULT_PERMUTATIONS,
+    DEFAULT_RANDOM_DRAWS,
+    DEFAULT_REACHABILITY_PAIRS,
+    ChatPatchingBackend,
+    behavioral_transfer,
+    format_behavioral_transfer_summary,
 )
 from appraisal_emotions.analysis.emotion_mapping import (
     format_map_geometry_summary,
@@ -51,6 +61,7 @@ from appraisal_emotions.backends.base import PatchedForwardBackend
 from appraisal_emotions.backends.factory import create_backend, free_backend
 from appraisal_emotions.config import StudyConfig, load_config, resolve_model_spec
 from appraisal_emotions.core.util import file_sha256, write_json
+from appraisal_emotions.stimuli.decision_probes import DEFAULT_ANSWER_FORM, AnswerForm
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 console = Console()
@@ -89,13 +100,89 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
 
 
 def register(app: typer.Typer) -> None:
-    """Attach the four emotion-layer commands to the shared app."""
+    """Attach the emotion-layer commands to the shared app."""
 
     app.command("extract-emotions")(extract_emotions)
     app.command("extract-story-projections")(extract_story_projections_command)
     app.command("map-geometry")(map_geometry_command)
     app.command("expectation-control")(expectation_control_command)
     app.command("patch-reveals")(patch_reveals_command)
+    app.command("behavioral-transfer")(behavioral_transfer_command)
+
+
+def behavioral_transfer_command(
+    config: ConfigOption,
+    states: Annotated[Path, typer.Option("--states", help="reveal_states.json")],
+    battery: Annotated[Path, typer.Option("--battery", help="battery.json")],
+    directions: Annotated[Path, typer.Option("--directions", help="reveal_directions.json")],
+    emotions: Annotated[Path, typer.Option("--emotions", help="emotion_vectors.json")],
+    out: Annotated[Path, typer.Option("--out", help="Report JSON path.")],
+    block: Annotated[
+        int | None, typer.Option("--block", help="Patch block; defaults to the emotion artifact's.")
+    ] = None,
+    seed: SeedOption = 7,
+    max_pairs: Annotated[int, typer.Option("--max-pairs")] = DEFAULT_MAX_PAIRS,
+    max_per_cell: Annotated[
+        int,
+        typer.Option("--max-per-cell", help="Cap per reward cell BEFORE --max-pairs truncates."),
+    ] = DEFAULT_MAX_PER_CELL,
+    random_draws: Annotated[
+        int, typer.Option("--random-draws", help="Random-direction floor draws.")
+    ] = DEFAULT_RANDOM_DRAWS,
+    permutations: Annotated[int, typer.Option("--permutations")] = DEFAULT_PERMUTATIONS,
+    reachability_pairs: Annotated[
+        int,
+        typer.Option(
+            "--reachability-pairs",
+            help="Off-cell pairs for the positive control that makes every null readable.",
+        ),
+    ] = DEFAULT_REACHABILITY_PAIRS,
+    answer_form: Annotated[
+        str,
+        typer.Option(
+            "--answer-form",
+            help="Answer-slot token form, SET BY THE REALITY SAMPLE: bare | leading_space.",
+        ),
+    ] = DEFAULT_ANSWER_FORM,
+) -> None:
+    """Rung E4: does the patched expectation state change what the model DOES (e4-prereg)?
+
+    Extends the byte-pinned reveal prompt into a three-message chat — reveal, the model's own
+    measured completion, then a decision probe — and reads a next-token logit MARGIN at the answer
+    slot with zero decode steps. Two things separate it from E3's behavioural leg. The readout sits
+    at a LATER token than the patch, where the residual stream's identity path cannot reach it, so
+    a shift means an attention head read the patched value; and the transfer fraction's denominator
+    is MEASURED first, unpatched, by the B0 gate. If B0 fails, no patched forward is spent and the
+    window records harness_inadequate rather than a null nobody can read.
+
+    Always a GPU run: there is no state-mode preview, because a state-mode preview is exactly the
+    same-position arithmetic this rung exists to escape.
+    """
+
+    spec = resolve_model_spec(load_config(config))
+    backend = create_backend(spec)
+    try:
+        report = behavioral_transfer(
+            states,
+            battery,
+            directions,
+            emotions,
+            backend=cast(ChatPatchingBackend, backend),
+            model_key=spec.key,
+            block=block,
+            seed=seed,
+            max_pairs=max_pairs,
+            max_per_cell=max_per_cell,
+            n_random_draws=random_draws,
+            n_permutations=permutations,
+            n_reachability_pairs=reachability_pairs,
+            answer_form=cast(AnswerForm, answer_form),
+        )
+    finally:
+        free_backend(backend)
+    write_json(out, report)
+    console.print(format_behavioral_transfer_summary(report))
+    console.print(f"\nwritten to {out}")
 
 
 def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.yaml")) -> None:

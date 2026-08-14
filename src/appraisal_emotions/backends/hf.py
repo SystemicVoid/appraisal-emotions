@@ -128,6 +128,9 @@ class HFBackend:
     def render_prompt(self, prompt: str) -> RenderedPrompt:
         return render_hf_chat_prompt(self.tokenizer, prompt, spec=getattr(self, "spec", None))
 
+    def render_chat(self, messages: tuple[dict[str, str], ...]) -> RenderedPrompt:
+        return render_hf_chat_messages(self.tokenizer, messages, spec=getattr(self, "spec", None))
+
     def decoder_block_count(self) -> int:
         """The loaded model's real decoder depth (number of transformer blocks)."""
 
@@ -255,6 +258,8 @@ class HFBackend:
         replacement: np.ndarray,
         layers: tuple[int, ...],
         max_new_tokens: int = 0,
+        readout_position: int | str | None = None,
+        logit_tokens: tuple[str, ...] = (),
     ) -> PatchedForwardResult:
         """Run with the residual at decoder ``block``'s output, ``position``, replaced.
 
@@ -290,6 +295,17 @@ class HFBackend:
             encoded_input_ids=encoded["input_ids"],
             position=position,
         )
+        readout_index = (
+            position_index
+            if readout_position is None
+            else _resolve_hf_hidden_state_position(
+                tokenizer=self.tokenizer,
+                prompt=prompt,
+                encoded_input_ids=encoded["input_ids"],
+                position=readout_position,
+            )
+        )
+        logit_token_ids = tuple(_single_token_id(self.tokenizer, token) for token in logit_tokens)
         prompt_length = int(encoded["input_ids"].shape[1])
         model_inputs = self._move_to_model_device(encoded)
         patch = torch.as_tensor(vector, device=self.model.device)
@@ -319,11 +335,19 @@ class HFBackend:
                 states = np.stack(
                     [
                         _hidden_vector_to_numpy(
-                            output.hidden_states[layer][0, position_index], torch
+                            output.hidden_states[layer][0, readout_index], torch
                         )
                         for layer in layer_indices
                     ],
                     axis=0,
+                )
+                logits = (
+                    tuple(
+                        float(output.logits[0, -1, token_id].to(torch.float32).item())
+                        for token_id in logit_token_ids
+                    )
+                    if logit_token_ids
+                    else None
                 )
                 continuation = None
                 generated_token_count = 0
@@ -341,6 +365,8 @@ class HFBackend:
             states=states,
             continuation=continuation,
             generated_token_count=generated_token_count,
+            readout_position=readout_index,
+            logits=logits,
         )
 
     def _encode_for_generation(self, prompt: str) -> Any:
@@ -362,6 +388,27 @@ def render_hf_chat_prompt(
     never disagree with the executing surface.
     """
 
+    return render_hf_chat_messages(tokenizer, ({"role": "user", "content": prompt},), spec=spec)
+
+
+def render_hf_chat_messages(
+    tokenizer: Any,
+    messages: tuple[dict[str, str], ...],
+    *,
+    spec: ModelSpec | None = None,
+) -> RenderedPrompt:
+    """Render a multi-turn chat through the SAME path the single-turn capture uses.
+
+    E4 extends the pinned reveal prompt into user / assistant / user (design
+    ``docs/design/e4-prereg.md`` §3). Rendering that through a second code path is how the two
+    surfaces would silently diverge, so there is one path and the single-turn entry point above is
+    a call into it. ``raw_prompt`` carries the last turn's content, which is the only part a
+    caller can vary once the reveal prompt is pinned.
+    """
+
+    if not messages:
+        raise ValueError("cannot render an empty chat")
+    prompt = messages[-1]["content"]
     apply_chat_template = getattr(tokenizer, "apply_chat_template", None)
     chat_template = getattr(tokenizer, "chat_template", None)
     if not callable(apply_chat_template) or not chat_template:
@@ -377,14 +424,14 @@ def render_hf_chat_prompt(
     without_generation_prompt: object = None
     try:
         rendered = apply_chat_template(
-            [{"role": "user", "content": prompt}],
+            list(messages),
             tokenize=False,
             add_generation_prompt=True,
             **chat_template_kwargs,
         )
         if reasoning_delimiters and type(rendered) is str and rendered:
             without_generation_prompt = apply_chat_template(
-                [{"role": "user", "content": prompt}],
+                list(messages),
                 tokenize=False,
                 add_generation_prompt=False,
                 **chat_template_kwargs,
@@ -474,6 +521,23 @@ def _resolve_hf_hidden_state_position(
     prompt_position = resolve_hidden_state_position(position, token_count=len(prompt_token_ids))
     prompt_start = _find_unique_subsequence(encoded_token_ids, prompt_token_ids)
     return prompt_start + prompt_position
+
+
+def _single_token_id(tokenizer: Any, token: str) -> int:
+    """The one token id ``token`` encodes to, or a refusal.
+
+    A readout slot whose option spells two tokens is not a readout slot: the logit at the answer
+    position would score a prefix shared with other continuations. Same fail-closed discipline as
+    ``analysis/symbol_preflight.py``, applied where the logits are actually read.
+    """
+
+    ids = tokenizer.encode(token, add_special_tokens=False)
+    if len(ids) != 1:
+        raise ValueError(
+            f"logit token {token!r} encodes to {len(ids)} tokens on this tokenizer; a "
+            "single-token slot is required for a next-token logit readout"
+        )
+    return int(ids[0])
 
 
 def _find_unique_subsequence(values: tuple[int, ...], needle: tuple[int, ...]) -> int:

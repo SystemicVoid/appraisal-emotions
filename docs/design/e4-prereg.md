@@ -233,3 +233,101 @@ differs within a pair.
   P1's recommendation — widen the word families to ~26 per family before buying more compute —
   stands unspent. E4 works on the valence-level result; it is not a substitute for the project's
   declared headline, and the writeup says so rather than quietly letting the emphasis drift.
+
+## 10. Build-time rulings — what changed between freezing this design and building it
+
+Nine changes. Four came from measuring the pinned checkpoint's own tokenizer and chat template
+offline before anything was rented; five came from two adversarial reviews of the built harness.
+Every one of them changes a number the design promised, so they are recorded here rather than
+absorbed silently — and every one is a change made BEFORE the harness met data, which is why none
+of them needs the symmetric-amendment test in `docs/agents/rails.md`.
+
+**Measured against the checkpoint (offline; cached tokenizer and `chat_template.jinja`, no
+weights, no GPU):**
+
+1. **§3's "renders byte-identically to the capture" is true only under a CONCATENATION
+   construction, not under `apply_chat_template`.** Rendering the three messages through the
+   template does not reproduce the pinned reveal read prompt: the `<think>\n\n</think>\n\n`
+   no-think scaffold the capture read its token immediately after is emitted only by
+   `add_generation_prompt`, and a historical assistant turn is re-rendered without it and with its
+   content `|trim`med. First divergence at char 220. `extend` therefore appends onto the pinned
+   prompt and derives the template's control tokens by rendering a sentinel chat and slicing —
+   never by transcribing them (`docs/agents/rails.md`). Verified: the pinned prompt survives as a
+   token prefix under both thinking modes.
+2. **§6's W3 changes shape: numbers are not single tokens on this checkpoint.** ` 30`, ` 40`,
+   ` 10` and ` 3` all split, so a numeric answer slot has no logit to read at all and the window
+   would have raised after ~7,000 patched forwards, with the artifact never written.
+   `running_total` is now a labelled-options question with the same 2x2 counterbalance as the
+   choice window, and every window answers with a symbol.
+3. **The answer FORM is a parameter the reality sample sets, not a constant.** The slot follows
+   the template's own newlines; bare and leading-space are both plausible and only an observation
+   settles it. `preflight_answer_symbols` now gates BOTH forms, and `scripts/e4_surface_preflight.py`
+   takes the ~10-trial sample that fixes it.
+4. **The shipped answer pool was wrong for this run.** `PIL` collides with the battery's own
+   held-out symbols and `DAX/NUV/REB` are two tokens in both forms — the preflight would have
+   returned zero valid symbols. The measured replacement is `KER/PON/TUR/VEL`, re-gated at run
+   time against the real battery rather than assumed.
+
+**From the adversarial reviews:**
+
+5. **A positive control was missing, and without it §7's kill clause could not fire honestly.**
+   Every pair set in this design is reward-matched, which is what makes the corruption windows
+   invariant and also what makes none of them able to show that a value written at the reveal token
+   reaches the answer slot at all. A flat arm table was therefore ambiguous between "the
+   expectation state is not behaviourally used" and "nothing crosses positions on this surface",
+   and `docs/agents/experiment-gating.md` forbids reading the first. The `reachability` window —
+   the running-total question asked ACROSS reward cells, donor and recipient roles alternating —
+   supplies the point prediction. It runs even when B0 fails, because a failed B0 is exactly when
+   the operator needs to know which of the two they bought. 30 pairs x 2 forwards = 60, under 1%
+   of the budget.
+6. **§6's "norm-matched random directions" were not norm-matched.** E3's substitution injects
+   `(delta . r) r`, whose norm is ~`|delta|/sqrt(d)` — at d=5120 roughly 44x smaller than the
+   certified arm's. A floor that perturbs 44x less than the arm it floors reads near zero whether
+   or not the effect is direction-specific, which is precisely how E3's floor became decoration.
+   `matched_random_value` injects the certified arm's own magnitude along a random direction. E3's
+   `substituted_value` is unchanged so its published artifact stays reproducible.
+7. **The gate is now one estimand.** Effect size, permutation null and MDE80 are all the unweighted
+   mean of reward-cell means. Cell sizes are unequal on the real battery, so the earlier
+   pair-weighted effect against a cluster-level SE were two different quantities wearing one
+   inequality. The arms' headline is `normalised_shift = mean(shift)/mean(gap)` for the same
+   reason; E3's sign-corrected ratio of sums is kept beside it for comparability, and the arm's
+   permutation null now permutes `shift * sign(gap)` rather than the raw shift.
+8. **`layers` is a raw `hidden_states` index, and `read` was passing block numbers.** Post-block
+   *l* is index *l+1* (`hf_hidden_states_post_block/v1`). Uncorrected, every free-rider projection
+   put a post-block-(l-1) state onto a post-block-l axis, and the patch-block "free control" row
+   read the block's INPUT — zero by construction rather than by verification.
+9. **Three smaller repairs, all of which changed what the artifact says.** The per-cell pair cap
+   was defeated by a head-slice truncation that still filled the budget from the first cells in
+   artifact order; truncation is now round-robin across cells. The corruption tolerance is judged
+   on mean |shift| against the CHOICE window's own natural gap, not on |mean shift| against a
+   saturated baseline — the old form both cancelled opposite-signed damage and permitted damage
+   larger than the effect being claimed. And `verdict_cap` now reads the arm table: its prose had
+   always promised a comparison against the floor and the no-op that nothing computed, so an
+   all-zero run would have been written up as "functionally-used".
+
+**The pair pool, recounted against the real capture.** Run on
+`runs/reveal_rpe_base/reveal_rpe` (1,984 reveals), `build_patch_pairs` returns **248 symbol-matched
+opposite-sign pairs across 60 reward cells** — so §6's frozen figures were right, and the review
+claim that the pool was 149 across 56 does not reproduce. What the recount does establish is the
+size of ruling 9's truncation bug: the per-cell cap leaves a pool of 209, and the old head-slice
+drew its 120 from **34 of the 60 cells**. Round-robin draws from all 60, and every one of the run's
+120 pairs has a same-condition donor, so that arm is not thinned.
+
+**Forward budget, recomputed.** 2,880 (B0: 3 levels x 120 pairs x 2 rows x 4 renderings) + 3,840
+(arms: 480 each for `full_residual`, `v_rpe_component` and `same_condition_donor`, plus 20 random
+draws x 120 pairs x 1 rotating rendering cell) + 720 (corruption: 2 windows x [120 baselines + 2
+arms x 120]) + 60 (reachability) + 1 (wiring) = **~7,500 forwards, of which ~4,350 are genuinely
+patched**; the rest are self-patches, which is how the baseline reaches the arms through the same
+code path rather than a second one that might not agree with it. The arms take their baselines
+from B0's selected level rather than re-measuring them, which is where the 480 the earlier draft
+double-counted went. ~35-60 min at batch 1 on a 27B. The §3 figure of "~2,880" counted the gate
+alone.
+
+**Still open, and deliberately not fixed.** The no-op control matches on `(ev_cell, rpe_sign)` only
+and is a full-residual swap against a rank-1 certified arm; the report records
+`no_op_surface_match_rate` so it is read as a control on `full_residual`. The MDE80 plugs in an
+observed SD whose CV at ~46 clusters is ~10%, so a gate landing within ~10% of its bar is a coin
+flip. And the cross-position argument is stated for softmax attention while this checkpoint is 48
+linear-attention + 16 full-attention layers; the conclusion survives — a recurrent state
+accumulation is still not the identity path — but the sentence wants re-deriving for the real
+stack before it appears in a writeup.

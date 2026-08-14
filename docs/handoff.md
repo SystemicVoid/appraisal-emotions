@@ -92,8 +92,103 @@ vectors to 1.6e-14. Verdict `gray_zone`: ICC_resid 0.673, a third of the residua
 story-sampling noise, and the raw-cosine ICC of 0.947 against it says the reliably-measured part
 is mostly the valence shadow E1 regresses out on purpose.
 
+## What changed after P1 (2026-08-14, second pass, zero GPU)
+
+Three things, in the order they happened. All of it is off-GPU: no instance was rented and none
+is authorized.
+
+1. **E2b — the comparison signature (`expectation_control/v2`).** E2's within-cell slope was run
+   on ONE matched family (reward-matched: outcome pinned, stated EV varies), and one arm cannot
+   exclude a pure EV tracker — a model encoding only the stated expectation produces E2's result
+   exactly. The estimator now runs on BOTH families. Reward-matched recovers `−b`, EV-matched
+   (same draw, opposite realised outcome) recovers `+a` in `projection ≈ a·reward + b·ev`; a
+   quantity carrying `reward − ev` requires `a = −b`, so BOTH arms must read positive. They do:
+   reward-matched +0.0261 / +0.0200 (60 cells, reproducing the published v1 values to nine
+   decimals), EV-matched +0.0290 / +0.0251 (124 cells), both p = 1/10001, signature holds on both
+   axes. Pre-registered in `docs/design/e2b-prereg.md` **before** the analysis ran — it costs no
+   GPU, so writing the expectation first is the only thing that made it honest.
+
+2. **E3's transfer is mostly the residual stream's identity path.**
+   `scripts/e3_passthrough_decomposition.py` prices the counterfactual E3 never computed: the
+   stream is additive and the readout is linear, so "the network did nothing with the patch" is a
+   point prediction, `(substituted − recipient) · axis_at_readout_block`. That prediction accounts
+   for **80% of the published shift on PC1 and 97–105% on `elated − disappointed`**. The
+   random-direction floor could not have caught it (`|cos| ≈ 1/√5120 = 0.014`, so a random
+   component injects a delta ~44× smaller and scores ≈0 under passthrough and under genuine use
+   alike), and the same-condition no-op arm's excess over passthrough is as large as the certified
+   direction's. **Consequence, recorded:** E3's `functionally-used, pilot-suggestive` cap is
+   superseded to *control failure with the claim open* — not a falsification, and E1/E2's
+   representational claims are untouched.
+
+3. **E4 designed and built (`docs/design/e4-prereg.md`, frozen; no run authorized).** The repair
+   is one idea: **there is no identity path between token positions.** The reveal prompt is
+   extended into a three-message chat (reveal → the model's own measured completion → a decision
+   probe) and the readout is a next-token logit margin at an answer slot several tokens later, so
+   a shift requires an attention head to have read the patched value. The other repair is E3's
+   behavioural leg's real defect, which was not a null: its transfer fraction's denominator was
+   never measured. A **B0 gate** now measures the natural, unpatched behavioural gap first and
+   refuses to spend a patched forward until it clears a bar fixed in advance.
+
+## What the E4 build measured, and what it changed (2026-08-14, third pass, zero GPU)
+
+The design was frozen, then built, then reviewed twice adversarially. Nine rulings supersede parts
+of the frozen text; `docs/design/e4-prereg.md` §10 is the authoritative list and each entry names
+what it cost. The four that matter to whoever buys the session:
+
+1. **Four surface defects were measured against the pinned checkpoint offline** — cached tokenizer
+   and `chat_template.jinja`, no weights, no GPU. Three of them would have raised only after
+   thousands of patched forwards, with the artifact unwritable. `apply_chat_template` does not
+   byte-extend the pinned reveal prompt (the no-think scaffold is generation-only and assistant
+   content is `|trim`med), so the extension is a *concatenation* onto the model's real transcript
+   with the template's control tokens derived by rendering a sentinel chat and slicing; numbers are
+   not single tokens on this tokenizer, so §6's W3 running-total window is now a labelled-options
+   question and every window answers with a symbol; the answer *form* (bare vs leading-space) is a
+   measurement the reality sample takes, not a constant; and the shipped answer-symbol pool was
+   wrong for this checkpoint (`PIL` collides with the battery, `DAX/NUV/REB` are two tokens), so
+   the preflight re-gates it against the run's own battery. `just e4-surface-preflight` runs all of
+   this, and `--tokenizer-only` needs neither weights nor GPU.
+2. **A positive control was missing, and without it the kill-on-null clause could not fire.** Every
+   pair in this design is reward-matched, which is what makes the corruption windows invariant and
+   also what makes none of them able to show that a value written at the reveal token reaches the
+   answer slot *at all*. A flat arm table was therefore ambiguous between "not behaviourally used"
+   and "nothing crosses positions on this surface" — and `docs/agents/experiment-gating.md` forbids
+   reading the first. The new `reachability` window asks the running-total question ACROSS reward
+   cells, where a correct model MUST move. 60 forwards, under 1% of budget, and `verdict_cap` routes
+   a failed reachability to `harness_inadequate` before it looks at anything else.
+3. **E3's random-direction floor was never norm-matched, and E4's inherited the bug.** The
+   substitution injects `(delta . r) r`, ~1/sqrt(d) of the certified arm's magnitude — at d=5120,
+   44x smaller. A floor that perturbs 44x less than the arm it floors reads near zero whether or
+   not the effect is direction-specific, which is exactly how E3's floor became decoration.
+   E4 injects the certified arm's own magnitude along a random direction; E3's `substituted_value`
+   is left untouched so its published artifact stays reproducible.
+4. **`layers=` is a raw `hidden_states` index and the readout was passing block numbers**
+   (`gotchas.md`, issue #4). Silent, in-range, and plausible-looking: it would have made the
+   patch-block control row read zero by construction rather than by verification.
+
+One review claim did NOT survive checking, and is recorded because the recount is the useful
+artifact: a reviewer reported the battery yields 149 symbol-matched pairs across 56 reward cells
+rather than the design's 248 across 60. Run against `runs/reveal_rpe_base/reveal_rpe` — the real
+capture, 1,984 reveals — `build_patch_pairs` returns **248 pairs across 60 cells**, so the frozen
+figures were right. What the recount *did* establish is the size of the truncation bug: the
+per-cell cap leaves a pool of 209, and the old head-slice took its 120 from **34 of the 60 cells**;
+round-robin now covers all 60. The forward budget is the one figure that genuinely moves —
+**~7,500** forwards, ~4,350 of them genuinely patched and the rest inert self-patches, against the
+frozen "~2,880" which counted the gate alone. `e4-prereg.md` §10 itemises the arithmetic.
+
 ## Next steps, in order
 
+0. **Decide whether to buy the E4 session.** The harness is built, tested against planted
+   controls, reviewed twice adversarially, and every review finding is folded in; nothing is
+   authorized and the ask is still outstanding. On the instance the order is fixed by
+   `e4-prereg.md` §8 as amended by §10: `just e4-surface-preflight … --tokenizer-only` (seconds,
+   no weights) → the same recipe with weights for the ~10-trial reality sample, which SETS
+   `--answer-form` → B0 and the titration freeze → the patched arms, with the reachability
+   control, the corruption windows and the off-position re-read riding along. ~7,500
+   forwards, ~35–60 min at batch 1 on a 27B. Budget for a clean B0 null: a strong instruct model
+   computing round 2 from the round-2 numbers and ignoring round-1 history is *normatively correct
+   behaviour*, and that outcome is a reportable instrument fact rather than a harness bug — a
+   failed B0 spends zero patched forwards, and reachability still runs, because a failed B0 is
+   exactly when the operator needs to know which of the two they bought.
 1. **Widen the word families before buying any more compute.** This is P1's actionable finding
    and the only one with a number attached: at the current story count the families would need
    ≈26 words each for the observed effect to be detectable, ≈12 each at large k, against 9 and
@@ -127,8 +222,14 @@ is mostly the valence shadow E1 regresses out on purpose.
 - **Norm coverage of the 84 words** — the graded upgrade is all-or-nothing (mixed scales are
   incommensurable); the report names the missing words; binary labels are the designed
   fallback, not a failure.
-- **EV vs RPE identification in E3** — accepted limit this weekend; the EV-matched patching
-  arm is the designed follow-up if transfer is observed.
+- **EV vs RPE identification in E3/E4** — unchanged and exact: within a reward-matched cell EV
+  and signed RPE are perfectly anti-correlated, so no patching arm on that family can separate
+  them. E2b's two matched arms are what carry the separation, and they carry it
+  representationally, not causally. The EV-matched family cannot serve E4's behavioural leg at
+  all — its pairs differ in realised outcome, so the reveal text visibly differs within a pair.
+- **Whether E4's window can move at all** — the honest open question, and the reason B0 exists.
+  It is a fact about the model on this surface, measurable for the price of the unpatched half of
+  the session, and it is measured before anything is spent on the patched half.
 - **Continuation grading** — deliberately unbuilt until a reality sample of real 30B
   continuations exists; graders frozen against unseen outputs are the classic failure mode.
 - **Compute estimates** — the runbook's numbers are estimates with stated arithmetic; measure
@@ -139,5 +240,10 @@ is mostly the valence shadow E1 regresses out on purpose.
 Developed on the parent repo's branch `claude/hackathon-ra-gambles-emotion-r6yevd` (PR #348)
 and mirrored commit-for-commit to `SystemicVoid/appraisal-emotions` `main`, which is the repo
 that owns these pipelines for the event. The mirror is byte-identical to the parent's
-`hackathon/` subtree at each landing (verified per push). Gates at landing: 139 tests green,
-ruff check + format clean, no file over the agent read boundary.
+`hackathon/` subtree at each landing (verified per push). Gates at landing: ruff check + format
+clean, no file over the agent read boundary, and the suite green apart from two known host-
+dependent failures — `test_states_metadata_is_byte_identical_to_the_parent_golden` and
+`test_directions_metadata_is_byte_identical_to_the_parent_golden` compare BLAS-digest-bearing
+metadata against the parent's goldens and fail on this machine's OpenBLAS. Verified pre-existing
+and independent of the E4 work by stashing the E4 changes and re-running: 205 passed, the same 2
+failed.

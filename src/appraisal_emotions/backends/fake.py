@@ -71,6 +71,10 @@ _ECHO_MODULUS = 6
 _QUOTED_TERM_PATTERN = re.compile(r'"([^"\n]{1,40})"')
 # Weight the injected vector carries in a downstream synthetic state (``patched_forward``).
 _PATCH_MIX = 0.75
+# A patch reaches a LATER position only through attention, never through the identity path, so
+# the synthetic propagation attenuates it there. The number is arbitrary; what is not arbitrary is
+# that it is smaller than 1 and that a self-patch still lands exactly on the unpatched value.
+_OFF_POSITION = 0.4
 
 
 class FakeBackend:
@@ -99,6 +103,27 @@ class FakeBackend:
         return RenderedPrompt(
             raw_prompt=prompt,
             rendered_prompt=prompt,
+            mode="raw",
+            chat_template_applied=False,
+        )
+
+    def render_chat(self, messages: tuple[dict[str, str], ...]) -> RenderedPrompt:
+        """Control-token markers around each turn, plus a generation header.
+
+        Deliberately NOT a bare concatenation. E4 builds its extended prompt by concatenating onto
+        the byte-pinned reveal prompt and splicing in control tokens derived from this rendering —
+        measured on the real checkpoint, a three-message render does not reproduce the pinned bytes
+        (``docs/agents/gotchas.md``). A fake that rendered a chat as plain concatenation would make
+        the sentinel-slicing in ``behavioral_transfer.chat_tail`` trivially correct here and
+        untested; markers give it something real to slice.
+        """
+
+        if not messages:
+            raise ValueError("cannot render an empty chat")
+        turns = "".join(f"<|{message['role']}|>{message['content']}<|end|>" for message in messages)
+        return RenderedPrompt(
+            raw_prompt=messages[-1]["content"],
+            rendered_prompt=f"{turns}<|assistant|>",
             mode="raw",
             chat_template_applied=False,
         )
@@ -179,6 +204,8 @@ class FakeBackend:
         replacement: np.ndarray,
         layers: tuple[int, ...],
         max_new_tokens: int = 0,
+        readout_position: int | str | None = None,
+        logit_tokens: tuple[str, ...] = (),
     ) -> PatchedForwardResult:
         """Synthetic propagation of a residual substitution — PLUMBING ONLY.
 
@@ -219,13 +246,24 @@ class FakeBackend:
         # measured against this, which is what makes a self-patch inert rather than merely small.
         at_site = self._hidden_vector(prompt, layer=block + 1, position_index=position_index)
         delta = vector - at_site
+        readout_index = (
+            position_index
+            if readout_position is None
+            else resolve_hidden_state_position(
+                readout_position, token_count=len(self.token_ids(prompt))
+            )
+        )
         rows = []
         for layer in layers:
-            if layer == block + 1:
+            if layer == block + 1 and readout_index == position_index:
                 rows.append(vector)
                 continue
-            base = self._hidden_vector(prompt, layer=layer, position_index=position_index)
-            rows.append(base + _PATCH_MIX * delta if layer >= block + 2 else base)
+            base = self._hidden_vector(prompt, layer=layer, position_index=readout_index)
+            # A LATER position is only reachable downstream of the patch site, and only by a
+            # weaker route: the contract E4 depends on is that a patch cannot move a position it
+            # never propagated to, so an off-position read at or before the patch block is inert.
+            carried = _PATCH_MIX if readout_index == position_index else _PATCH_MIX * _OFF_POSITION
+            rows.append(base + carried * delta if layer >= block + 2 else base)
         continuation = None
         generated_token_count = 0
         if max_new_tokens > 0:
@@ -236,6 +274,29 @@ class FakeBackend:
             states=np.stack(rows, axis=0),
             continuation=continuation,
             generated_token_count=generated_token_count,
+            readout_position=readout_index,
+            logits=self._patched_logits(prompt, delta, logit_tokens),
+        )
+
+    def _patched_logits(
+        self, prompt: str, delta: np.ndarray, logit_tokens: tuple[str, ...]
+    ) -> tuple[float, ...] | None:
+        """Deterministic per-token logits that move with the injected delta, and only with it.
+
+        Not a model: the point is the two contract properties E4's behavioural readout rests on —
+        a self-patch (``delta = 0``) leaves every logit exactly where the unpatched call put it,
+        and two different patches give two different logits.
+        """
+
+        if not logit_tokens:
+            return None
+        carried = _PATCH_MIX * _OFF_POSITION * float(delta[0])
+        # Token-DEPENDENT weights, so a logit DIFFERENCE moves too: a common offset would leave
+        # E4's readout inert under every patch and the harness would test nothing.
+        return tuple(
+            _stable_unit(f"{prompt}|logit|{token}")
+            + carried * _stable_unit(f"logit-weight|{token}")
+            for token in logit_tokens
         )
 
     def _patched_continuation(self, prompt: str, vector: np.ndarray, max_new_tokens: int) -> str:

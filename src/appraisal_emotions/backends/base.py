@@ -120,19 +120,27 @@ class TokenMeanHiddenStateBackend(Protocol):
 
 @dataclass(frozen=True)
 class PatchedForwardResult:
-    """The residual stream of a patched forward, read at ``(block, position)`` and downstream.
+    """The residual stream of a patched forward, read at ``readout_position`` and downstream.
 
-    ``states`` is ``(len(layers), hidden_size)`` — the residual at the SAME position, at each
+    ``states`` is ``(len(layers), hidden_size)`` — the residual at ``readout_position``, at each
     requested ``hidden_states`` index, AFTER the substitution has propagated. ``continuation`` is
     the greedy text decoded with the patch in place, or ``None`` when none was requested; it is
     raw model text, deliberately unparsed (``docs/agents/rails.md``: no grader before a reality
     sample of the surface it would grade).
+
+    ``logits`` carries the next-token logit of each requested token at the FINAL prompt position,
+    in the order requested, or ``None`` when none were. It exists because a readout taken at the
+    patched position is linear in the injected delta and so cannot distinguish a network that used
+    the patch from a residual stream that merely carried it (``docs/design/e4-prereg.md`` §2); a
+    logit at a later position has no identity path back to the patch and can.
     """
 
     layers: tuple[int, ...]
     states: np.ndarray
     continuation: str | None
     generated_token_count: int
+    readout_position: int = -1
+    logits: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         states = np.array(self.states, dtype=np.float64, copy=True)
@@ -154,6 +162,8 @@ class PatchedForwardBackend(Protocol):
         replacement: np.ndarray,
         layers: tuple[int, ...],
         max_new_tokens: int = 0,
+        readout_position: int | str | None = None,
+        logit_tokens: tuple[str, ...] = (),
     ) -> PatchedForwardResult:
         """Replace the residual at decoder ``block``'s output, ``position``, with ``replacement``.
 
@@ -164,6 +174,13 @@ class PatchedForwardBackend(Protocol):
         measurement — and **propagated effects appear from index ``block + 2`` onward**, which is
         where a downstream readout must look. ``position`` follows
         :func:`resolve_hidden_state_position`. ``max_new_tokens = 0`` means no generation.
+
+        ``readout_position`` defaults to ``position`` — the patch site — which is the E3 reading.
+        Passing a LATER position is the E4 reading, and the difference is not cosmetic: a linear
+        readout at the patched position is linear in the injected delta and is reproduced by the
+        additive residual stream alone, whereas a later position can only be reached through
+        attention (``docs/design/e4-prereg.md`` §2). ``logit_tokens`` are read at the final prompt
+        position; each must encode to exactly one token or the call fails closed.
 
         Three semantics every implementation must share:
 

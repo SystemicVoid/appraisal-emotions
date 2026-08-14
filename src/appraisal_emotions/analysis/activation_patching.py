@@ -179,15 +179,32 @@ def _condition(reveal: Comparison) -> tuple[str, int]:
 
 
 def build_patch_pairs(
-    reveals: tuple[Comparison, ...], *, max_pairs: int = DEFAULT_MAX_PAIRS
+    reveals: tuple[Comparison, ...],
+    *,
+    max_pairs: int = DEFAULT_MAX_PAIRS,
+    max_per_cell: int | None = None,
 ) -> tuple[tuple[PatchPair, ...], bool]:
     """Opposite-signed-RPE pairs within each reward-matched cell, symbol-matched where possible.
 
     Returns ``(pairs, symbol_matched)``. Symbol- and template-matched pairs are preferred; the
     fallback to symbol-unmatched pairs fires only when the battery yields none, and the caller
     records the confound. Deterministic: rows are visited in the states artifact's own order.
+
+    ``max_per_cell`` caps how many pairs any one cell contributes BEFORE ``max_pairs`` truncates,
+    and exists because the uncapped order-truncation is order-biased: E3's forward run took its 60
+    pairs from only 14 of the 60 available reward cells, which is a 4:1 pseudoreplication against a
+    cluster-aware null and an arbitrary sample of the symbol-matched pairs the battery yields
+    (``docs/design/e4-prereg.md`` §6). Capping per cell spreads the same budget over every cell
+    that yields a pair — but ONLY together with the round-robin truncation it switches on. Measured
+    on the real base battery, capping at 4 and then head-slicing to 120 still filled the budget
+    from the first cells in artifact order and left 26 of 60 cells contributing nothing, at 3.5
+    pairs per cell: the same order bias, one level up. Round-robin gives 120 pairs across all 60.
+
+    E3's uncapped call keeps the plain head-slice so its published artifact stays reproducible.
     """
 
+    if max_per_cell is not None and max_per_cell < 1:
+        raise ValueError("max_per_cell must be >= 1 when given")
     cells: dict[str, list[int]] = {}
     for row, reveal in enumerate(reveals):
         cells.setdefault(str(reveal.metadata["reward_cell_id"]), []).append(row)
@@ -195,6 +212,7 @@ def build_patch_pairs(
     for symbol_matched in (True, False):
         pairs: list[PatchPair] = []
         for cell_id, rows in cells.items():
+            before = len(pairs)
             # Group the cell's rows by the surface that must be held fixed across the patch, then
             # cross the +1-sign donors with the -1-sign recipients inside each group.
             groups: dict[tuple[str, str], dict[int, list[int]]] = {}
@@ -217,8 +235,12 @@ def build_patch_pairs(
                             symbol_matched=symbol_matched,
                         )
                     )
+            if max_per_cell is not None:
+                del pairs[before + max_per_cell :]
         if pairs:
-            return tuple(pairs[:max_pairs]), symbol_matched
+            if max_per_cell is None:
+                return tuple(pairs[:max_pairs]), symbol_matched
+            return _round_robin(tuple(pairs), max_pairs), symbol_matched
     raise ValueError(
         "no reward-matched cell yields a template-matched pair of reveals with opposite signed "
         "RPE; E3 has no in-distribution donor/recipient pair to patch on this battery."
@@ -408,6 +430,50 @@ def substituted_value(
         return patch_state(recipient, block_states[cast(int, pair.same_condition_row)])
     direction = {"full_residual": None, "v_rpe_component": v_rpe}.get(arm, random_direction)
     return patch_state(recipient, block_states[pair.donor_row], direction)
+
+
+def _round_robin(pairs: tuple[PatchPair, ...], max_pairs: int) -> tuple[PatchPair, ...]:
+    """Truncate to ``max_pairs`` by taking one pair from each cell in turn, not by cell order.
+
+    Deterministic: cells keep artifact insertion order and each cell keeps its own pair order, so
+    the only thing round-robin changes is WHICH pairs the budget buys, never their sequence.
+    """
+
+    by_cell: dict[str, list[PatchPair]] = {}
+    for pair in pairs:
+        by_cell.setdefault(pair.reward_cell_id, []).append(pair)
+    kept: list[PatchPair] = []
+    for rank in range(max(len(rows) for rows in by_cell.values())):
+        for rows in by_cell.values():
+            if rank < len(rows):
+                kept.append(rows[rank])
+    chosen = {id(pair) for pair in kept[:max_pairs]}
+    return tuple(pair for pair in pairs if id(pair) in chosen)
+
+
+def matched_random_value(
+    pair: PatchPair,
+    block_states: np.ndarray,
+    v_rpe: np.ndarray,
+    random_direction: np.ndarray,
+) -> np.ndarray:
+    """A random-direction floor that injects the SAME magnitude as the certified-direction arm.
+
+    ``patch_state(recipient, donor, r)`` injects ``(delta . r) r``, whose norm is ``|delta| /
+    sqrt(d)`` in expectation — at d=5120 that is ~44x smaller than the ``(delta . v_rpe) v_rpe``
+    the certified arm injects, because ``delta`` is not random with respect to ``v_rpe``. A floor
+    that perturbs 44x less than the arm it floors reads near zero whether or not the effect is
+    direction-specific, which is precisely the way E3's floor was decoration. Matching the
+    projected magnitude and randomising only the direction makes the comparison the one the arm
+    table claims to be making: same push, different place to push it.
+
+    E3's ``substituted_value`` keeps the old form so its published artifact stays reproducible;
+    E4 uses this one for ``random_component``.
+    """
+
+    recipient = block_states[pair.recipient_row]
+    delta = block_states[pair.donor_row] - recipient
+    return recipient + float(delta @ v_rpe) * random_direction
 
 
 def _scored_pairs(arm: str, pairs: tuple[PatchPair, ...]) -> list[PatchPair]:

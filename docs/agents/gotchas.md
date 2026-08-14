@@ -158,3 +158,73 @@ identity-path prediction beside it (1.0 vs the recorded 0.0), which is the evide
 denominator (or re-document the row as pre-hook and move the wiring check to a direct read of the
 hook's own output), and pin the transformers version in the report. `environmental` in origin, but
 the assert is ours to write.
+
+### A chat template does NOT re-render a past assistant turn the way it generated it
+
+E4 extends the byte-pinned reveal prompt into `user / assistant / user` and patches a token index
+derived from the single-turn render, so the whole rung depends on the multi-turn render *byte-
+extending* the single-turn one. On the run's pinned checkpoint (`Qwen/Qwen3.6-27B` @ `6a9e13bd`,
+whose tokenizer is cached locally) it does not, and the fail-closed guard in
+`analysis/behavioral_transfer.extend` would abort the session on the first pair.
+
+Two independent reasons, both measured offline by rendering `chat_template.jinja` directly
+(jinja2, no weights, no transformers — `uv run --offline --with jinja2`):
+
+- **The no-think scaffold is generation-only.** With the registry's pinned
+  `chat_template_kwargs.enable_thinking=false`, `add_generation_prompt=True` emits
+  `<|im_start|>assistant\n<think>\n\n</think>\n\n` — and the reveal state was captured at the token
+  right after it. Re-rendering that same turn as a *past* assistant message emits
+  `<|im_start|>assistant\n` + content, with no scaffold at all. First divergence at char 220.
+- **Assistant content is `|trim`med.** The leading space of ` PIL = 30 points` — which is the
+  byte-pinned `read_prefix` the capture read — is stripped on re-render.
+
+So the model's own transcript and the template's re-render of that transcript are different
+strings, and only the first one is the context the captured state belongs to.
+
+*Fix path:* do not build the extension with `apply_chat_template`. Concatenate onto the pinned
+prompt — which is the model's real transcript — and derive every control token from the template
+itself by rendering a sentinel chat and slicing after the sentinel, so no ChatML is hand-copied
+(`docs/agents/rails.md`). `environmental` in origin: a template is free to render history however
+it likes, and nothing was going to tell us but a render.
+
+Same session, same method, two more instrument facts worth writing down: on this tokenizer ` 30`
+is **not** a single token (digits are split), so any readout whose answer slot is a *number* fails
+`_single_token_id` — an answer slot must be a symbol; and of the four symbols the run actually
+uses (`SIL WAN GIS PIL`) only the leading-space form is single-token, while the answer slot after
+`</think>\n\n` most plausibly wants the bare form. An answer pool has to be gated on **both** forms.
+
+### `layers=` is a raw `hidden_states` index, and a block number silently reads the wrong block
+
+`backends.base.HiddenStateRequest.layers` indexes the transformers `hidden_states` tuple, whose
+element 0 is the *embedding* output — so post-block *l* is index *l+1*
+(`hf_hidden_states_post_block/v1`). `activation/capture.all_block_layers` does that conversion and
+says so; nothing else in the tree did, and E4's readout was built passing block numbers straight
+through. The failure is silent and plausible-looking: every free-rider projection lands a
+post-block-(*l*−1) state onto a post-block-*l* axis and still produces finite, well-scaled
+numbers, and the patch-block row would have read the block's *input* — zero by construction rather
+than by verification, i.e. exactly the shape of a passing control.
+
+Nothing catches this at runtime, because both indices are in range. What catches it is a test with
+a recording backend that asserts on the `HiddenStateRequest` the analysis actually builds:
+`test_the_readout_asks_for_a_later_position_and_the_contracts_own_layer_indices` in
+`tests/test_behavioral_transfer.py` pins `layers == tuple(b + 1 for b in blocks)`.
+
+*Fix path:* [#4](https://github.com/SystemicVoid/appraisal-emotions/issues/4) — a caller that means
+"block" should never construct `layers=` itself. `capture.all_block_layers` is the model; a
+`block_layers(blocks)` helper beside it, used by every analysis, makes the off-by-one
+unrepresentable.
+
+### Private-use sentinel characters are invisible in every tool you will use to debug them
+
+`behavioral_transfer.chat_tail` wraps its sentinels in U+E000/U+E001 so a stray sentinel cannot
+collide with real prompt text. The cost: `USER` renders as `USER` in the terminal, in
+`Read` output, and in an `Edit` diff. An `Edit` whose `old_string` was typed as the visible text
+fails to match with no visible reason, and a `str.replace` "no-ops" against a file that already
+contains the intended bytes — you cannot tell "already correct" from "silently failed" by looking.
+
+`cat -A` is the arbiter: U+E000 shows as `M-nM-^@M-^@`. Check before concluding an edit didn't
+apply.
+
+*Fix path:* `environmental` — the invisibility is the point of a private-use codepoint, and the
+alternative (a visible ASCII sentinel) trades a debugging annoyance for a real collision risk with
+prompt text. Recorded so the next agent spends seconds on it, not minutes.

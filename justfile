@@ -133,3 +133,21 @@ patch-reveals run=smoke_rpe_dir emo=smoke_emo_dir:
 # GPU runs gate behind explicit human approval.
 patch-reveals-forward config run=smoke_rpe_dir emo=smoke_emo_dir:
     {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions patch-reveals --mode forward --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/activation_patching_forward.json --seed 7
+
+# E4 BEHAVIOURAL TIER. Extends the byte-pinned reveal into a three-message chat and reads a
+# next-token logit MARGIN at the answer slot, zero decode steps. Two repairs over E3's behavioural
+# leg: the readout sits at a LATER token than the patch, where the residual stream's identity path
+# cannot reach it (scripts/e3_passthrough_decomposition.py priced that path at 80-105% of E3's
+# published transfer), and the transfer fraction's denominator is MEASURED first by the unpatched
+# B0 gate. A failed B0 spends no patched forward and records harness_inadequate.
+# GPU-only by construction; gates behind explicit human approval.
+#
+# RUN e4-surface-preflight FIRST. Four surface defects were measured offline against the pinned
+# checkpoint, three of which would have raised only after thousands of patched forwards had been
+# spent and the artifact could no longer be written. The tokenizer-only mode costs no weights and
+# no GPU; the full mode adds the ~10-trial reality sample that SETS --answer-form.
+e4-surface-preflight config run=smoke_rpe_dir out="e4_preflight.json" *flags="":
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf python scripts/e4_surface_preflight.py --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --out {{out}} {{flags}}
+
+behavioral-transfer config run=smoke_rpe_dir emo=smoke_emo_dir:
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions behavioral-transfer --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/behavioral_transfer_report.json --seed 7

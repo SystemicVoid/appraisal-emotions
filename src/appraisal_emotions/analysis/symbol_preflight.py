@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from appraisal_emotions.core.schema import StrictModel
+from appraisal_emotions.stimuli.decision_probes import ANSWER_FORMS, answer_token
 from appraisal_emotions.stimuli.emotion_lexicon import emotion_words_in
 
 
@@ -35,6 +36,79 @@ class SymbolPreflight(StrictModel):
     affect_flagged: tuple[str, ...]
     passed: bool
     note: str
+
+
+ANSWER_POOL_MINIMUM = 2
+
+
+class AnswerPoolPreflight(StrictModel):
+    """E4's round-two answer symbols, audited on the same two gates the reveal symbols pass."""
+
+    valid: tuple[str, ...]
+    multi_token: tuple[str, ...]
+    affect_flagged: tuple[str, ...]
+    collided: tuple[str, ...]
+    passed: bool
+    note: str
+
+
+def preflight_answer_symbols(
+    backend: _TokenIdsBackend,
+    *,
+    candidates: tuple[str, ...],
+    used_symbols: frozenset[str],
+) -> AnswerPoolPreflight:
+    """Audit E4's answer pool: single-token, affect-neutral, and unused by the reveal battery.
+
+    Two survivors suffice: every window presents two labelled options, and the corruption windows
+    reuse the same two labels rather than needing a third. The single-token gate here is stricter
+    than the reveal battery's — it requires BOTH the bare and the leading-space form, because the
+    answer slot sits after the chat template's own newlines and which form the model continues in
+    is settled by the reality sample, not by this module. Gating one form would let the run pick
+    the other and discover mid-flight that its readout token does not exist.
+
+    The collision check is the E4-specific gate: an answer symbol the reveal already showed would
+    put a token-repetition prior in the readout, riding on the very position the patch is read
+    from.
+    """
+
+    multi_token: list[str] = []
+    affect_flagged: list[str] = []
+    collided: list[str] = []
+    valid: list[str] = []
+    for symbol in candidates:
+        if symbol in used_symbols:
+            collided.append(symbol)
+        elif emotion_words_in(symbol):
+            affect_flagged.append(symbol)
+        elif not _is_single_token_both_forms(backend, symbol):
+            multi_token.append(symbol)
+        else:
+            valid.append(symbol)
+    passed = len(valid) >= ANSWER_POOL_MINIMUM
+    note = (
+        f"{len(valid)} answer symbols single-token in both forms, affect-neutral, disjoint from "
+        "the battery's."
+        if passed
+        else (
+            f"ANSWER POOL DEFECT: E4 needs >= {ANSWER_POOL_MINIMUM} symbols that are single-token "
+            "in BOTH the bare and the leading-space form, affect-neutral, and never used by the "
+            f"reveal battery. valid={valid} multi_token={multi_token} "
+            f"affect_flagged={affect_flagged} collided={collided}. Pick new symbols and re-run."
+        )
+    )
+    return AnswerPoolPreflight(
+        valid=tuple(valid),
+        multi_token=tuple(multi_token),
+        affect_flagged=tuple(affect_flagged),
+        collided=tuple(collided),
+        passed=passed,
+        note=note,
+    )
+
+
+def _is_single_token_both_forms(backend: _TokenIdsBackend, symbol: str) -> bool:
+    return all(len(backend.token_ids(answer_token(symbol, form))) == 1 for form in ANSWER_FORMS)
 
 
 def _is_single_token(backend: _TokenIdsBackend, symbol: str) -> bool:
