@@ -1,7 +1,21 @@
-"""E2 — expectation vs situation on the certified reward-matched cells (design §4 E2).
+"""E2 + E2b — expectation vs situation, and expectation vs comparison (design §4 E2;
+``docs/design/e2b-prereg.md``).
 
 NEW module (no parent counterpart). Pure CPU over three hash-bound inputs: the reveal-token
 states artifact, the battery that produced it, and the E0 emotion basis. Zero new stimuli.
+
+**Two cell families, one estimator.** Write the readout as linear in the regressors that span
+the value plane, ``projection ≈ a·reward + b·ev``. Each matched family fixes one of them, so the
+within-cell slope on ``signed_rpe = reward − ev`` recovers one coefficient:
+
+- ``reward_cell_id`` (E2) holds the realised outcome fixed and varies stated EV ⇒ recovers ``−b``;
+- ``ev_cell_id`` (E2b) holds stated EV fixed and varies the realised outcome ⇒ recovers ``+a``.
+
+E2 alone cannot license the word *comparison*: a readout that represents the stated EV and never
+compares it to anything predicts E2's result exactly. The conjunction is the estimand — a
+comparison carries ``reward − ev``, hence ``a = −b``, hence BOTH arms positive. One arm positive
+and the other null names which rival survives. Both arms run through the same code with the
+grouping key as the only difference, so a gap between them cannot be an estimator difference.
 
 The rival this answers is Peiris (arXiv:2604.13466): emotion vectors may be projections of
 *situational context* onto human-emotion axes rather than appraisal-tracking states. The
@@ -58,9 +72,11 @@ from appraisal_emotions.core.util import EXTRACTION_SEED, file_sha256, read_json
 from appraisal_emotions.stimuli.reveal_probes import RevealProbeBattery
 
 __all__ = [
+    "CELL_FAMILIES",
     "EXPECTATION_CONTROL_CONTRACT_VERSION",
     "PAIR_AXIS",
     "PC1_AXIS",
+    "ArmResult",
     "AxisResult",
     "ExpectationControlReport",
     "align_reveals",
@@ -69,10 +85,57 @@ __all__ = [
     "format_expectation_control_summary",
 ]
 
-EXPECTATION_CONTROL_CONTRACT_VERSION = "expectation_control/v1"
+EXPECTATION_CONTROL_CONTRACT_VERSION = "expectation_control/v2"
 PC1_AXIS = "pc1_affect_concept_valence"
 PAIR_AXIS = "elated_minus_disappointed"
 _MIN_CELL_ROWS = 2
+
+
+@dataclass(frozen=True)
+class CellFamily:
+    """One matched-cell grouping: which regressor it pins, and which coefficient it recovers."""
+
+    name: str
+    metadata_key: str
+    held_fixed: str
+    varies: str
+    recovers: str
+    scope_note: str
+
+
+# Order is the reporting order and is fixed here, before data: E2 first because it is the arm
+# that has already run and whose numbers the v1 artifact published.
+CELL_FAMILIES: tuple[CellFamily, ...] = (
+    CellFamily(
+        name="reward_matched",
+        metadata_key="reward_cell_id",
+        held_fixed="realised reward and |RPE|",
+        varies="stated EV",
+        recovers="-b (the EV coefficient), because reward is pinned inside the cell",
+        scope_note=(
+            "The options block is NOT byte-identical inside a reward-matched cell — EV differs "
+            "by construction. The varying text is numeric point values on a surface that passes "
+            "the zero-emotion-lexicon audit: exactly the variation an expectation-tracker must "
+            "use and a surface-affect detector should ignore."
+        ),
+    ),
+    CellFamily(
+        name="ev_matched",
+        metadata_key="ev_cell_id",
+        held_fixed="stated EV and |RPE|",
+        varies="the realised outcome",
+        recovers="+a (the reward coefficient), because EV is pinned inside the cell",
+        scope_note=(
+            "The realised outcome SYMBOL differs inside an EV-matched cell — that is what makes "
+            "the outcome vary — so unlike the reward-matched arm the surface is not "
+            "outcome-matched. Symbol identity is put in the intercept rather than the slope by "
+            "the battery's balanced rendering (both orders, both strata, four templates at equal "
+            "weight) on neutrality-calibrated symbols. This arm is the complement of the "
+            "reward-matched one, not a replacement: that arm pins the surface and varies the "
+            "expectation, this one pins the expectation and varies the surface with the outcome."
+        ),
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -101,12 +164,12 @@ def align_reveals(states: RevealRpeStates, battery: RevealProbeBattery) -> tuple
     return tuple(by_id[rid] for rid in states.metadata.reveal_ids)
 
 
-def _cell_design(reveals: tuple[Comparison, ...]) -> _CellDesign:
-    """Group reveals by ``reward_cell_id``, keeping cells with >=2 rows AND varying signed RPE."""
+def _cell_design(reveals: tuple[Comparison, ...], family: CellFamily) -> _CellDesign:
+    """Group reveals by the family's cell key, keeping cells with >=2 rows AND varying signed RPE."""
 
     grouped: dict[str, list[int]] = {}
     for row, comparison in enumerate(reveals):
-        grouped.setdefault(str(comparison.metadata["reward_cell_id"]), []).append(row)
+        grouped.setdefault(str(comparison.metadata[family.metadata_key]), []).append(row)
     rows: list[int] = []
     cells: list[np.ndarray] = []
     for members in grouped.values():
@@ -118,8 +181,8 @@ def _cell_design(reveals: tuple[Comparison, ...]) -> _CellDesign:
         rows.extend(members)
     if not cells:
         raise ValueError(
-            "no reward-matched cell carries >=2 reveals with varying signed RPE; E2 has no "
-            "within-cell contrast to read on this battery."
+            f"no {family.name} cell carries >=2 reveals with varying signed RPE; this arm has "
+            "no within-cell contrast to read on this battery."
         )
     row_index = np.asarray(rows)
     rpe = np.asarray([float(reveals[row].metadata["signed_rpe"]) for row in row_index])
@@ -190,10 +253,40 @@ class AxisResult(StrictModel):
     reads_expectation: bool
 
 
-class ExpectationControlReport(StrictModel):
-    """E2 record: does the emotion-probe readout track expectation with the outcome held fixed?"""
+class ArmResult(StrictModel):
+    """One matched-cell family: what it pins, what it recovers, and its per-axis slopes."""
 
-    artifact_contract_version: Literal["expectation_control/v1"] = (
+    cell_family: str
+    cell_key: str
+    held_fixed: str
+    varies: str
+    recovers: str
+    scope_note: str
+    axes: tuple[AxisResult, ...]
+
+
+class ComparisonSignature(StrictModel):
+    """Whether one axis shows the conjunction a comparison predicts, and what it says if not.
+
+    ``holds`` is the recorded expectation of ``docs/design/e2b-prereg.md`` §2 — BOTH arms
+    sign-congruent and below alpha on this axis. The reading is deliberately spelled out per axis
+    rather than left to the writeup, because the whole point of the rung is that a single
+    positive arm has already been over-read once.
+    """
+
+    axis: str
+    reward_matched_slope: float
+    ev_matched_slope: float
+    reward_matched_reads: bool
+    ev_matched_reads: bool
+    holds: bool
+    reading: str
+
+
+class ExpectationControlReport(StrictModel):
+    """E2+E2b record: does the emotion-probe readout track expectation, and does it compare?"""
+
+    artifact_contract_version: Literal["expectation_control/v2"] = (
         EXPECTATION_CONTROL_CONTRACT_VERSION
     )
     seed: int
@@ -206,16 +299,8 @@ class ExpectationControlReport(StrictModel):
     emotion_selected_block: int
     sensitivity_gate: str
     verdict_cap: str
-    axes: tuple[AxisResult, ...]
-    scope_note: str
-
-
-_SCOPE_NOTE = (
-    "The options block is NOT byte-identical inside a reward-matched cell — EV differs by "
-    "construction. The varying text is numeric point values on a surface that passes the "
-    "zero-emotion-lexicon audit: exactly the variation an expectation-tracker must use and a "
-    "surface-affect detector should ignore."
-)
+    arms: tuple[ArmResult, ...]
+    comparison_signature: tuple[ComparisonSignature, ...]
 
 
 def emotion_axes(emotion: EmotionVectors, block: int) -> dict[str, tuple[np.ndarray, str]]:
@@ -261,18 +346,66 @@ def expectation_control(
         raise ValueError(f"block {matched_block} out of range for {states.metadata.n_blocks}")
 
     reveals = align_reveals(states, battery)
-    design = _cell_design(reveals)
-    block_states = np.asarray(states.states[:, matched_block, :])[design.rows]
+    all_states = np.asarray(states.states[:, matched_block, :])
+    axes = emotion_axes(emotion, matched_block)
 
+    arms = tuple(
+        _arm(
+            family,
+            reveals,
+            all_states,
+            axes,
+            block=matched_block,
+            seed=seed,
+            n_permutations=n_permutations,
+            alpha=alpha,
+        )
+        for family in CELL_FAMILIES
+    )
+
+    gate = emotion.metadata.gate_verdict
+    return ExpectationControlReport(
+        seed=seed,
+        n_permutations=n_permutations,
+        alpha=alpha,
+        block=matched_block,
+        states_sha256=states.metadata.states_sha256,
+        battery_sha256=file_sha256(Path(battery_file)),
+        emotion_vectors_sha256=emotion.metadata.vectors_sha256,
+        emotion_selected_block=emotion.metadata.selected_block,
+        sensitivity_gate=f"G0={gate}",
+        verdict_cap=_verdict_cap(gate),
+        arms=arms,
+        comparison_signature=_comparison_signature(arms),
+    )
+
+
+def _arm(
+    family: CellFamily,
+    reveals: tuple[Comparison, ...],
+    all_states: np.ndarray,
+    axes: dict[str, tuple[np.ndarray, str]],
+    *,
+    block: int,
+    seed: int,
+    n_permutations: int,
+    alpha: float,
+) -> ArmResult:
+    """One cell family through the estimator — the ONLY difference between arms is the grouping."""
+
+    design = _cell_design(reveals, family)
+    block_states = all_states[design.rows]
     results: list[AxisResult] = []
-    for name, (axis, description) in emotion_axes(emotion, matched_block).items():
+    for name, (axis, description) in axes.items():
         projection = block_states @ axis
         slope = _pooled_slope(projection, design, design.rpe)
         p_value = _cluster_permutation_p(
             projection,
             design,
             slope,
-            rng=np.random.default_rng(seed_int(seed, "expectation-control", name, matched_block)),
+            rng=np.random.default_rng(
+                seed_int(seed, "expectation-control", family.name, name, block)
+            ),
             n_permutations=n_permutations,
         )
         per_cell = _per_cell_slopes(projection, design)
@@ -289,22 +422,65 @@ def expectation_control(
                 reads_expectation=bool(p_value < alpha and slope > 0.0),
             )
         )
-
-    gate = emotion.metadata.gate_verdict
-    return ExpectationControlReport(
-        seed=seed,
-        n_permutations=n_permutations,
-        alpha=alpha,
-        block=matched_block,
-        states_sha256=states.metadata.states_sha256,
-        battery_sha256=file_sha256(Path(battery_file)),
-        emotion_vectors_sha256=emotion.metadata.vectors_sha256,
-        emotion_selected_block=emotion.metadata.selected_block,
-        sensitivity_gate=f"G0={gate}",
-        verdict_cap=_verdict_cap(gate),
+    return ArmResult(
+        cell_family=family.name,
+        cell_key=family.metadata_key,
+        held_fixed=family.held_fixed,
+        varies=family.varies,
+        recovers=family.recovers,
+        scope_note=family.scope_note,
         axes=tuple(results),
-        scope_note=_SCOPE_NOTE,
     )
+
+
+_READINGS = {
+    (True, True): (
+        "COMPARISON SIGNATURE. Both arms are sign-congruent and below alpha, which is what a "
+        "readout carrying reward - ev predicts (a = -b). Neither a pure expectation tracker "
+        "(predicts the EV-matched arm at zero) nor a pure outcome tracker (predicts the "
+        "reward-matched arm at zero) survives both. Representational only: this says the readout "
+        "carries the comparison, not that anything uses it."
+    ),
+    (True, False): (
+        "EXPECTATION TRACKER NOT EXCLUDED. The reward-matched arm reads, the EV-matched arm does "
+        "not. That is exactly what a readout representing the stated EV, with no comparison to "
+        "the outcome at all, predicts. Writeups say 'tracks the stated expectation' and NOT "
+        "'compares outcome against expectation' on this axis."
+    ),
+    (False, True): (
+        "OUTCOME TRACKER NOT EXCLUDED. The EV-matched arm reads, the reward-matched arm does not "
+        "— the readout may be following the realised outcome. This contradicts the published "
+        "reward-matched result and should be debugged before it is reported."
+    ),
+    (False, False): (
+        "NEITHER ARM READS on this axis. Nothing here adjudicates the rivals; with G0 passed this "
+        "is a readable null for the emotion-axis readout at this block, and with G0 failed it is "
+        "harness_inadequate."
+    ),
+}
+
+
+def _comparison_signature(arms: tuple[ArmResult, ...]) -> tuple[ComparisonSignature, ...]:
+    """Read the two arms together, per axis — the conjunction is the estimand (e2b-prereg §2)."""
+
+    by_family = {arm.cell_family: {axis.axis: axis for axis in arm.axes} for arm in arms}
+    reward, ev_matched = by_family["reward_matched"], by_family["ev_matched"]
+    signatures: list[ComparisonSignature] = []
+    for name, reward_axis in reward.items():
+        ev_axis = ev_matched[name]
+        key = (reward_axis.reads_expectation, ev_axis.reads_expectation)
+        signatures.append(
+            ComparisonSignature(
+                axis=name,
+                reward_matched_slope=reward_axis.pooled_within_cell_slope,
+                ev_matched_slope=ev_axis.pooled_within_cell_slope,
+                reward_matched_reads=reward_axis.reads_expectation,
+                ev_matched_reads=ev_axis.reads_expectation,
+                holds=all(key),
+                reading=_READINGS[key],
+            )
+        )
+    return tuple(signatures)
 
 
 def _verdict_cap(gate: str) -> str:
@@ -315,10 +491,12 @@ def _verdict_cap(gate: str) -> str:
             "positive adjudicates the situational rival; the claim stays OPEN."
         )
     return (
-        "present-and-separable, pilot-suggestive. A sign-congruent within-cell slope says the "
-        "emotion-probe readout tracks the EXPECTATION manipulation with the outcome text fixed; "
-        "a null within cells is what the situational-context rival predicts. Neither licenses "
-        "any welfare / sentience / experience claim."
+        "present-and-separable, pilot-suggestive. A sign-congruent within-cell slope on the "
+        "reward-matched arm says the emotion-probe readout tracks the EXPECTATION manipulation "
+        "with the outcome text fixed; a null there is what the situational-context rival "
+        "predicts. Only the CONJUNCTION with the EV-matched arm licenses the word 'comparison' — "
+        "read comparison_signature, not one arm. Nothing here is a causal claim, and none of it "
+        "licenses any welfare / sentience / experience claim."
     )
 
 
@@ -326,20 +504,43 @@ def format_expectation_control_summary(report: ExpectationControlReport) -> str:
     """A plain-text summary table for stdout."""
 
     lines = [
-        "E2 expectation-control — outcome fixed, expectation varies (present-and-separable)",
+        "E2 + E2b expectation-control — two matched-cell families, one estimator "
+        "(present-and-separable)",
         f"  block={report.block} seed={report.seed} perms={report.n_permutations} "
         f"alpha={report.alpha}",
         f"  sensitivity: {report.sensitivity_gate}",
         f"  verdict cap: {report.verdict_cap}",
-        "",
-        "  axis                              pooled beta   mean cell beta  cells  rows       p  "
-        "expectation?",
     ]
-    for axis in report.axes:
-        lines.append(
-            f"  {axis.axis:<32} {axis.pooled_within_cell_slope:+11.5f}   "
-            f"{axis.mean_per_cell_slope:+13.5f}  {axis.n_cells:>5}  {axis.n_rows:>4}  "
-            f"{axis.p_value:6.4f}  {'YES' if axis.reads_expectation else 'no'}"
+    for arm in report.arms:
+        lines.extend(
+            [
+                "",
+                f"  [{arm.cell_family}] cells keyed on {arm.cell_key} — holds {arm.held_fixed} "
+                f"fixed, varies {arm.varies}",
+                f"    recovers {arm.recovers}",
+                "",
+                "    axis                              pooled beta   mean cell beta  cells  rows"
+                "       p  reads?",
+            ]
         )
-    lines.extend(["", f"  scope: {report.scope_note}"])
+        for axis in arm.axes:
+            lines.append(
+                f"    {axis.axis:<32} {axis.pooled_within_cell_slope:+11.5f}   "
+                f"{axis.mean_per_cell_slope:+13.5f}  {axis.n_cells:>5}  {axis.n_rows:>4}  "
+                f"{axis.p_value:6.4f}  {'YES' if axis.reads_expectation else 'no'}"
+            )
+        lines.append(f"    scope: {arm.scope_note}")
+
+    lines.extend(["", "  comparison signature (both arms read together — the estimand):"])
+    for signature in report.comparison_signature:
+        lines.extend(
+            [
+                f"    {signature.axis}: reward-matched {signature.reward_matched_slope:+.5f} "
+                f"({'reads' if signature.reward_matched_reads else 'null'}), "
+                f"EV-matched {signature.ev_matched_slope:+.5f} "
+                f"({'reads' if signature.ev_matched_reads else 'null'}) "
+                f"=> holds={signature.holds}",
+                f"      {signature.reading}",
+            ]
+        )
     return "\n".join(lines)

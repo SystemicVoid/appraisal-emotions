@@ -210,8 +210,11 @@ def test_e2_and_e3_read_the_same_artifacts_and_cap_their_claims(chain):
     assert e2["states_sha256"] and e2["battery_sha256"]
     assert e2["emotion_vectors_sha256"] == emotion.metadata.vectors_sha256
     assert e2["sensitivity_gate"] == "G0=harness_inadequate"
-    assert len(e2["axes"]) == 2
-    assert all(axis["n_cells"] >= 2 for axis in e2["axes"])
+    assert [arm["cell_family"] for arm in e2["arms"]] == ["reward_matched", "ev_matched"]
+    for arm in e2["arms"]:
+        assert len(arm["axes"]) == 2
+        assert all(axis["n_cells"] >= 2 for axis in arm["axes"])
+    assert len(e2["comparison_signature"]) == 2
 
     e3_out = emotion_dir / "activation_patching_report.json"
     result = runner.invoke(

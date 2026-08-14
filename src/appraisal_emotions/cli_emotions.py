@@ -262,13 +262,16 @@ def expectation_control_command(
     seed: SeedOption = 7,
     permutations: Annotated[int, typer.Option("--permutations")] = 10_000,
 ) -> None:
-    """Rung E2: expectation vs situation on the reward-matched cells (design §4 E2).
+    """Rungs E2 + E2b: expectation vs situation, and expectation vs comparison (design §4 E2;
+    ``docs/design/e2b-prereg.md``).
 
     Projects reveal-token states onto the emotion valence axis and onto the elated/disappointed
-    contrast, then regresses on signed RPE WITHIN outcome-fixed cells with a cluster-aware
-    permutation null. A sign-congruent within-cell slope favours expectation-tracking; a null
-    within cells is what the situational-context rival predicts. Licence capped at
-    present-and-separable — E2 has no causal arm.
+    contrast, then regresses on signed RPE WITHIN matched cells with a cluster-aware permutation
+    null — over BOTH matched families. Reward-matched cells pin the outcome and vary the stated
+    EV; EV-matched cells do the reverse. One arm alone cannot tell a comparison from a code for
+    the quantity that arm happens to vary, so the verdict is the conjunction reported in
+    ``comparison_signature``. Licence capped at present-and-separable — neither arm has a causal
+    leg.
     """
 
     report = expectation_control(
