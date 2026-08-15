@@ -515,7 +515,13 @@ class EmotionVectorsMetadata(StrictModel):
     # above. The two are equal on a run whose splitter returned what the prompt asked for, and the
     # run refuses when they are not (:class:`StoryYieldShortfall`) — so this pair is the record
     # that the A/B compared at matched sample size, not just at matched configuration.
-    generated_by_label: dict[str, int]
+    #
+    # DEFAULTED, and it must stay that way while the contract reads emotion_vectors/v1: the
+    # certified base run predates the yield check and legitimately has no yield record, so a
+    # required field here rejects the committed artifact every downstream reader loads. Any new
+    # field added to this model needs either a default or a contract bump; the regression test in
+    # tests/test_emotion_vectors.py validates the committed artifact file itself to catch it.
+    generated_by_label: dict[str, int] = {}
     kept_by_label: dict[str, int]
     first_contact_n: int
     first_contact_drop_rate: float

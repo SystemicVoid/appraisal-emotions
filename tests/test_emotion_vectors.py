@@ -8,12 +8,15 @@ meaningless by construction (which is exactly why the smoke run reports ``harnes
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from appraisal_emotions.analysis.emotion_vectors import (
+    EMOTION_VECTORS_CONTRACT_VERSION,
+    EmotionVectorsMetadata,
     FirstContactFailure,
     StoryYieldShortfall,
     extract_emotion_vectors,
@@ -32,8 +35,13 @@ from appraisal_emotions.stimuli.emotion_stories import (
     read_emotion_words,
 )
 
-WORDS_PATH = Path(__file__).resolve().parents[1] / "data" / "emotion_words.json"
-SOFRONIEW_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "sofroniew2026"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+WORDS_PATH = REPO_ROOT / "data" / "emotion_words.json"
+# The certified E0 run, tracked in git and read by every downstream command.
+CERTIFIED_ARTIFACT = (
+    REPO_ROOT / "runs" / "emotion_vectors_base" / "emotions" / "emotion_vectors.json"
+)
+SOFRONIEW_DATA_DIR = REPO_ROOT / "data" / "sofroniew2026"
 SPEC = ModelSpec(key="fake", backend="fake", model_id="fake")
 # The shipped smoke recipe (configs/emotion_vectors_smoke.yaml), so the deterministic fake
 # generations here are the same ones the smoke run reads.
@@ -184,6 +192,26 @@ def test_artifact_read_refuses_a_tampered_payload(extracted, tmp_path):
     np.savez(vectors_path, emotion_vectors=tampered)
     with pytest.raises(ValueError, match="hash does not match"):
         read_emotion_vectors(path)
+
+
+def test_the_committed_certified_artifact_still_validates():
+    """The certified base run must keep loading, or every downstream reader breaks at once.
+
+    ``runs/emotion_vectors_base/emotions/emotion_vectors.json`` is tracked JSON, present in a
+    clean checkout, and is what map-geometry, P1, E2b and E3 all read. Adding
+    ``generated_by_label`` without a default made ``model_validate`` reject it while the contract
+    still said ``emotion_vectors/v1`` — the artifact was fine, the model had silently moved under
+    it. This test is the CI form of that: a new required field, or a rename, fails here rather
+    than in four downstream commands at once. A deliberate incompatibility bumps the contract
+    version instead, and then this test's assertion on the version is what says so.
+    """
+
+    assert CERTIFIED_ARTIFACT.exists(), "the certified E0 artifact is tracked; it must be present"
+    payload = json.loads(CERTIFIED_ARTIFACT.read_text(encoding="utf-8"))
+    assert payload["artifact_contract_version"] == EMOTION_VECTORS_CONTRACT_VERSION
+    metadata = EmotionVectorsMetadata.model_validate(payload)
+    # Pre-dates the yield check, so it carries no yield record and must not be made to fake one.
+    assert metadata.generated_by_label == {}
 
 
 def test_pc1_orientation_follows_the_valence_labels():
