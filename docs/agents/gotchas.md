@@ -264,3 +264,15 @@ printf '%s/src\n' "$PWD" > .venv/lib/python3.12/site-packages/appraisal_emotions
 Before any run that costs money, invoke the real entry point (`--help` is enough) rather than
 trusting a green suite. `uv run python -c "import appraisal_emotions; print(appraisal_emotions.__file__)"`
 answers it in one line.
+
+### `e4_surface_preflight --tokenizer-only` still loads the 27B onto the GPU
+
+The flag exists so the answer-form check can run before renting anything, and `e21a363`'s
+message advertises it that way. It does not deliver: `e4_surface_preflight.py:main` calls
+`create_backend(spec)` *before* branching on the flag, and `HFBackend.__init__` eagerly loads
+the model and calls `.to("cuda")`. `d1f25fa` fixed the eager *states* load, not the *weights*
+load. On a GPU-less workstation the "cheap" mode dies (or drags a 27B through CPU RAM); either
+way it is not a pre-rental gate. Run the preflight once, on-instance, in full mode, and treat
+its cost as part of the run. Found by reading the call order while drafting the single-rental
+run sheet (2026-08-15); the fix path is to move backend construction after the flag branch.
+Tracked in the repo issues.
