@@ -17,6 +17,7 @@ Everything is synthetic; the hidden dimension is small and no model is involved.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -26,11 +27,12 @@ from appraisal_emotions.analysis.story_projections import (
     StoryProjectionsMetadata,
 )
 from appraisal_emotions.analysis.story_reliability import (
-    MDE80_COEFFICIENT,
+    MDE80_Z_SUM,
     attenuation,
     floor_bootstrap,
     half_sample_cosines,
     lambda_at,
+    mde80_coefficient,
     prophecy,
     residual_sd_at_k,
     split_half_reliability,
@@ -39,6 +41,7 @@ from appraisal_emotions.analysis.story_reliability import (
     word_projection_stats,
 )
 from appraisal_emotions.core.util import states_sha256
+from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 N_WORDS = 120
 K = 12
@@ -47,6 +50,10 @@ N_BLOCKS = 1
 DIRECTION = "v_rpe"
 LABELS = tuple(f"w{index:03d}" for index in range(N_WORDS))
 TOPICS = tuple(f"t{index}" for index in range(5))
+# Any pair of family sizes does here — these tests check the shape of prophecy() and
+# floor_bootstrap(), not a particular word set. The point of passing it in is that no width is
+# baked into the module any more.
+COEFFICIENT = mde80_coefficient(n_outcome=9, n_control=10)
 
 
 def _artifact(
@@ -278,7 +285,7 @@ def test_de_attenuation_reports_itself_undefined_when_noise_explains_every_word(
     )
     components, _ = variance_components(stats, design)
     assert not np.isfinite(lambda_at(stats, components.mean_k))
-    forecast = prophecy(stats, components, observed_effect=0.02, max_k=100)
+    forecast = prophecy(stats, components, observed_effect=0.02, max_k=100, coefficient=COEFFICIENT)
     assert forecast["de_attenuation_undefined"]
     assert forecast["k_star"] is None
     assert not forecast["detectable_at_any_k"]
@@ -295,19 +302,46 @@ def test_attenuation_is_below_one_and_relaxes_with_k(artifact):
     assert curve[-1] == pytest.approx(1.0, abs=1e-3)
 
 
+def test_the_mde80_coefficient_tracks_the_word_file_it_is_scoring():
+    """It was a constant baked at 9 vs 10, and the word set widened underneath it.
+
+    The two properties that matter: it MOVES with the family sizes (a stale pin would not), and
+    the sizes it moves with are the ones the shipped word file actually carries — read here, not
+    restated, so a future widening does not need this test edited.
+    """
+
+    words = read_emotion_words(Path(__file__).resolve().parents[1] / "data" / "emotion_words.json")
+    contrast = next(c for c in words.expected_family_contrasts() if c.expected_sign == 1)
+    n_outcome = len(words.words_in_category(contrast.outcome_family))
+    n_control = len(words.words_in_category(contrast.control_family))
+    live = mde80_coefficient(n_outcome=n_outcome, n_control=n_control)
+
+    assert live == pytest.approx(MDE80_Z_SUM * math.sqrt(1 / n_outcome + 1 / n_control))
+    # Wider families detect smaller effects, and the coefficient must fall to say so.
+    assert live < mde80_coefficient(n_outcome=n_outcome - 1, n_control=n_control - 1)
+    # The value the certified E1 path was pinned to, reproduced only at the widths it came from.
+    assert mde80_coefficient(n_outcome=9, n_control=10) == pytest.approx(1.1424563566, abs=1e-9)
+    with pytest.raises(ValueError, match="a word on each side"):
+        mde80_coefficient(n_outcome=0, n_control=10)
+
+
 def test_prophecy_finds_a_crossing_only_when_one_exists(artifact, design):
     """k* must exist for an effect above the irreducible floor and never for one below it."""
 
     stats = word_projection_stats(artifact, LABELS, block=0, direction=DIRECTION)
     components, _ = variance_components(stats, design)
-    floor = MDE80_COEFFICIENT * np.sqrt(max(components.between_word_variance_resid, 0.0))
+    floor = COEFFICIENT * np.sqrt(max(components.between_word_variance_resid, 0.0))
 
-    reachable = prophecy(stats, components, observed_effect=floor * 3.0, max_k=200)
+    reachable = prophecy(
+        stats, components, observed_effect=floor * 3.0, max_k=200, coefficient=COEFFICIENT
+    )
     assert reachable["k_star"] is not None
     assert reachable["detectable_at_any_k"]
 
     # Below the floor no capture size helps: the between-word term never shrinks.
-    hopeless = prophecy(stats, components, observed_effect=floor * 0.3, max_k=200)
+    hopeless = prophecy(
+        stats, components, observed_effect=floor * 0.3, max_k=200, coefficient=COEFFICIENT
+    )
     assert hopeless["k_star"] is None
     assert not hopeless["detectable_at_any_k"]
 
@@ -361,10 +395,15 @@ def test_floor_bootstrap_brackets_the_point_estimate_and_prices_the_comparison(
 
     stats = word_projection_stats(artifact, LABELS, block=0, direction=DIRECTION)
     components, _ = variance_components(stats, design)
-    floor = MDE80_COEFFICIENT * math.sqrt(max(components.between_word_variance_resid, 0.0))
+    floor = COEFFICIENT * math.sqrt(max(components.between_word_variance_resid, 0.0))
 
     priced = floor_bootstrap(
-        stats, design, observed_effect=floor, rng=np.random.default_rng(0), n_resamples=400
+        stats,
+        design,
+        observed_effect=floor,
+        rng=np.random.default_rng(0),
+        n_resamples=400,
+        coefficient=COEFFICIENT,
     )
     low, high = priced["mde80_floor_ci95"]
     assert low <= floor <= high
@@ -373,10 +412,20 @@ def test_floor_bootstrap_brackets_the_point_estimate_and_prices_the_comparison(
     assert 0.2 < priced["p_floor_below_effect"] < 0.8
 
     certain = floor_bootstrap(
-        stats, design, observed_effect=1e6, rng=np.random.default_rng(0), n_resamples=200
+        stats,
+        design,
+        observed_effect=1e6,
+        rng=np.random.default_rng(0),
+        n_resamples=200,
+        coefficient=COEFFICIENT,
     )
     impossible = floor_bootstrap(
-        stats, design, observed_effect=0.0, rng=np.random.default_rng(0), n_resamples=200
+        stats,
+        design,
+        observed_effect=0.0,
+        rng=np.random.default_rng(0),
+        n_resamples=200,
+        coefficient=COEFFICIENT,
     )
     assert certain["p_floor_below_effect"] == 1.0
     assert impossible["p_floor_below_effect"] == 0.0

@@ -44,9 +44,9 @@ story log). No model, no forwards, no new capture. It answers, in order:
 each number says which one it is:
 
 * the tabled ``family_contrasts[].p_value`` is a **within-pool** two-sample label permutation
-  (``valence_residual.two_sample_permutation_p``) over the 19 words of the two contrasted
-  families only — 9 outcome against 10 controls;
-* the ``clears_both_floors`` **verdict** is a **whole-set** relabelling of all 84 residuals,
+  (``valence_residual.two_sample_permutation_p``) over the two contrasted families' words only
+  (19 of them on the run of record: 9 outcome against 10 controls);
+* the ``clears_both_floors`` **verdict** is a **whole-set** relabelling of every residual,
   scored by the max over poles (``valence_residual.label_shuffled_floor``), and-ed with the
   random-direction floor.
 
@@ -111,6 +111,22 @@ def _block_frame(report: dict, block: int) -> dict:
         "resid_reported": np.array([row["residual"] for row in entry["word_residuals"]]),
         "binary": np.array([row["valence"] for row in entry["word_residuals"]], dtype=float),
     }
+
+
+def _valence_design(numeric_valence: np.ndarray) -> np.ndarray:
+    """``[1, valence]`` over however many words the word file carries.
+
+    One seam rather than a literal at each use site: this was ``np.ones(84)`` twice, and the word
+    file's width is not a constant — it moved to 111 with the E1 widening. A stale literal fails
+    on a shape mismatch if you are lucky and silently analyses a truncated set if you are not.
+    """
+
+    valence = np.atleast_2d(np.asarray(numeric_valence, dtype=float))
+    if valence.shape[0] == 1 and valence.shape[1] != 1:
+        valence = valence.T  # a flat (n,) vector of one norm column
+    if valence.ndim != 2 or valence.size == 0:
+        raise ValueError(f"numeric norms must be one row per word, got shape {valence.shape}")
+    return np.column_stack([np.ones(valence.shape[0]), valence])
 
 
 def _rows(frame: dict) -> dict[str, np.ndarray]:
@@ -219,7 +235,7 @@ def _exact_within_pool(resid: np.ndarray, rows: dict) -> dict[str, dict[str, flo
 def _whole_set_floor(resid: np.ndarray, rows: dict, rng, n_draws: int) -> dict[str, float]:
     """p95 of the max-over-poles contrast under a whole-set relabelling — the VERDICT criterion.
 
-    Mirrors ``valence_residual.label_shuffled_floor``: shuffle all 84 residuals (residualize
+    Mirrors ``valence_residual.label_shuffled_floor``: shuffle every residual (residualize
     first, then permute), score with the same max-over-poles headline the report uses, take
     ``FLOOR_QUANTILE``. This is what ``clears_both_floors`` reads, and it is a different question
     from the tabled per-pole p above.
@@ -501,7 +517,7 @@ def _diagnose_block(
     frame = _block_frame(report, block)
     assert frame["words"] == list(labels)
     rows = _rows(frame)
-    design = np.column_stack([np.ones(84), numeric_valence])
+    design = _valence_design(numeric_valence)
     resid = ols_residuals(frame["cos"], design)
 
     # 1. reproduce
@@ -625,7 +641,7 @@ def main() -> None:
     words = read_emotion_words(WORDS)
     labels = words.labels
     numeric_valence, covered, missing = read_valence_norms(NORMS, labels)
-    assert numeric_valence is not None and covered == 84, (covered, missing)
+    assert numeric_valence is not None and covered == len(labels), (covered, missing)
     arousal = {
         row["word"]: float(row["arousal"]) for row in __import__("csv").DictReader(NORMS.open())
     }
@@ -664,7 +680,7 @@ def main() -> None:
     positive_signs = [b for b in range(20, 64) if sweep[b] > 0]
     argmax_block = max(sweep, key=lambda b: sweep[b] if b >= 20 else -1)
     frame35, frame63 = _block_frame(report, 35), _block_frame(report, 63)
-    design_n = np.column_stack([np.ones(84), numeric_valence])
+    design_n = _valence_design(numeric_valence)
     resid_corr = float(
         np.corrcoef(
             ols_residuals(frame35["cos"], design_n), ols_residuals(frame63["cos"], design_n)
