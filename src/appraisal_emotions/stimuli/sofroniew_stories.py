@@ -38,16 +38,17 @@ Four faithfulness points that are decisions, not accidents, and are recorded as 
    uses it for every label.
 3. **The P5c style control is ours, derived here.** The paper has no style control; P5c is what
    makes our cosine scale readable, so it must run through whatever recipe the arm uses. The
-   control prompt is built from the loaded paper prompt by replacing its three emotion-bearing
-   lines, each replacement asserted to have hit (:func:`build_style_control_prompt`), so the
-   control and the stories differ only where they must.
-4. **The neutral corpus reuses the story topics.** The paper's appendix says the same 100 topics
-   "seed the generation of our stories and dialogues datasets", so the confound subspace it
+   control prompt is built from the loaded paper prompt by replacing its emotion-bearing lines,
+   which are SELECTED from that prompt by :func:`emotion_bearing_lines` rather than copied into
+   this module — only our replacements are literals here — and each replacement is asserted to
+   have hit exactly once, so the control and the stories differ only where they must.
+4. **The neutral corpus is drawn from the story topics.** The paper's appendix says the same 100
+   topics "seed the generation of our stories and dialogues datasets", so the confound subspace it
    removes is fit on the same topic material the stories were written from. At our scale that has
-   to be arranged rather than inherited: :func:`build_neutral_dialogue_grid` draws from the SAME
-   seeded shuffle
-   :func:`build_sofroniew_story_grid` draws from, so the neutral corpus spans topics the stories
-   saw instead of a disjoint sample of the 100.
+   to be derived rather than inherited: :func:`build_neutral_dialogue_grid` takes a PREFIX of the
+   list :func:`build_sofroniew_story_grid` used, and refuses when it would need more calls than
+   the stories have topics. Both drawing from the same seeded shuffle is not enough — a longer
+   neutral prefix runs off the end of the story prefix onto premises no story saw.
 """
 
 from __future__ import annotations
@@ -72,6 +73,7 @@ __all__ = [
     "build_neutral_dialogue_grid",
     "build_sofroniew_story_grid",
     "build_style_control_prompt",
+    "emotion_bearing_lines",
     "neutral_completion_splitter",
     "read_sofroniew_recipe",
     "split_completion",
@@ -91,27 +93,18 @@ DIALOGUE_SEPARATOR = "<NEW DIALOGUE>"
 # subspace that gets projected out (``analysis.neutral_projection``).
 NEUTRAL_DIALOGUE_LABEL = "neutral_dialogue"
 
-# The three lines of the paper prompt that name the emotion, and what the P5c control puts in
-# their place. These replacements are OUR text — they reproduce nothing held in a file, so no
-# load applies. Each is asserted to match exactly once; a silent miss would make the control a
-# different experiment.
-_STYLE_CONTROL_SUBSTITUTIONS: tuple[tuple[str, str], ...] = (
-    (
-        "The story should follow a character who is feeling {emotion}.",
-        "The story should follow a character going about their day, written throughout in a "
-        "formal register: full sentences, no contractions, no slang, third person.",
-    ),
-    (
-        "IMPORTANT: You must NEVER use the word '{emotion}' or any direct synonyms of it in the "
-        "stories. Instead, convey the emotion ONLY through:",
-        "IMPORTANT: You must NEVER name an emotion in the stories. Instead, convey the "
-        "character's situation ONLY through:",
-    ),
-    (
-        "The emotion should be clearly conveyed to the reader through these indirect means, but "
-        "never explicitly named.",
-        "The formal register should be maintained throughout, and no emotion should ever be named.",
-    ),
+# What the P5c control puts in place of the paper prompt's emotion-bearing lines, in the order
+# those lines occur. ONLY the replacements live here: they are our text, and nothing else can be
+# (``docs/agents/rails.md`` clause 1). What they replace is SELECTED from the loaded prompt by
+# :func:`emotion_bearing_lines` rather than copied into this file — the three targets used to be
+# spelled out here byte-identically to lines of ``data/sofroniew2026/prompts.json``, under a
+# comment claiming they reproduced nothing held in a file.
+_STYLE_CONTROL_REPLACEMENTS: tuple[str, ...] = (
+    "The story should follow a character going about their day, written throughout in a "
+    "formal register: full sentences, no contractions, no slang, third person.",
+    "IMPORTANT: You must NEVER name an emotion in the stories. Instead, convey the "
+    "character's situation ONLY through:",
+    "The formal register should be maintained throughout, and no emotion should ever be named.",
 )
 
 
@@ -229,21 +222,43 @@ def read_sofroniew_recipe(data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR) -> Sofron
     )
 
 
+def emotion_bearing_lines(story_prompt_template: str) -> tuple[str, ...]:
+    """The loaded prompt's own lines that mention the emotion, in the order they occur.
+
+    The selection rule, not the lines, is what lives in this file: a line of the paper's story
+    prompt is emotion-bearing exactly when it says "emotion". On the committed prompt that picks
+    out three -- the "character who is feeling {emotion}" line, the "NEVER use the word
+    '{emotion}'" line, and the "should be clearly conveyed ... never explicitly named" line -- and
+    no others. If a re-served appendix changes that count, :func:`build_style_control_prompt`
+    refuses rather than pairing our replacements against lines they were not written for.
+    """
+
+    return tuple(line for line in story_prompt_template.split("\n") if "emotion" in line.casefold())
+
+
 def build_style_control_prompt(story_prompt_template: str) -> str:
     """The P5c control prompt: the paper prompt with its emotion-bearing lines replaced.
 
-    Every substitution must hit exactly once. A missed substitution would leave ``{emotion}``
-    unbound (a crash) or leave the control asking for an emotion (a silent wrong control), so
-    this fails loudly instead of best-effort patching.
+    Both halves are loads-plus-rules rather than copies: the lines come out of the passed template
+    via :func:`emotion_bearing_lines`, and only our replacements are literals here. Every
+    substitution must still hit exactly once -- a missed one would leave ``{emotion}`` unbound (a
+    crash) or leave the control asking for an emotion (a silent wrong control).
     """
 
+    targets = emotion_bearing_lines(story_prompt_template)
+    if len(targets) != len(_STYLE_CONTROL_REPLACEMENTS):
+        raise ValueError(
+            f"the loaded story prompt has {len(targets)} emotion-bearing lines but "
+            f"{len(_STYLE_CONTROL_REPLACEMENTS)} replacements are written for it: {targets!r}. "
+            "The paper prompt changed; re-read it and update _STYLE_CONTROL_REPLACEMENTS "
+            "deliberately rather than pairing them off by position."
+        )
     prompt = story_prompt_template
-    for target, replacement in _STYLE_CONTROL_SUBSTITUTIONS:
+    for target, replacement in zip(targets, _STYLE_CONTROL_REPLACEMENTS, strict=True):
         occurrences = prompt.count(target)
         if occurrences != 1:
             raise ValueError(
-                f"style-control substitution matched {occurrences} times, expected 1: {target!r}. "
-                "The paper prompt changed; update _STYLE_CONTROL_SUBSTITUTIONS deliberately."
+                f"style-control substitution matched {occurrences} times, expected 1: {target!r}."
             )
         prompt = prompt.replace(target, replacement)
     if "{emotion}" in prompt:

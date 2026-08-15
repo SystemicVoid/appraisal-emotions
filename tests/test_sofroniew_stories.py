@@ -21,6 +21,7 @@ from appraisal_emotions.stimuli.sofroniew_stories import (
     STORY_SEPARATOR,
     build_sofroniew_story_grid,
     build_style_control_prompt,
+    emotion_bearing_lines,
     read_sofroniew_recipe,
     split_completion,
 )
@@ -142,8 +143,33 @@ def test_style_control_prompt_drops_every_emotion_slot(recipe):
 
 
 def test_style_control_substitution_fails_loudly_when_the_prompt_changes():
-    with pytest.raises(ValueError, match="matched 0 times"):
+    """A prompt with a different number of emotion-bearing lines is a different prompt.
+
+    Pairing our three replacements against however many lines a re-served appendix happens to
+    carry would build a control that differs from the stories somewhere nobody chose.
+    """
+
+    with pytest.raises(ValueError, match="0 emotion-bearing lines"):
         build_style_control_prompt("Write {n_stories} stories about {topic}.")
+
+
+def test_the_style_control_targets_are_read_out_of_the_loaded_prompt(recipe):
+    """rails.md clause 1: the targets are SELECTED from the file, never copied into the module.
+
+    They were literals here — byte-identical to lines of data/sofroniew2026/prompts.json, under a
+    comment saying they reproduced nothing held in a file. This is the check that they are a load:
+    every target must occur in the loaded prompt, and none of the replacements may.
+    """
+
+    targets = emotion_bearing_lines(recipe.story_prompt_template)
+    assert len(targets) == 3
+    for target in targets:
+        assert target in recipe.story_prompt_template
+        assert "emotion" in target.casefold()
+    # The selection is exhaustive: no line naming the emotion survives into the control unchanged.
+    control = build_style_control_prompt(recipe.story_prompt_template)
+    for target in targets:
+        assert target not in control
 
 
 # --------------------------------------------------------------------------------------
@@ -157,7 +183,11 @@ def test_split_recovers_stories_around_the_separator():
 
 
 def test_split_of_an_unseparated_completion_yields_one_piece():
-    """BLIND-freeze behaviour: no repair, one over-long piece the first-contact check will show."""
+    """BLIND-freeze behaviour: no repair, one piece where several were asked for.
+
+    That piece is a well-formed story of ordinary length, so no per-piece filter sees it. What
+    sees it is the yield check comparing realised stories per label against the configured count.
+    """
 
     assert split_completion("A single unbroken paragraph.") == ("A single unbroken paragraph.",)
 
