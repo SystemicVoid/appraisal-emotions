@@ -30,6 +30,7 @@ from appraisal_emotions.analysis.emotion_mapping import (
 from appraisal_emotions.analysis.emotion_vectors import (
     EmotionVectors,
     FirstContactFailure,
+    NeutralCorpusTooThin,
     StoryYieldShortfall,
     extract_emotion_vectors,
     read_emotion_vectors,
@@ -67,6 +68,7 @@ def emotion_paths(cfg: StudyConfig) -> dict[str, Path]:
         "stories": root / "stories.json",
         "neutral_dialogues": root / "neutral_dialogues.json",
         "first_contact": root / "first_contact_sample.json",
+        "neutral_first_contact": root / "neutral_first_contact_sample.json",
         "projections": root / "story_projections.json",
         "projections_quarantine": root / "story_projections_gate_failed.json",
     }
@@ -96,10 +98,18 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
             (abs(row.spearman_rho) for row in meta.g0_table_before_projection), default=0.0
         )
         console.print(
-            f"  neutral projection: {proj.n_kept}/{proj.n_requested} transcripts, "
-            f"{proj.total_components} components over {len(proj.blocks)} blocks "
-            f"(<= {proj.max_components_in_a_block} per block) at "
+            f"  neutral projection: {proj.total_components} components over "
+            f"{len(proj.blocks)} blocks (<= {proj.max_components_in_a_block} per block) at "
             f"{proj.variance_target:.0%} of variance"
+        )
+        # Three numbers, because a corpus can fall short at two different places: the splitter
+        # returning fewer pieces than were asked for, and the filter dropping what did come back.
+        console.print(
+            f"    corpus: {proj.n_transcripts_configured} configured over "
+            f"{proj.n_calls_requested} calls, {proj.n_pieces_obtained} obtained, "
+            f"{proj.n_kept} kept (floor {proj.min_kept}); drop rate {proj.drop_rate:.3f} "
+            f"(ceiling {proj.max_drop_rate:.2f}); first-contact "
+            f"{proj.first_contact_drop_rate:.2f} over n={proj.first_contact_n}"
         )
         console.print(f"    G0 |rho| before projection {best_before:.3f}")
     console.print(
@@ -150,6 +160,8 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
             neutral_dialogues=ev.neutral_dialogues,
             neutral_dialogues_per_call=ev.neutral_dialogues_per_call,
             neutral_variance_target=ev.neutral_variance_target,
+            neutral_min_kept=ev.neutral_min_kept,
+            neutral_max_drop_rate=ev.neutral_max_drop_rate,
             seed=ev.seed,
             min_token=ev.min_token,
             max_tokens=ev.max_tokens,
@@ -162,9 +174,17 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
     except FirstContactFailure as failure:
         # The BLIND filter's compensation: write the sample a human must READ, record the cap,
         # and stop before the capture pass rather than scoring a basis built from the survivors.
-        write_json(paths["first_contact"], story_log_records(failure.sample))
+        # Two surfaces are frozen blind, so the sample goes to the path for the one that tripped.
+        key = "neutral_first_contact" if failure.surface.startswith("neutral") else "first_contact"
+        write_json(paths[key], story_log_records(failure.sample))
         console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
-        console.print(f"  first-contact sample written to {paths['first_contact']}")
+        console.print(f"  first-contact sample written to {paths[key]}")
+        raise typer.Exit(code=1) from failure
+    except NeutralCorpusTooThin as failure:
+        # The corpus behind the projection is too small or too heavily filtered to be the one the
+        # config designed. Refused rather than recorded, because the basis it would fit is
+        # subtracted from every emotion vector before G0 can see anything.
+        console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
         raise typer.Exit(code=1) from failure
     except StoryYieldShortfall as failure:
         # The other half of the BLIND freeze: the filter can only audit pieces that exist, so a
@@ -178,6 +198,9 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
     write_json(paths["stories"], story_log_records(stories))
     write_json(paths["first_contact"], story_log_records(stories[: ev.first_contact_n]))
     if neutral:
+        # The neutral corpus gets the same written early-N sample the stories get: its <NEW
+        # DIALOGUE> splitter is a blind freeze on the same footing, so it needs the same reading.
+        write_json(paths["neutral_first_contact"], story_log_records(neutral[: ev.first_contact_n]))
         # Its own file, not appended to stories.json: P1 re-feeds that log as emotion stories, and
         # a neutral transcript is not a story of any emotion. Written regardless of the fit, so
         # the corpus behind a projection can be READ.

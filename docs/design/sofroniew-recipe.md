@@ -220,8 +220,12 @@ Four implementation decisions, each a decision rather than an accident:
    symmetric-amendment test).
 3. **Topics reused, not redrawn.** The appendix says the same 100 topics "seed the generation of
    our stories and dialogues datasets", so the subspace the paper removes is fit on the same
-   topic material its stories came from. At our scale that has to be arranged: the neutral grid
-   draws from the *same seeded shuffle* the story grid draws from.
+   topic material its stories came from. At our scale that has to be *derived*: the neutral grid
+   takes a prefix of the story grid's own topic list, and refuses when it would need more calls
+   than the stories have topics. Drawing from the same seeded shuffle is not enough on its own —
+   a longer neutral prefix runs off the end of the story prefix onto premises no story saw, and
+   the paper's topics carry affect. That caps the corpus at 6 calls (24 transcripts at 4 per
+   call) for a 6-topic story grid.
 4. **Pooling granularity — an unresolved ambiguity, stated as one.** The paper says "activations
    on this dataset" without saying whether the PCA ran over individual tokens or over
    per-transcript means. We use one mean per transcript over the same token-50-onward window the
@@ -233,7 +237,7 @@ Four implementation decisions, each a decision rather than an accident:
    means. We cannot tell, so the choice is named here and recorded in the artifact
    (`neutral_projection.pooling`) rather than smoothed over.
 
-Cost on top of the prompt arm: 10 extra generations and ≤40 read-only forwards. Rounding error.
+Cost on top of the prompt arm: 6 extra generations and ≤24 read-only forwards. Rounding error.
 
 The corpus is written to `runs/<id>/emotions/neutral_dialogues.json` so it can be **read** — the
 `<NEW DIALOGUE>` splitter is a blind freeze on the same footing as `<NEW STORY>`.

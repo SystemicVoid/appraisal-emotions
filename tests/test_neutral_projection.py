@@ -14,8 +14,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 
 from appraisal_emotions.analysis.emotion_vectors import (
+    FirstContactFailure,
+    NeutralCorpusTooThin,
     extract_emotion_vectors,
     fit_neutral_projection,
 )
@@ -98,20 +101,40 @@ def test_the_neutral_splitter_cuts_on_the_separator_and_renames(recipe):
     assert split("   ") == ()
 
 
-def test_the_neutral_grid_reuses_the_story_topics(recipe):
-    """The confound basis must be fit on topics the stories actually saw (module docstring, 4)."""
+@pytest.mark.parametrize("config_path", sorted(ROOT.glob("configs/*_projected*.yaml")))
+def test_every_shipped_projected_config_keeps_the_neutral_corpus_inside_the_story_topics(
+    recipe, config_path
+):
+    """The invariant, checked against the numbers the SHIPPED configs actually carry.
 
+    Reproduced at hand-matched numbers this test previously used (6 story topics / 12 transcripts
+    / 2 per call) the invariant held; both shipped configs violated it. The real arm asked for 10
+    neutral calls against 6 story topics and the smoke for 6 against 1, so the confound corpus
+    covered topics no story ever saw — several of them affect-laden, which is the specific hazard
+    the module docstring's point 4 names. Parametrizing over the config glob is what makes a new
+    arm inherit the check instead of a reviewer having to remember it.
+    """
+
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))["emotion_vectors"]
+    assert payload["story_recipe"] == "sofroniew", "the neutral arm only exists under this recipe"
+    topics_per_label = payload["stories_per_emotion"] // payload["sofroniew_stories_per_call"]
     stories = build_sofroniew_story_grid(
-        ("elated",), recipe=recipe, topics_per_label=6, stories_per_call=2, seed=7
+        ("elated",),
+        recipe=recipe,
+        topics_per_label=topics_per_label,
+        stories_per_call=payload["sofroniew_stories_per_call"],
+        seed=payload["seed"],
     )
     neutral = build_neutral_dialogue_grid(
-        recipe=recipe, n_transcripts=12, dialogues_per_call=2, seed=7
+        recipe=recipe,
+        n_transcripts=payload["neutral_dialogues"],
+        dialogues_per_call=payload["neutral_dialogues_per_call"],
+        story_topics_per_label=topics_per_label,
+        seed=payload["seed"],
     )
-    assert [request.topic for request in neutral] == [
-        request.topic for request in stories if request.emotion == "elated"
-    ]
+    story_topics = [request.topic for request in stories if request.emotion == "elated"]
+    assert [request.topic for request in neutral] == story_topics[: len(neutral)]
     assert {request.emotion for request in neutral} == {NEUTRAL_DIALOGUE_LABEL}
-    assert [request.story_index for request in neutral] == [0, 2, 4, 6, 8, 10]
     # Every prompt is the paper's neutral prompt with its two slots bound.
     for request in neutral:
         assert "{topic}" not in request.prompt
@@ -119,9 +142,107 @@ def test_the_neutral_grid_reuses_the_story_topics(recipe):
         assert request.topic in request.prompt
 
 
+def test_the_neutral_grid_refuses_more_calls_than_the_stories_have_topics(recipe):
+    """The topics past the story prefix are premises no emotion vector was ever built from."""
+
+    with pytest.raises(ValueError, match="no story ever saw"):
+        build_neutral_dialogue_grid(
+            recipe=recipe,
+            n_transcripts=12,
+            dialogues_per_call=2,
+            story_topics_per_label=5,
+            seed=7,
+        )
+
+
 def test_the_neutral_grid_refuses_an_uneven_batch(recipe):
     with pytest.raises(ValueError, match="multiple"):
-        build_neutral_dialogue_grid(recipe=recipe, n_transcripts=7, dialogues_per_call=2, seed=7)
+        build_neutral_dialogue_grid(
+            recipe=recipe,
+            n_transcripts=7,
+            dialogues_per_call=2,
+            story_topics_per_label=6,
+            seed=7,
+        )
+
+
+def _fit_neutral(**overrides):
+    """`fit_neutral_projection` at the fake-backend smoke shape, with one knob moved per test."""
+
+    settings = {
+        "layers": (0, 1, 2, 3),
+        "n_transcripts": 4,
+        "dialogues_per_call": 1,
+        "variance_target": 0.5,
+        "seed": 7,
+        "min_token": 20,
+        "max_tokens": 160,
+        "temperature": 1.0,
+        "min_kept": 2,
+        "max_drop_rate": 0.5,
+        "first_contact_n": 4,
+        "first_contact_max_drop_rate": 0.5,
+        "story_topics_per_label": 4,
+        "data_dir": DATA_DIR,
+    }
+    return fit_neutral_projection(FakeBackend(SPEC), **(settings | overrides))
+
+
+def test_the_neutral_corpus_has_a_floor_above_the_two_the_algebra_needs():
+    """What this floor catches: a rank-1 basis fit on the survivors of a mostly-dropped corpus.
+
+    `fit_neutral_basis` refusing below 2 was the whole adequacy gate, and 2 is only the point
+    where PCA stops being undefined — it says nothing about whether the subspace is the confound
+    subspace. The basis is subtracted from every emotion vector BEFORE G0, so a bad one is not
+    something a downstream gate can notice.
+    """
+
+    with pytest.raises(NeutralCorpusTooThin, match="below the floor of 8"):
+        _fit_neutral(min_kept=8)
+
+
+def test_the_neutral_corpus_has_a_drop_ceiling():
+    """min_token above every transcript's length drops the lot — the corpus is not the design.
+
+    The first-contact checkpoint is disabled here so the ceiling is what fires: the two overlap
+    on a corpus that over-drops from the start, and the ceiling's own job is the corpus that
+    passes its first N and then falls apart.
+    """
+
+    with pytest.raises(NeutralCorpusTooThin, match="the filter dropped 1.00"):
+        _fit_neutral(min_token=100_000, max_drop_rate=0.5, first_contact_max_drop_rate=1.0)
+
+
+def test_the_neutral_corpus_gets_its_own_first_contact_checkpoint():
+    """The <NEW DIALOGUE> splitter is a BLIND freeze, and rails.md licenses one only with this.
+
+    The story-side checkpoint cannot cover it: it reads `stories`, and no neutral transcript is
+    ever in that list. The failure names its surface so the written sample lands in the right file.
+    """
+
+    with pytest.raises(FirstContactFailure, match="neutral transcripts") as excinfo:
+        _fit_neutral(min_token=100_000, first_contact_max_drop_rate=0.0)
+    assert excinfo.value.surface == "neutral transcripts"
+    assert excinfo.value.sample, "the checkpoint must hand back the sample a human has to read"
+
+
+def test_the_record_separates_configured_obtained_and_kept():
+    """Three numbers, because a corpus falls short in two different places.
+
+    Reproduced: with `neutral_dialogues: 12, per_call: 2` the artifact read
+    `n_requested: 6, n_kept: 6, drop_rate: 0.0` — the 12 the config asked for appeared nowhere,
+    and a corpus at half its designed size read as a clean run.
+    """
+
+    _basis, record, transcripts = _fit_neutral(n_transcripts=4, dialogues_per_call=2)
+    # 4 asked for over 2 calls; the fake backend emits no separator, so 2 come back.
+    assert record.n_transcripts_configured == 4
+    assert record.n_calls_requested == 2
+    assert record.n_pieces_obtained == len(transcripts) == 2
+    assert record.n_kept == 2
+    # The filter's drop rate is 0 — and that is exactly why it cannot be the only number here.
+    assert record.drop_rate == 0.0
+    assert record.n_pieces_obtained < record.n_transcripts_configured
 
 
 # --------------------------------------------------------------------------------------
@@ -253,13 +374,22 @@ def test_fit_neutral_projection_generates_captures_and_records():
         min_token=20,
         max_tokens=160,
         temperature=1.0,
+        min_kept=2,
+        max_drop_rate=0.5,
+        first_contact_n=4,
+        first_contact_max_drop_rate=0.5,
+        story_topics_per_label=4,
         data_dir=DATA_DIR,
     )
     # 8 transcripts asked for, 2 per call = 4 calls. The fake backend emits no <NEW DIALOGUE>,
     # so each call yields one piece — the same known smoke behaviour the story arm has, and the
-    # reason n_transcripts is a request target rather than a guarantee.
+    # reason n_transcripts is a request target rather than a guarantee. All three numbers are
+    # recorded, because a corpus that came back at half its request must not read as a clean run.
     assert len(transcripts) == 4
     assert {t.emotion for t in transcripts} == {NEUTRAL_DIALOGUE_LABEL}
+    assert record.n_transcripts_configured == 8
+    assert record.n_calls_requested == 4
+    assert record.n_pieces_obtained == 4
     # No transcript may be dropped for naming a target: there is no target to name.
     assert "names_target" not in record.drop_counts_by_reason
     assert record.n_kept == sum(1 for t in transcripts if t.kept)
@@ -295,6 +425,9 @@ def test_the_projection_arm_records_g0_on_both_sides_of_the_projection():
         neutral_dialogues=2,
         neutral_dialogues_per_call=1,
         neutral_variance_target=0.5,
+        # The structural minimum: this grid can issue 2 calls and the fake backend returns one
+        # transcript each, so 2 is all a fake-backend corpus can be. The real arm's floor is 8.
+        neutral_min_kept=2,
         **common,
     )
 
@@ -305,7 +438,7 @@ def test_the_projection_arm_records_g0_on_both_sides_of_the_projection():
     assert len(neutral) == 2  # 2 calls x 1 unsplit piece each, under the fake backend
     record = projected.metadata.neutral_projection
     assert record is not None
-    assert record.n_requested == len(neutral)
+    assert record.n_pieces_obtained == len(neutral)
     assert record.blocks[0].block == 0
     # The pre-projection table is the unprojected run's table: same stories, same centring, and
     # the projection is the only thing that happens between them.

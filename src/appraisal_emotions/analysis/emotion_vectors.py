@@ -236,21 +236,35 @@ def read_story_log(path: Path) -> tuple[GeneratedStory, ...]:
 
 
 class FirstContactFailure(RuntimeError):
-    """The BLIND story filter dropped too much of its first-contact sample.
+    """A BLIND-frozen filter dropped too much of its first-contact sample.
 
     Raised before full spend so the run records ``harness_inadequate`` rather than producing an
     emotion basis built from whatever survived a mis-frozen rule.
+
+    ``surface`` names which generated corpus tripped it. There are two, frozen against unread
+    output by two different splitters, and they fail independently: the emotion stories, and the
+    neutral-dialogue corpus whose principal components get subtracted from every emotion vector
+    before G0. A checkpoint on the first alone leaves the second unread.
     """
 
-    def __init__(self, *, drop_rate: float, threshold: float, sample: tuple[GeneratedStory, ...]):
+    def __init__(
+        self,
+        *,
+        drop_rate: float,
+        threshold: float,
+        sample: tuple[GeneratedStory, ...],
+        surface: str = "stories",
+    ):
         super().__init__(
-            f"first-contact checkpoint failed: {drop_rate:.2f} of the first {len(sample)} stories "
-            f"were dropped by the BLIND story filter (threshold {threshold:.2f}). Read the "
-            "written sample, fix the prompt or the filter, then re-run — do NOT score this basis."
+            f"first-contact checkpoint failed on the {surface}: {drop_rate:.2f} of the first "
+            f"{len(sample)} were dropped by the BLIND filter (threshold {threshold:.2f}). Read "
+            "the written sample, fix the prompt or the filter, then re-run — do NOT score this "
+            "basis."
         )
         self.drop_rate = drop_rate
         self.threshold = threshold
         self.sample = sample
+        self.surface = surface
 
 
 class StoryYieldShortfall(RuntimeError):
@@ -280,6 +294,16 @@ class StoryYieldShortfall(RuntimeError):
         self.requested = requested
         self.realized = realized
         self.short = short
+
+
+class NeutralCorpusTooThin(RuntimeError):
+    """The neutral corpus cleared ``>= 2`` but not the floors the arm is actually exposed to.
+
+    ``fit_neutral_basis`` needs two transcripts to have any variance at all, and that was the
+    whole adequacy gate: 38 of 40 transcripts dropped still fits a rank-1 basis, which is then
+    subtracted from every emotion vector before G0. Two transcripts are enough to compute
+    something; they are not enough for it to be the confound subspace the paper's step means.
+    """
 
 
 def _yield_check(stories: tuple[GeneratedStory, ...], *, requested: int) -> dict[str, int]:
@@ -358,9 +382,9 @@ def generate_stories(
 
 
 def _first_contact_check(
-    stories: tuple[GeneratedStory, ...], *, n: int, max_drop_rate: float
+    stories: tuple[GeneratedStory, ...], *, n: int, max_drop_rate: float, surface: str = "stories"
 ) -> tuple[int, float]:
-    """Read the run's own first ``n`` stories against the frozen filter; refuse if it over-drops."""
+    """Read the run's own first ``n`` pieces against the frozen filter; refuse if it over-drops."""
 
     sample = stories[:n]
     if not sample:
@@ -368,7 +392,7 @@ def _first_contact_check(
     drop_rate = sum(1 for story in sample if not story.kept) / len(sample)
     if drop_rate > max_drop_rate:
         raise FirstContactFailure(
-            drop_rate=drop_rate, threshold=max_drop_rate, sample=tuple(sample)
+            drop_rate=drop_rate, threshold=max_drop_rate, sample=tuple(sample), surface=surface
         )
     return len(sample), drop_rate
 
@@ -676,6 +700,10 @@ class StimulusPlan:
     split: Callable[[str], tuple[str, ...]]
     stimulus_hash: str
     stories_per_emotion: int
+    # Topics each label's stories were drawn over. The neutral corpus draws from the same seeded
+    # shuffle, so this is the number that bounds how many neutral calls can stay inside the topics
+    # the stories actually saw. Zero under the project recipe, which has no neutral arm.
+    topics_per_label: int
     recipe_manifest: dict[str, object]
 
 
@@ -710,6 +738,7 @@ def build_stimulus_plan(
                 [STORY_PROMPT_TEMPLATE, STYLE_CONTROL_PROMPT_TEMPLATE, list(STORY_TOPICS)]
             ),
             stories_per_emotion=stories_per_emotion,
+            topics_per_label=0,
             recipe_manifest={"recipe": "project", "n_topics": len(STORY_TOPICS)},
         )
     if story_recipe != "sofroniew":
@@ -753,6 +782,7 @@ def build_stimulus_plan(
             ]
         ),
         stories_per_emotion=stories_per_emotion,
+        topics_per_label=topics_per_label,
         recipe_manifest=manifest,
     )
 
@@ -768,6 +798,11 @@ def fit_neutral_projection(
     min_token: int,
     max_tokens: int,
     temperature: float,
+    min_kept: int,
+    max_drop_rate: float,
+    first_contact_n: int,
+    first_contact_max_drop_rate: float,
+    story_topics_per_label: int,
     data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
 ) -> tuple[NeutralBasis, NeutralProjectionRecord, tuple[GeneratedStory, ...]]:
     """Generate the neutral corpus, capture it, and fit the confound basis the paper projects out.
@@ -780,6 +815,14 @@ def fit_neutral_projection(
     target" clause (there is no target). The length clause matters here for the same reason it
     does there: a transcript with no token past ``min_token`` contributes nothing but noise to the
     covariance.
+
+    **Three refusals, each naming the failure it can catch.** The ``<NEW DIALOGUE>`` splitter is a
+    BLIND freeze on exactly the same footing as ``<NEW STORY>``, so it gets the same early-N
+    checkpoint the stories get — rails.md licenses a blind freeze only against one. Past that,
+    ``min_kept`` and ``max_drop_rate`` are floors on the corpus itself: what they catch is a
+    confound basis fit on a handful of survivors and then subtracted from every emotion vector
+    BEFORE G0, where nothing downstream can distinguish its effect from the instrument's. Their
+    defaults are sized to the real config's 40 transcripts (see ``config.EmotionVectorsConfig``).
     """
 
     recipe = read_sofroniew_recipe(data_dir)
@@ -787,6 +830,7 @@ def fit_neutral_projection(
         recipe=recipe,
         n_transcripts=n_transcripts,
         dialogues_per_call=dialogues_per_call,
+        story_topics_per_label=story_topics_per_label,
         seed=seed,
     )
     transcripts = generate_stories(
@@ -797,12 +841,29 @@ def fit_neutral_projection(
         temperature=temperature,
         split=neutral_completion_splitter(recipe.speaker_substitutions),
     )
+    contact_n, contact_rate = _first_contact_check(
+        transcripts,
+        n=first_contact_n,
+        max_drop_rate=first_contact_max_drop_rate,
+        surface="neutral transcripts",
+    )
     kept = tuple(transcript for transcript in transcripts if transcript.kept)
-    if len(kept) < 2:
-        raise ValueError(
-            f"only {len(kept)} of {len(transcripts)} neutral transcripts survived the filter; a "
-            "confound basis needs at least 2. Raise neutral_dialogues or max_tokens, or lower "
-            "min_token."
+    drop_rate = 1.0 - len(kept) / len(transcripts)
+    if drop_rate > max_drop_rate:
+        raise NeutralCorpusTooThin(
+            f"the filter dropped {drop_rate:.2f} of the {len(transcripts)} neutral transcripts "
+            f"that came back (ceiling {max_drop_rate:.2f}, reasons "
+            f"{dict(sorted(Counter(t.drop_reason for t in transcripts if t.drop_reason).items()))}"
+            "). The surviving corpus is not the one the config designed, so the subspace it fits "
+            "is not the one the arm meant to remove."
+        )
+    if len(kept) < max(min_kept, 2):
+        raise NeutralCorpusTooThin(
+            f"only {len(kept)} neutral transcripts survived, below the floor of {min_kept} "
+            f"({len(transcripts)} pieces came back from {len(requests)} calls asking for "
+            f"{n_transcripts}). A basis fit on this few is subtracted from every emotion vector "
+            "before G0, and nothing downstream can tell its effect from the instrument's. Raise "
+            "neutral_dialogues or max_tokens, or lower min_token."
         )
     states = capture_token_mean_states(
         backend, [transcript.text for transcript in kept], layers=layers, min_token=min_token
@@ -812,9 +873,15 @@ def fit_neutral_projection(
     record = NeutralProjectionRecord(
         variance_target=variance_target,
         pooling=f"mean over transcript tokens from token {min_token} onward, per block",
-        n_requested=len(transcripts),
+        n_transcripts_configured=n_transcripts,
+        n_calls_requested=len(requests),
+        n_pieces_obtained=len(transcripts),
         n_kept=len(kept),
-        drop_rate=1.0 - len(kept) / len(transcripts),
+        drop_rate=drop_rate,
+        min_kept=min_kept,
+        max_drop_rate=max_drop_rate,
+        first_contact_n=contact_n,
+        first_contact_drop_rate=contact_rate,
         drop_counts_by_reason=dict(sorted(drop_counts.items())),
         dialogues_per_call=dialogues_per_call,
         stimulus_hash=stable_hash(
@@ -843,9 +910,11 @@ def extract_emotion_vectors(
     sofroniew_stories_per_call: int = 2,
     sofroniew_data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
     neutral_projection: bool = False,
-    neutral_dialogues: int = 40,
+    neutral_dialogues: int = 24,
     neutral_dialogues_per_call: int = 4,
     neutral_variance_target: float = DEFAULT_NEUTRAL_VARIANCE_TARGET,
+    neutral_min_kept: int = 8,
+    neutral_max_drop_rate: float = 0.5,
     seed: int = EXTRACTION_SEED,
     min_token: int = DEFAULT_MIN_TOKEN,
     max_tokens: int = 320,
@@ -933,6 +1002,11 @@ def extract_emotion_vectors(
             min_token=min_token,
             max_tokens=max_tokens,
             temperature=temperature,
+            min_kept=neutral_min_kept,
+            max_drop_rate=neutral_max_drop_rate,
+            first_contact_n=first_contact_n,
+            first_contact_max_drop_rate=first_contact_max_drop_rate,
+            story_topics_per_label=plan.topics_per_label,
             data_dir=sofroniew_data_dir,
         )
         vectors = project_out(vectors, neutral_basis)

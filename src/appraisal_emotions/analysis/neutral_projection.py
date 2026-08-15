@@ -259,14 +259,31 @@ class NeutralProjectionRecord(StrictModel):
     survived" bounds how many components could exist at all: with N transcripts the per-block
     covariance has rank at most N-1.
 
+    That accounting is THREE numbers, not one, because they can and do differ. The config asks for
+    ``n_transcripts_configured`` transcripts, which fixes ``n_calls_requested`` batched calls; the
+    splitter returns ``n_pieces_obtained`` transcripts from those calls, fewer whenever a
+    completion carries no separator; and the filter keeps ``n_kept`` of those. Recording only the
+    last two reports a 0.00 drop rate for a corpus a fraction of its designed size -- which is
+    what a 40-transcript config would have done while obtaining 10, leaving its own "rank <= 39"
+    note standing and false.
     """
 
     contract_version: str = NEUTRAL_PROJECTION_CONTRACT_VERSION
     variance_target: float
     pooling: str
-    n_requested: int
+    n_transcripts_configured: int
+    n_calls_requested: int
+    n_pieces_obtained: int
     n_kept: int
+    # Over the pieces that came back, so this is the FILTER's drop rate. The corpus shortfall from
+    # an unsplit completion is the n_transcripts_configured vs n_pieces_obtained gap above.
     drop_rate: float
+    # The floors this run was held to, and the early-N sample it was read against. Recorded so a
+    # corpus that only just cleared its floors is legible without re-deriving them from a config.
+    min_kept: int
+    max_drop_rate: float
+    first_contact_n: int
+    first_contact_drop_rate: float
     drop_counts_by_reason: dict[str, int]
     dialogues_per_call: int
     stimulus_hash: str

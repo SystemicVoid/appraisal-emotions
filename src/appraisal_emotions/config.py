@@ -127,9 +127,21 @@ class EmotionVectorsConfig(ConfigModel):
     # than a silent change to the instrument E1-E3 already read.
     # Needs `sofroniew_data_dir`: the neutral-dialogue prompt is the paper's, loaded from there.
     neutral_projection: bool = False
-    neutral_dialogues: int = 40
+    # A REQUEST target, and one bounded by the story grid: the neutral corpus draws its topics
+    # from the story grid's own list, so `neutral_dialogues // neutral_dialogues_per_call` calls
+    # may not exceed the story arm's topics per label (`build_neutral_dialogue_grid` refuses).
+    neutral_dialogues: int = 24
     neutral_dialogues_per_call: int = 4
     neutral_variance_target: float = 0.5
+    # Floors on the corpus that actually survives, and what they catch: a confound basis fit on a
+    # handful of transcripts, subtracted from every emotion vector BEFORE G0, where nothing
+    # downstream can separate its effect from the instrument's. `fit_neutral_basis` needs 2 to
+    # have any variance at all, and 2 was previously the whole adequacy gate — 22 of 24 dropped
+    # still fits a rank-1 basis. Sized against the real arm's 24-transcript request: a third of it
+    # surviving is the least that makes the 50%-of-variance rule a selection rather than a
+    # coin flip, and the drop ceiling mirrors the story side's first-contact ceiling.
+    neutral_min_kept: int = 8
+    neutral_max_drop_rate: float = 0.5
     min_token: int = 50
     max_tokens: int = 320
     temperature: float = 1.0
@@ -153,6 +165,22 @@ class EmotionVectorsConfig(ConfigModel):
     def positive_counts(cls, value: int) -> int:
         if value < 1:
             raise ValueError("must be >= 1")
+        return value
+
+    @field_validator("neutral_min_kept")
+    @classmethod
+    def basis_needs_variance(cls, value: int) -> int:
+        # Below 2 there is no variance to take principal components of, so a floor under 2 is not
+        # a weaker floor — it is no floor at all, and fit_neutral_basis would raise anyway.
+        if value < 2:
+            raise ValueError("neutral_min_kept must be >= 2")
+        return value
+
+    @field_validator("neutral_max_drop_rate")
+    @classmethod
+    def drop_rate_in_unit_interval(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("neutral_max_drop_rate must lie in [0, 1]")
         return value
 
     @field_validator("neutral_variance_target")

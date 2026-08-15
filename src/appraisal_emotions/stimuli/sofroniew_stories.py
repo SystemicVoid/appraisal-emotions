@@ -380,6 +380,7 @@ def build_neutral_dialogue_grid(
     recipe: SofroniewRecipe,
     n_transcripts: int,
     dialogues_per_call: int,
+    story_topics_per_label: int,
     seed: int,
 ) -> tuple[StoryRequest, ...]:
     """The confound corpus: ``n_transcripts`` emotionally neutral Human/Assistant transcripts.
@@ -389,11 +390,14 @@ def build_neutral_dialogue_grid(
     neutral transcripts ... enough to explain 50% of the variance"), so what matters about them is
     coverage of the ordinary-conversation directions, not balance across emotions.
 
-    Topics come from the SAME seeded shuffle of the paper's 100 that the story grid draws from, so
-    when the two counts coincide the neutral corpus spans exactly the topics the stories did. The
-    paper gets this for free -- its appendix seeds both datasets from the same 100 topics -- while
-    at our scale it has to be arranged, or the projection would remove directions belonging to
-    topics no story ever saw.
+    Topics are the story grid's own topics, not a parallel draw of the same length: this takes the
+    prefix of ``_shared_topics(story_topics_per_label)``, which is exactly the list
+    :func:`build_sofroniew_story_grid` used. Both drawing from the same seeded shuffle is not
+    enough on its own -- a longer neutral prefix runs off the end of the story prefix and covers
+    topics no story ever saw, several of them affect-laden, which is the hazard the module
+    docstring's point 4 names. The paper gets the sharing for free (its appendix seeds both
+    datasets from the same 100 topics); at our scale it has to be derived, so ``n_calls`` may not
+    exceed ``story_topics_per_label`` and this refuses rather than silently widening.
 
     ``n_transcripts`` is a request target, not a guarantee: it fixes how many CALLS are issued
     (``n_transcripts // dialogues_per_call``), and how many transcripts come back depends on
@@ -412,7 +416,18 @@ def build_neutral_dialogue_grid(
         )
 
     n_calls = n_transcripts // dialogues_per_call
-    topics = _shared_topics(topics=recipe.topics, topics_per_label=n_calls, seed=seed)
+    if n_calls > story_topics_per_label:
+        raise ValueError(
+            f"the neutral corpus would need {n_calls} topics "
+            f"(n_transcripts={n_transcripts} / dialogues_per_call={dialogues_per_call}) but the "
+            f"stories were written over only {story_topics_per_label}. The extra topics are ones "
+            "no story ever saw, and the paper's topics carry affect — the projection would remove "
+            "directions belonging to premises the emotion vectors were never built from. Raise "
+            "dialogues_per_call, lower neutral_dialogues, or widen the story grid."
+        )
+    topics = _shared_topics(
+        topics=recipe.topics, topics_per_label=story_topics_per_label, seed=seed
+    )[:n_calls]
     return tuple(
         StoryRequest(
             emotion=NEUTRAL_DIALOGUE_LABEL,

@@ -46,9 +46,16 @@ emotion_vectors:
   sofroniew_stories_per_call: 1
   sofroniew_data_dir: data/sofroniew2026
   neutral_projection: true
-  neutral_dialogues: 12
-  neutral_dialogues_per_call: 2
+  # 2 calls, which is the 2 topics `stories_per_emotion / sofroniew_stories_per_call` gives the
+  # stories here — the grid refuses a neutral corpus wider than the topics the stories saw.
+  neutral_dialogues: 2
+  neutral_dialogues_per_call: 1
   neutral_variance_target: 0.5
+  # The structural minimum, not the real arm's floor: the fake backend emits one transcript per
+  # call and this grid can only issue 2 calls, so 2 is all a smoke can produce. The value that
+  # matters is in configs/emotion_vectors_sofroniew_projected.yaml, and it is 8.
+  neutral_min_kept: 2
+  neutral_max_drop_rate: 0.5
   min_token: 20
   max_tokens: 160
   temperature: 1.0
