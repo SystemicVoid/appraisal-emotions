@@ -99,12 +99,28 @@ def read_main_tex(tarball_bytes: bytes) -> str:
         return handle.read().decode("utf-8")
 
 
+class NetworkError(RuntimeError):
+    """arXiv could not be reached. Distinct from drift, because the fixes are opposite.
+
+    A raw URLError traceback here is indistinguishable at a glance from the source having changed
+    — one means "try again or pass --tarball", the other means "read the diff before trusting
+    anything". They must not look alike.
+    """
+
+
 def download_eprint() -> bytes:
     request = urllib.request.Request(
         EPRINT_URL, headers={"User-Agent": "appraisal-emotions/1.0 (recipe extraction)"}
     )
-    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310 - fixed https URL
-        return response.read()
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310 - fixed URL
+            return response.read()
+    except urllib.error.URLError as exc:
+        raise NetworkError(
+            f"could not fetch {EPRINT_URL}: {exc.reason}. This is a NETWORK failure, not source "
+            "drift — the committed files under data/sofroniew2026/ are unchanged and still valid. "
+            "Retry, or pass --tarball with a saved e-print."
+        ) from exc
 
 
 # --------------------------------------------------------------------------------------
@@ -166,7 +182,9 @@ def parse_emotion_words(block: str) -> list[str]:
     """The 171-word list: one comma-separated run, possibly wrapped over lines."""
 
     words = [word.strip() for word in " ".join(block.split("\n")).split(",")]
-    words = [word for word in words if word]
+    # Same normalization as every other promptblock. It is a no-op on today's source (no word
+    # carries a backtick), but the rule must not depend on which parser happens to reach the text.
+    words = [normalize_promptblock(word) for word in words if word]
     if len(words) != EXPECTED_EMOTION_COUNT:
         raise ExtractionError(f"expected {EXPECTED_EMOTION_COUNT} emotion words, got {len(words)}")
     if len(set(words)) != len(words):
@@ -215,8 +233,9 @@ def parse_speaker_substitutions(tex: str) -> list[dict[str, str]]:
     than guessing: a wrong rename would change every token of every neutral transcript.
 
     The appendix states the same sentence twice, once under the neutral-dialogues prompt and once
-    under the emotional-dialogues prompt. This returns the neutral one and asserts every other
-    occurrence parses identically, so *which* occurrence was read cannot matter.
+    under the emotional-dialogues prompt. Every occurrence must parse identically, so *which* one
+    was read cannot matter — but at least one must follow the neutral-dialogues prompt, or the
+    sentence we are reading belongs to some other prompt entirely.
     """
 
     starts: list[int] = []
@@ -234,10 +253,11 @@ def parse_speaker_substitutions(tex: str) -> list[dict[str, str]]:
         )
 
     neutral_at = tex.index(ANCHOR_NEUTRAL_PROMPT)
-    after_neutral = [start for start in starts if start > neutral_at]
-    if not after_neutral:
+    if not any(start > neutral_at for start in starts):
         raise ExtractionError("no speaker-conversion sentence follows the neutral-dialogues prompt")
-    return parsed[starts.index(after_neutral[0])]
+    # Every parse is equal by the check above, so indexing to the neutral occurrence would return
+    # this same list; say so instead of implying a choice that has no consequence.
+    return parsed[0]
 
 
 def parse_story_prompt(block: str) -> str:
@@ -255,7 +275,7 @@ def parse_story_prompt(block: str) -> str:
 # --------------------------------------------------------------------------------------
 
 
-def build_payloads(tex: str) -> dict[str, dict]:
+def build_payloads(tex: str, *, arxiv_version: str = ARXIV_VERSION) -> dict[str, dict]:
     words = parse_emotion_words(promptblock_after(tex, ANCHOR_EMOTIONS))
     topics = parse_topics(promptblock_after(tex, ANCHOR_TOPICS))
     story_raw = promptblock_after(tex, ANCHOR_STORY_PROMPT)
@@ -276,7 +296,7 @@ def build_payloads(tex: str) -> dict[str, dict]:
 
     source = {
         "arxiv_id": ARXIV_ID,
-        "arxiv_version": ARXIV_VERSION,
+        "arxiv_version": arxiv_version,
         "eprint_url": EPRINT_URL,
         "main_tex_sha256": hashlib.sha256(tex.encode("utf-8")).hexdigest(),
     }
@@ -418,21 +438,48 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--check", action="store_true", help="verify committed files; write none")
+    parser.add_argument(
+        "--accept-new-source",
+        action="store_true",
+        help="proceed when main.tex no longer matches MAIN_TEX_SHA256; needs --arxiv-version",
+    )
+    parser.add_argument(
+        "--arxiv-version",
+        help="the version arXiv is now serving (e.g. v2). Required with --accept-new-source.",
+    )
     args = parser.parse_args(argv)
 
-    raw = args.tarball.read_bytes() if args.tarball else download_eprint()
+    try:
+        raw = args.tarball.read_bytes() if args.tarball else download_eprint()
+    except NetworkError as exc:
+        print(f"NETWORK: {exc}", file=sys.stderr)
+        return 2
     tex = read_main_tex(raw)
 
+    # The pin is the whole drift detector. Warning and regenerating anyway rewrote all four files
+    # from an unread source and stamped the OLD arxiv_version onto them, at exit 0 — the one
+    # outcome the --check story is meant to make impossible. Refuse instead, and make accepting a
+    # new source say which version it is, so provenance cannot silently describe the old one.
     actual = hashlib.sha256(tex.encode("utf-8")).hexdigest()
+    version = ARXIV_VERSION
     if actual != MAIN_TEX_SHA256:
+        if not (args.accept_new_source and args.arxiv_version):
+            print(
+                f"DRIFT: main.tex sha256 is {actual}, pinned {MAIN_TEX_SHA256}. The paper source "
+                "changed (new version, or a corrected appendix). Read the diff, then re-run with "
+                "--accept-new-source --arxiv-version <vN> and update MAIN_TEX_SHA256 and "
+                "ARXIV_VERSION in this script. Nothing was written.",
+                file=sys.stderr,
+            )
+            return 1
+        version = args.arxiv_version
         print(
-            f"NOTE: main.tex sha256 is {actual}, pinned {MAIN_TEX_SHA256}. The paper source "
-            "changed (new version, or a corrected appendix). Read the diff before trusting the "
-            "regenerated files.",
+            f"ACCEPTING NEW SOURCE: main.tex {actual}, stamped as {version}. Update "
+            "MAIN_TEX_SHA256 and ARXIV_VERSION in this script to re-pin.",
             file=sys.stderr,
         )
 
-    payloads = build_payloads(tex)
+    payloads = build_payloads(tex, arxiv_version=version)
     if args.check:
         return check_payloads(payloads, args.out_dir)
     write_payloads(payloads, args.out_dir)
