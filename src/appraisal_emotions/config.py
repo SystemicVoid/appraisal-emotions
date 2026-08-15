@@ -25,7 +25,14 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from appraisal_emotions.core.schema import PILOT_PARTITIONS, ModelSpec, PilotPartition
 
@@ -210,6 +217,40 @@ class EmotionVectorsConfig(ConfigModel):
         if not 0.0 <= value <= 1.0:
             raise ValueError("must lie in [0, 1]")
         return value
+
+    @model_validator(mode="after")
+    def arm_options_belong_to_their_arm(self) -> EmotionVectorsConfig:
+        """Refuse options the chosen arm will not read, rather than ignoring them.
+
+        Under ``story_recipe: project`` the sofroniew grid is never built and the neutral corpus
+        is never fitted, so every ``sofroniew_*`` and ``neutral_*`` key is inert. Accepting them
+        silently is how a config comes to *describe* a run nobody performed — the reader sees
+        ``neutral_projection: true`` in the committed YAML beside an artifact with no basis in it.
+        """
+
+        if self.story_recipe != "project":
+            return self
+        if self.neutral_projection:
+            # There is no designed project + projection arm: the neutral prompt, its speaker
+            # renames and its topics all come from the paper's recipe, so a confound basis fit
+            # that way and subtracted from §5-prompt vectors mixes two manipulations at once.
+            # Adding the arm means designing it in docs/design/sofroniew-recipe.md first.
+            raise ValueError(
+                "neutral_projection requires story_recipe: sofroniew — the neutral corpus is the "
+                "paper's prompt and the paper's topics, and projecting it out of §5-prompt "
+                "vectors is an arm nobody designed"
+            )
+        inert = sorted(
+            name
+            for name in self.model_fields_set
+            if name.startswith(("sofroniew_", "neutral_")) and name != "neutral_projection"
+        )
+        if inert:
+            raise ValueError(
+                f"story_recipe: project ignores {', '.join(inert)}. Drop the keys, or set "
+                "story_recipe: sofroniew if the paper's arm is what you meant to run."
+            )
+        return self
 
 
 class StudyConfig(ConfigModel):

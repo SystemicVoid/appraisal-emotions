@@ -17,7 +17,7 @@
 # diverge, that divergence is the finding and both arms get reported.
 #
 # What it does NOT change: the word set. The paper's 171 words do not contain `disappointed`, nor
-# 7 of our other 9 outcome_neg words, so extracting on their list would delete the OCC
+# 7 of our other 8 outcome_neg words, so extracting on their list would delete the OCC
 # prospect-disconfirmation contrast E1/E2 exist to test. The word-set divergence is therefore
 # forced by the hypothesis, not a shortcut; docs/design/sofroniew-recipe.md shows the full
 # overlap table, and data/sofroniew2026/emotion_words_171.json carries their list for reference.

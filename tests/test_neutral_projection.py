@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from appraisal_emotions.analysis.emotion_vectors import (
     FirstContactFailure,
@@ -27,6 +28,7 @@ from appraisal_emotions.analysis.neutral_projection import (
     project_out,
 )
 from appraisal_emotions.backends.fake import FakeBackend
+from appraisal_emotions.config import EmotionVectorsConfig
 from appraisal_emotions.core.schema import ModelSpec
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 from appraisal_emotions.stimuli.sofroniew_stories import (
@@ -140,6 +142,29 @@ def test_every_shipped_projected_config_keeps_the_neutral_corpus_inside_the_stor
         assert "{topic}" not in request.prompt
         assert "{n_stories}" not in request.prompt
         assert request.topic in request.prompt
+
+
+def test_the_projection_is_refused_under_the_project_recipe():
+    """An arm nobody designed, previously accepted in silence and then silently not run.
+
+    ``story_recipe: project`` never builds the neutral grid, so ``neutral_projection: true``
+    validated, ran, and produced an artifact with no confound basis in it — a committed config
+    that describes a run the repo cannot perform.
+    """
+
+    with pytest.raises(ValidationError, match="requires story_recipe: sofroniew"):
+        EmotionVectorsConfig(story_recipe="project", neutral_projection=True)
+
+
+def test_the_project_recipe_refuses_options_only_the_other_arm_reads():
+    """Inert keys are refused, not ignored: the config must describe the run it produces."""
+
+    with pytest.raises(ValidationError, match="sofroniew_stories_per_call"):
+        EmotionVectorsConfig(story_recipe="project", sofroniew_stories_per_call=4)
+    with pytest.raises(ValidationError, match="neutral_dialogues"):
+        EmotionVectorsConfig(story_recipe="project", neutral_dialogues=8)
+    # The defaults are not "set", so the plain project arm still validates.
+    assert EmotionVectorsConfig().story_recipe == "project"
 
 
 def test_the_neutral_grid_refuses_more_calls_than_the_stories_have_topics(recipe):
