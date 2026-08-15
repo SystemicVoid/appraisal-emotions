@@ -44,6 +44,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from appraisal_emotions.core.schema import StrictModel
+from appraisal_emotions.core.util import stable_hash, states_sha256
 
 __all__ = [
     "DEFAULT_NEUTRAL_VARIANCE_TARGET",
@@ -51,6 +52,9 @@ __all__ = [
     "NeutralBasis",
     "NeutralProjectionBlockRow",
     "NeutralProjectionRecord",
+    "basis_arrays",
+    "basis_from_arrays",
+    "basis_sha256",
     "fit_neutral_basis",
     "project_out",
 ]
@@ -211,12 +215,50 @@ def project_out(vectors: np.ndarray, basis: NeutralBasis) -> np.ndarray:
     return np.ascontiguousarray(out, dtype=np.float64)
 
 
+# Name prefix of the per-block component arrays inside the emotion-vectors npz. One array per
+# block because k_b is ragged; the block's row carries the k the array must have.
+BASIS_ARRAY_PREFIX = "neutral_basis_block_"
+
+
+def basis_arrays(basis: NeutralBasis) -> dict[str, np.ndarray]:
+    """The basis as named arrays for the artifact payload -- what makes the removal auditable.
+
+    Recording only the component COUNTS says how many directions were subtracted but not which,
+    so no reviewer could check the removal and no downstream re-capture could reproduce it. P1
+    reads these back and applies the same subtraction to its per-story states, which is what keeps
+    its faithfulness identity true on a projected basis.
+    """
+
+    return {f"{BASIS_ARRAY_PREFIX}{block}": array for block, array in enumerate(basis.components)}
+
+
+def basis_from_arrays(
+    rows: tuple[NeutralProjectionBlockRow, ...], arrays: dict[str, np.ndarray]
+) -> NeutralBasis:
+    """Rebuild a :class:`NeutralBasis` from :func:`basis_arrays` output plus its recorded rows."""
+
+    components: list[np.ndarray] = []
+    for block in range(len(rows)):
+        name = f"{BASIS_ARRAY_PREFIX}{block}"
+        if name not in arrays:
+            raise ValueError(f"the payload has no {name} array; the confound basis is incomplete")
+        components.append(np.ascontiguousarray(arrays[name], dtype=np.float64))
+    return NeutralBasis(components=tuple(components), rows=rows)
+
+
+def basis_sha256(basis: NeutralBasis) -> str:
+    """One digest over every block's components, in block order -- the payload binding."""
+
+    return stable_hash([states_sha256(array) for array in basis.components])
+
+
 class NeutralProjectionRecord(StrictModel):
     """What a run did in this step, recorded in the emotion-vectors artifact.
 
     Carries the corpus accounting as well as the fit, because "how many neutral transcripts
     survived" bounds how many components could exist at all: with N transcripts the per-block
     covariance has rank at most N-1.
+
     """
 
     contract_version: str = NEUTRAL_PROJECTION_CONTRACT_VERSION
@@ -231,3 +273,6 @@ class NeutralProjectionRecord(StrictModel):
     blocks: tuple[NeutralProjectionBlockRow, ...]
     total_components: int
     max_components_in_a_block: int
+    # Digest of the component arrays stored beside the vectors, so the basis a reader loads is
+    # provably the basis the run subtracted.
+    components_sha256: str

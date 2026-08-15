@@ -34,6 +34,11 @@ from appraisal_emotions.analysis.emotion_vectors import (  # noqa: E402
     EmotionVectorsMetadata,
     G0BlockRow,
 )
+from appraisal_emotions.analysis.neutral_projection import (  # noqa: E402
+    NeutralBasis,
+    NeutralProjectionRecord,
+    basis_sha256,
+)
 from appraisal_emotions.analysis.reveal_rpe import (  # noqa: E402
     DIRECTION_FAMILIES,
     RevealRpeDirections,
@@ -129,8 +134,14 @@ def synthetic_emotion_artifact(
     *,
     selected_block: int = 0,
     gate_verdict: str = "pass",
+    neutral_basis: NeutralBasis | None = None,
 ) -> EmotionVectors:
-    """Wrap planted vectors (n_words + 1 style row, n_blocks, hidden) in valid E0 metadata."""
+    """Wrap planted vectors (n_words + 1 style row, n_blocks, hidden) in valid E0 metadata.
+
+    ``neutral_basis`` mints the paper-faithful arm's artifact: the record and the basis together,
+    exactly as a projected run writes them, so a caller can plant a projected basis without
+    re-deriving the metadata pairing rules the artifact validates.
+    """
 
     array = np.ascontiguousarray(vectors, dtype=np.float64)
     n_words = len(labels)
@@ -174,12 +185,28 @@ def synthetic_emotion_artifact(
         g0_spearman_p=0.0,
         gate_verdict=gate_verdict,
         gate_note="synthetic fixture",
+        neutral_projection=None
+        if neutral_basis is None
+        else NeutralProjectionRecord(
+            variance_target=0.5,
+            pooling="synthetic fixture",
+            n_requested=4,
+            n_kept=4,
+            drop_rate=0.0,
+            drop_counts_by_reason={},
+            dialogues_per_call=1,
+            stimulus_hash=stable_hash("synthetic-neutral"),
+            blocks=neutral_basis.rows,
+            total_components=neutral_basis.total_components,
+            max_components_in_a_block=max(row.n_components for row in neutral_basis.rows),
+            components_sha256=basis_sha256(neutral_basis),
+        ),
         n_blocks=int(array.shape[1]),
         hidden_size=int(array.shape[2]),
         vectors_dtype=str(array.dtype),
         vectors_sha256=states_sha256(array),
     )
-    return EmotionVectors(metadata=metadata, vectors=array)
+    return EmotionVectors(metadata=metadata, vectors=array, neutral_basis=neutral_basis)
 
 
 def synthetic_directions_artifact(

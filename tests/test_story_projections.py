@@ -25,7 +25,12 @@ import numpy as np
 import pytest
 
 from appraisal_emotions.activation.capture import capture_token_mean_states, decoder_layers
-from appraisal_emotions.analysis.emotion_vectors import GeneratedStory
+from appraisal_emotions.analysis.emotion_vectors import EmotionVectors, GeneratedStory
+from appraisal_emotions.analysis.neutral_projection import (
+    basis_sha256,
+    fit_neutral_basis,
+    project_out,
+)
 from appraisal_emotions.analysis.story_projections import (
     GATE_MAX_RELATIVE_DEVIATION,
     PROJECTION_DIRECTIONS,
@@ -114,6 +119,39 @@ def fixture():
     return backend, stories, emotion, directions, states, kept
 
 
+@pytest.fixture
+def projected_fixture():
+    """The same fixture on the PAPER-FAITHFUL arm: E0's word vectors carry a confound removal.
+
+    Built exactly as ``extract_emotion_vectors`` builds it — centre, then project — so the artifact
+    under test is the one the projected config actually writes, basis included.
+    """
+
+    backend = FakeBackend(SPEC, decoder_block_count=N_BLOCKS)
+    stories = _stories()
+    kept, states = _capture(backend, stories)
+    labels = (*WORDS, STYLE_CONTROL_LABEL)
+    means = np.stack(
+        [
+            states[[i for i, story in enumerate(kept) if story.emotion == label]].mean(axis=0)
+            for label in labels
+        ]
+    )
+    centred = means - means[: len(WORDS)].mean(axis=0)
+    # A neutral corpus in the same space the stories live in, so the removed directions are ones
+    # the emotion vectors actually have a component along — a basis orthogonal to them would make
+    # the projection a no-op and the test vacuous.
+    neutral = states[:: max(1, len(states) // 8)]
+    basis = fit_neutral_basis(neutral, variance_target=0.5)
+    emotion = synthetic_emotion_artifact(
+        project_out(centred, basis), WORDS, VALENCE, neutral_basis=basis
+    )
+    rng = np.random.default_rng(3)
+    raw = rng.standard_normal((3, N_BLOCKS, emotion.metadata.hidden_size))
+    directions = synthetic_directions_artifact(raw / np.linalg.norm(raw, axis=2, keepdims=True))
+    return backend, stories, emotion, directions, states, kept
+
+
 def _extract(fixture, **kwargs):
     backend, stories, emotion, directions, _states, _kept = fixture
     return extract_story_projections(
@@ -147,6 +185,54 @@ def test_word_means_reproduce_the_emotion_basis_exactly(fixture):
     assert artifact.metadata.direction_names == PROJECTION_DIRECTIONS
     assert artifact.metadata.n_stories == len(WORDS + (STYLE_CONTROL_LABEL,)) * STORIES_PER_LABEL
     assert artifact.metadata.gate_verdict == "pass"
+
+
+def test_word_means_reproduce_a_projected_emotion_basis(projected_fixture):
+    """The same identity on the paper-faithful arm, whose basis had a confound subspace removed.
+
+    Reproduced before the fix: E0 subtracted the neutral basis from its published word vectors
+    while P1 re-derived unprojected story means, so the gate compared two different spaces and
+    read a max relative deviation of 3.469 (word-mean correlation 0.718) on the shipped projected
+    smoke config. The subtraction is linear, so applying it per story restores the identity
+    exactly rather than merely loosening the threshold.
+    """
+
+    _backend, _stories, emotion, directions, _states, _kept = projected_fixture
+    assert emotion.neutral_basis is not None
+    assert emotion.neutral_basis.total_components > 0, "a basis that removes nothing proves nothing"
+    artifact = _extract(projected_fixture)
+
+    unit = np.stack([direction_matrix(emotion, directions, b) for b in range(N_BLOCKS)])
+    for label_index, label in enumerate(emotion.metadata.vector_labels):
+        observed = artifact.projections[artifact.rows_for(label)].mean(axis=0)
+        expected = np.einsum("bh,bdh->bd", emotion.vectors[label_index], unit)
+        assert np.allclose(observed, expected, rtol=0.0, atol=1e-12), label
+    assert artifact.metadata.gate_verdict == "pass"
+    assert artifact.metadata.gate_max_relative_deviation < GATE_MAX_RELATIVE_DEVIATION / 100
+    # The capture records which space it lives in, so a reader never has to consult the config.
+    assert artifact.metadata.neutral_basis_sha256 == basis_sha256(emotion.neutral_basis)
+
+    # ...and the per-story states really were projected: their component in the removed subspace
+    # is gone. Without this the test above would pass on a basis that removed nothing.
+    _kept_rows, raw = _capture(_backend := projected_fixture[0], projected_fixture[1])
+    assert np.linalg.norm(raw @ emotion.neutral_basis.components[0].T) > 1e-6
+
+
+def test_a_projected_basis_without_its_components_is_unreadable():
+    """The compounding half of the same defect: counts recorded, directions not.
+
+    An artifact that says a projection ran but does not carry the subspace it removed cannot be
+    audited by a reviewer and cannot be re-applied by P1, so it is refused at construction rather
+    than producing a confusing gate failure two commands later.
+    """
+
+    vectors = np.random.default_rng(4).standard_normal((len(WORDS) + 1, N_BLOCKS, 16))
+    basis = fit_neutral_basis(
+        np.random.default_rng(5).standard_normal((8, N_BLOCKS, 16)), variance_target=0.5
+    )
+    artifact = synthetic_emotion_artifact(vectors, WORDS, VALENCE, neutral_basis=basis)
+    with pytest.raises(ValueError, match="no confound basis is attached"):
+        EmotionVectors(metadata=artifact.metadata, vectors=artifact.vectors)
 
 
 def test_a_failed_gate_still_yields_a_quarantinable_artifact(fixture):

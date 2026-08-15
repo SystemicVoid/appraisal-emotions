@@ -60,6 +60,9 @@ from appraisal_emotions.analysis.neutral_projection import (
     DEFAULT_NEUTRAL_VARIANCE_TARGET,
     NeutralBasis,
     NeutralProjectionRecord,
+    basis_arrays,
+    basis_from_arrays,
+    basis_sha256,
     fit_neutral_basis,
     project_out,
 )
@@ -464,14 +467,23 @@ class EmotionVectorsMetadata(StrictModel):
 
 @dataclass(frozen=True)
 class EmotionVectors:
-    """Validated per-block emotion-concept vectors plus binding metadata (frozen read-only)."""
+    """Validated per-block emotion-concept vectors plus binding metadata (frozen read-only).
+
+    ``neutral_basis`` is the confound subspace this run subtracted, present exactly when
+    ``metadata.neutral_projection`` is. It rides with the artifact rather than being recoverable
+    only from a re-fit because two readers need it: a reviewer auditing WHICH directions were
+    removed, and P1, whose re-capture has to apply the same subtraction to its per-story states or
+    its faithfulness identity against these vectors cannot hold.
+    """
 
     metadata: EmotionVectorsMetadata
     vectors: np.ndarray  # (n_labels, n_blocks, hidden)
+    neutral_basis: NeutralBasis | None = None
 
     def __post_init__(self) -> None:
         array = np.array(self.vectors, copy=True)
         meta = self.metadata
+        self._validate_neutral_basis()
         if array.ndim != 3:
             raise ValueError("emotion vectors must be (n_labels, n_blocks, hidden)")
         labels, blocks, hidden = (int(dim) for dim in array.shape)
@@ -493,6 +505,28 @@ class EmotionVectors:
             raise ValueError("metadata.selected_block out of range for n_blocks")
         array.flags.writeable = False
         object.__setattr__(self, "vectors", array)
+
+    def _validate_neutral_basis(self) -> None:
+        """Present iff the run projected, shaped as its record says, and digest-bound to it."""
+
+        record = self.metadata.neutral_projection
+        if record is None:
+            if self.neutral_basis is not None:
+                raise ValueError(
+                    "a confound basis is attached but metadata.neutral_projection is None; the "
+                    "artifact would claim an unprojected basis while carrying a projection"
+                )
+            return
+        if self.neutral_basis is None:
+            raise ValueError(
+                "metadata.neutral_projection records a projection but no confound basis is "
+                "attached; the removed directions would be unauditable and P1 could not "
+                "reproduce them"
+            )
+        if self.neutral_basis.rows != record.blocks:
+            raise ValueError("the confound basis rows disagree with metadata.neutral_projection")
+        if basis_sha256(self.neutral_basis) != record.components_sha256:
+            raise ValueError("confound basis hash does not match metadata")
 
     @property
     def word_labels(self) -> tuple[str, ...]:
@@ -519,11 +553,18 @@ def emotion_vectors_path(metadata_path: Path) -> Path:
 
 
 def write_emotion_vectors(artifact: EmotionVectors, metadata_path: Path) -> tuple[Path, Path]:
-    """Write the metadata JSON and the sibling vectors npz; return both paths."""
+    """Write the metadata JSON and the sibling vectors npz; return both paths.
+
+    The npz carries the confound basis beside the vectors when the run projected, so the removed
+    directions travel with the thing they were removed from.
+    """
 
     vectors_path = emotion_vectors_path(metadata_path)
     ensure_parent(metadata_path)
-    np.savez(vectors_path, **{_VECTORS_ARRAY_NAME: np.asarray(artifact.vectors)})
+    payload = {_VECTORS_ARRAY_NAME: np.asarray(artifact.vectors)}
+    if artifact.neutral_basis is not None:
+        payload |= basis_arrays(artifact.neutral_basis)
+    np.savez(vectors_path, **payload)
     write_json(metadata_path, artifact.metadata)
     return metadata_path, vectors_path
 
@@ -534,7 +575,15 @@ def read_emotion_vectors(metadata_path: Path) -> EmotionVectors:
     metadata = EmotionVectorsMetadata.model_validate(read_json(metadata_path))
     with np.load(emotion_vectors_path(metadata_path), allow_pickle=False) as bundle:
         array = np.array(bundle[_VECTORS_ARRAY_NAME])
-    return EmotionVectors(metadata=metadata, vectors=array)
+        basis = (
+            None
+            if metadata.neutral_projection is None
+            else basis_from_arrays(
+                metadata.neutral_projection.blocks,
+                {name: np.array(bundle[name]) for name in bundle.files},
+            )
+        )
+    return EmotionVectors(metadata=metadata, vectors=array, neutral_basis=basis)
 
 
 # --------------------------------------------------------------------------------------
@@ -731,6 +780,7 @@ def fit_neutral_projection(
         blocks=basis.rows,
         total_components=basis.total_components,
         max_components_in_a_block=max(row.n_components for row in basis.rows),
+        components_sha256=basis_sha256(basis),
     )
     return basis, record, transcripts
 
@@ -816,12 +866,13 @@ def extract_emotion_vectors(
     valence = np.asarray([word_set.valence_by_word[label] for label in labels], dtype=float)
     neutral_transcripts: tuple[GeneratedStory, ...] = ()
     projection_record: NeutralProjectionRecord | None = None
+    neutral_basis: NeutralBasis | None = None
     table_before: tuple[G0BlockRow, ...] = ()
     if neutral_projection:
         # After centring, before the gate: projection is linear, so word rows that summed to zero
         # still do, and G0 has to score the vectors the run keeps.
         table_before = _g0_table(vectors[: len(labels)], valence)
-        basis, projection_record, neutral_transcripts = fit_neutral_projection(
+        neutral_basis, projection_record, neutral_transcripts = fit_neutral_projection(
             backend,
             layers=layers,
             n_transcripts=neutral_dialogues,
@@ -833,7 +884,7 @@ def extract_emotion_vectors(
             temperature=temperature,
             data_dir=sofroniew_data_dir,
         )
-        vectors = project_out(vectors, basis)
+        vectors = project_out(vectors, neutral_basis)
 
     table = _g0_table(vectors[: len(labels)], valence)
     selected_block, abs_rho, verdict, note = _gate(table, g0_threshold)
@@ -885,4 +936,5 @@ def extract_emotion_vectors(
         vectors_dtype=str(vectors.dtype),
         vectors_sha256=states_sha256(vectors),
     )
-    return EmotionVectors(metadata=metadata, vectors=vectors), stories, neutral_transcripts
+    artifact = EmotionVectors(metadata=metadata, vectors=vectors, neutral_basis=neutral_basis)
+    return artifact, stories, neutral_transcripts
