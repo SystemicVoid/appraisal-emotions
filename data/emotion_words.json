@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "_note": "The §5 emotion word set (docs/design/experiment.md), 126 words, written down BEFORE any emotion vector is extracted. v3 WIDENS four families -- outcome_pos 9->16, outcome_neg 9->16, nonoutcome_pos 10->24, nonoutcome_neg 10->24 -- per docs/design/e1-widening.md, which carries the n/k arithmetic, the per-word grounding for the 42 additions, their graded-norms coverage, and their recorded directional expectations. No existing word, label or expectation changed. The widened set is NOT runnable until the wiring in that document's §7 lands (hard-coded 84s in tests, scripts/e1_null_diagnosis.py and MDE80_COEFFICIENT, and the §5 count line the count test reads). This file is the sole authority: no code, config or test restates the list (docs/agents/rails.md). The `valence` field is MINTED FOR THIS PROJECT -- binary +1/-1/0, our own judgment, not a published norm; CONTEXT.md names this operationalization `affect-concept valence, binary project label`. Numeric valence/arousal norms (Warriner et al. 2013; NRC-VAD) are FETCHED by scripts/fetch_norms.py into data/norms/, never hand-transcribed, and upgrade P1/P2 from binary to graded when they cover the whole set. The surprise family carries valence 0 because P4's claim is that v_absrpe picks it out WITHOUT loading a valence pole; assigning one would beg that question. Emotion words here are CONCEPT LABELS, never state attributions.",
+  "_note": "The §5 emotion word set (docs/design/experiment.md), 111 words, written down BEFORE any emotion vector is extracted. v3 WIDENS five families -- outcome_pos 9->11, outcome_neg 9->15, outcome_confirm 4->5, nonoutcome_pos 10->17, nonoutcome_neg 10->21 -- per docs/design/e1-widening.md, which carries the n/k arithmetic, the per-word grounding for the 27 additions, their graded-norms coverage, and (in the `expectations.widening` block below) their recorded directional expectations. No existing word or label changed; the three existing named pairs, both family contrasts, the ordering, P4, P5a and P5c stand untouched and two new pairs are ADDED. The widened set is NOT runnable until the wiring in that document's §7 lands (hard-coded 84s and family sizes in tests, scripts/e1_null_diagnosis.py, MDE80_COEFFICIENT, the §5 count line the count test reads, and the arousal regressor the primary readout needs). This file is the sole authority: no code, config or test restates the list (docs/agents/rails.md). The `valence` field is MINTED FOR THIS PROJECT -- binary +1/-1/0, our own judgment, not a published norm; CONTEXT.md names this operationalization `affect-concept valence, binary project label`. Numeric valence/arousal norms (Warriner et al. 2013; NRC-VAD) are FETCHED by scripts/fetch_norms.py into data/norms/, never hand-transcribed, and upgrade P1/P2 from binary to graded when they cover the whole set. The surprise family carries valence 0 because P4's claim is that v_absrpe picks it out WITHOUT loading a valence pole; assigning one would beg that question. Emotion words here are CONCEPT LABELS, never state attributions.",
   "words": [
     {"word": "elated", "category": "outcome_pos", "valence": 1},
     {"word": "thrilled", "category": "outcome_pos", "valence": 1},
@@ -11,13 +11,8 @@
     {"word": "gleeful", "category": "outcome_pos", "valence": 1},
     {"word": "relieved", "category": "outcome_pos", "valence": 1},
     {"word": "reassured", "category": "outcome_pos", "valence": 1},
-    {"word": "exultant", "category": "outcome_pos", "valence": 1},
     {"word": "glad", "category": "outcome_pos", "valence": 1},
-    {"word": "pleased", "category": "outcome_pos", "valence": 1},
-    {"word": "lucky", "category": "outcome_pos", "valence": 1},
-    {"word": "fortunate", "category": "outcome_pos", "valence": 1},
     {"word": "encouraged", "category": "outcome_pos", "valence": 1},
-    {"word": "impressed", "category": "outcome_pos", "valence": 1},
 
     {"word": "disappointed", "category": "outcome_neg", "valence": -1},
     {"word": "dismayed", "category": "outcome_neg", "valence": -1},
@@ -34,11 +29,11 @@
     {"word": "underwhelmed", "category": "outcome_neg", "valence": -1},
     {"word": "rueful", "category": "outcome_neg", "valence": -1},
     {"word": "crushed", "category": "outcome_neg", "valence": -1},
-    {"word": "demoralized", "category": "outcome_neg", "valence": -1},
 
     {"word": "satisfied", "category": "outcome_confirm", "valence": 1},
     {"word": "gratified", "category": "outcome_confirm", "valence": 1},
     {"word": "vindicated", "category": "outcome_confirm", "valence": 1},
+    {"word": "pleased", "category": "outcome_confirm", "valence": 1},
     {"word": "resigned", "category": "outcome_confirm", "valence": -1},
 
     {"word": "content", "category": "nonoutcome_pos", "valence": 1},
@@ -53,17 +48,10 @@
     {"word": "affectionate", "category": "nonoutcome_pos", "valence": 1},
     {"word": "merry", "category": "nonoutcome_pos", "valence": 1},
     {"word": "jolly", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "jovial", "category": "nonoutcome_pos", "valence": 1},
     {"word": "playful", "category": "nonoutcome_pos", "valence": 1},
     {"word": "blissful", "category": "nonoutcome_pos", "valence": 1},
     {"word": "lighthearted", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "mirthful", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "genial", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "cozy", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "comfortable", "category": "nonoutcome_pos", "valence": 1},
     {"word": "refreshed", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "secure", "category": "nonoutcome_pos", "valence": 1},
-    {"word": "compassionate", "category": "nonoutcome_pos", "valence": 1},
     {"word": "untroubled", "category": "nonoutcome_pos", "valence": 1},
 
     {"word": "sad", "category": "nonoutcome_neg", "valence": -1},
@@ -78,11 +66,8 @@
     {"word": "weary", "category": "nonoutcome_neg", "valence": -1},
     {"word": "forlorn", "category": "nonoutcome_neg", "valence": -1},
     {"word": "glum", "category": "nonoutcome_neg", "valence": -1},
-    {"word": "desolate", "category": "nonoutcome_neg", "valence": -1},
     {"word": "listless", "category": "nonoutcome_neg", "valence": -1},
     {"word": "morose", "category": "nonoutcome_neg", "valence": -1},
-    {"word": "somber", "category": "nonoutcome_neg", "valence": -1},
-    {"word": "heartbroken", "category": "nonoutcome_neg", "valence": -1},
     {"word": "grieving", "category": "nonoutcome_neg", "valence": -1},
     {"word": "bereaved", "category": "nonoutcome_neg", "valence": -1},
     {"word": "wretched", "category": "nonoutcome_neg", "valence": -1},
@@ -143,7 +128,9 @@
     "pairs": [
       {"outcome": "disappointed", "control": "sad", "expected_sign": -1},
       {"outcome": "relieved", "control": "calm", "expected_sign": 1},
-      {"outcome": "elated", "control": "content", "expected_sign": 1}
+      {"outcome": "elated", "control": "content", "expected_sign": 1},
+      {"outcome": "disappointed", "control": "grieving", "expected_sign": -1},
+      {"outcome": "disappointed", "control": "bereaved", "expected_sign": -1}
     ],
     "family_contrasts": [
       {"pole": "positive", "outcome": "outcome_pos", "control": "nonoutcome_pos", "expected_sign": 1},
@@ -152,6 +139,36 @@
     "outcome_ordering": ["outcome_pos", "outcome_confirm", "outcome_neg"],
     "p4": {"surprise": "surprise", "arousal_matched": "arousal_control"},
     "p5a": "sad",
-    "p5c": "style_control"
+    "p5c": "style_control",
+    "widening": {
+      "_note": "Recorded before any emotion-concept vector is extracted from a widened basis. This block is the AUTHORITY for the widened run's expectations; docs/design/e1-widening.md §5 carries their literature grounding and nothing loads it. Each entry names the statistic it is read on and, where it routes anything, the band that decides it -- a kill criterion names its threshold before the run (docs/agents/experiment-gating.md). Emotion words are CONCEPT LABELS, never state attributions.",
+      "design_doc": "docs/design/e1-widening.md",
+      "primary_readout": {
+        "residualize_on": ["valence", "arousal"],
+        "reason": "The shipped analysis partials valence only. E1's block-63 positive-pole contrast falls from 0.018572 to 0.011094 when arousal is added to the design, so the valence-only contrast carries an arousal component that the widened control families are also built to remove. The cleaner instrument is the primary; operator decision, recorded before the run.",
+        "comparability_readout": {"residualize_on": ["valence"], "reason": "reported beside the primary so the widened number stays comparable with E1's published 0.018572"}
+      },
+      "expectations": [
+        {"id": "w1", "statistic": "family_contrast", "pole": "positive", "expected_sign": 1,
+         "words": ["glad", "encouraged"],
+         "claim": "the new outcome_pos words sit above the widened nonoutcome_pos family, unevenly: 'glad' as an ordinary-register outcome reaction, 'encouraged' lower because it carries a forward-looking component"},
+        {"id": "w2", "statistic": "family_contrast", "pole": "negative", "expected_sign": -1,
+         "words": ["discouraged", "defeated", "dispirited", "underwhelmed", "rueful", "crushed"],
+         "claim": "the new outcome_neg words sit below the widened nonoutcome_neg family, with 'underwhelmed' the strongest member -- its lexical content is disconfirmation and nothing else"},
+        {"id": "w3", "statistic": "family_contrast", "pole": "negative", "expected_sign": 0,
+         "band": {"rule": "abs(contrast_negative) <= label_shuffled_p95", "reads": "unmoved"},
+         "claim": "the negative pole is expected to stay near zero after widening (E1 measured 0.000986 valence-only, 0.003032 valence+arousal). If it stays flat while the positive pole strengthens, the reading offered is pole asymmetry in the emotion-concept geometry, NOT a failed widening; the per-word table is read against the rival that nonoutcome_neg is still contaminated by disconfirmation semantics."},
+        {"id": "w4", "statistic": "word_residual", "expected_sign": 0,
+         "band": {"rule": "abs(residual) <= word_residual_p95", "reads": "inside the word residuals' own spread"},
+         "words_scope": "the 18 new nonoutcome_pos / nonoutcome_neg words",
+         "claim": "expectation of ABSENCE on all three appraisal directions, held to the P5a standard; it carries information only while the family contrasts are positive"},
+        {"id": "w5", "statistic": "bereavement_intensity_check", "pairs": ["disappointed/grieving", "disappointed/bereaved"],
+         "band": {"rule": "let d = mean_residual(nonoutcome_neg) - mean_residual(outcome_neg) and g = mean(residual(grieving), residual(bereaved)) - mean_residual(outcome_neg); the check FAILS when d > 0 and g <= 0.25 * d; it is INCONCLUSIVE when d <= 0, because there is then no scale to measure against",
+                  "reads": "fail = the valence-residual construction is reading affect intensity rather than prospect disconfirmation"},
+         "claim": "grieving and bereaved are the strongest negative-affect concepts in the set with no expectation term at all. A fail here is evidence against inheritance on this surface, more diagnostically than a flat family contrast."},
+        {"id": "w6", "statistic": "g0_gate", "band": {"rule": "abs(spearman(PC1, valence)) >= g0_threshold (0.6, configs/emotion_vectors_base.yaml)"},
+         "claim": "G0 should pass more comfortably on 111 words than on 84. A G0 FAILURE on the widened basis means the widening broke the extraction, and every downstream number records harness_inadequate."}
+      ]
+    }
   }
 }

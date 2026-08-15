@@ -31,12 +31,12 @@
     }
   ],
   "missing_words": [],
-  "n_words_covered": 126,
-  "n_words_requested": 126,
+  "n_words_covered": 111,
+  "n_words_requested": 111,
   "note": "Norm VALUES are never hand-entered anywhere in this repo. Partial coverage is reported, not patched: map-geometry uses numeric norms only when every word is covered, and otherwise falls back to the binary labels in data/emotion_words.json. Any word under `lemma_backoff` carries its VERB LEMMA's rating, not the inflected form's \u2014 a recorded substitution, not a measurement of that word.",
   "sources": [
     {
-      "covered_words": 122,
+      "covered_words": 107,
       "fetched": "2026-08-15",
       "member": "NRC-VAD-Lexicon-v2.1/NRC-VAD-Lexicon-v2.1.txt",
       "name": "nrc_vad_v2",
@@ -47,7 +47,7 @@
     }
   ],
   "subset_csv": "data/norms/vad_subset.csv",
-  "subset_csv_sha256": "a53065fbaa2ea8c5b93baf2d543148a0cebd2ce5e3eaf4332fe2342e5e300cce",
+  "subset_csv_sha256": "59d7924f66f96b68a1a2b9562119d760d9f5e6e0a4023c786265cd84bf0be22d",
   "words_file": "data/emotion_words.json",
-  "words_file_sha256": "63d22ebdbb0be95e4bdb340cfcbc49288c5ab313dca0da1efc4286e23f975083"
+  "words_file_sha256": "b4a164426f624f4ee7141b0c9f2438a16a4155015c959485d97cdaf2ac07c473"
 }
