@@ -159,6 +159,26 @@ class EmotionVectorsConfig(ConfigModel):
     # against the frozen story filter and refuse before full spend if it over-drops.
     first_contact_n: int = 10
     first_contact_max_drop_rate: float = 0.5
+    # Which numeric norm columns the downstream valence-residual readouts partial out. Valence
+    # alone is E1's CERTIFIED analysis — the published 0.018572 has to stay reproducible from this
+    # code, so the default never moves. The widened run's pre-registered primary adds arousal
+    # (docs/design/e1-widening.md §1), because the arousal gap between the outcome families and
+    # their controls is part of what the valence-only contrast was measuring; the valence-only
+    # number is still computed and reported beside it, which is what makes the two comparable.
+    # Consumed by `map-geometry --residualize-on` and `scripts/p1_reliability.py`.
+    residualize_on: tuple[Literal["valence", "arousal"], ...] = ("valence",)
+
+    @field_validator("residualize_on")
+    @classmethod
+    def valence_is_always_partialled(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        # Valence first and always: every readout here is a valence-RESIDUAL readout, and the
+        # column order is the design matrix's, so `valence` must stay column 1 for P1's sanity
+        # correlation and P5c's binary-design evaluation to mean what they say.
+        if not value or value[0] != "valence":
+            raise ValueError("residualize_on must start with 'valence'")
+        if len(set(value)) != len(value):
+            raise ValueError(f"residualize_on repeats a column: {value}")
+        return value
 
     @field_validator(
         "stories_per_emotion",

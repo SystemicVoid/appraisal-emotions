@@ -102,24 +102,34 @@ MAP_GEOMETRY_CONTRACT_VERSION = "map_geometry/v2"
 
 
 def read_valence_norms(
-    path: Path, labels: tuple[str, ...]
+    path: Path, labels: tuple[str, ...], columns: tuple[str, ...] = ("valence",)
 ) -> tuple[np.ndarray | None, int, tuple[str, ...]]:
-    """Numeric valence norms for ``labels`` from the fetched subset CSV, or ``None``.
+    """Numeric norms for ``labels`` from the fetched subset CSV, or ``None``.
 
-    Returns ``(valence array aligned to labels, covered word count, uncovered words)``. Coverage is
-    ALL-OR-NOTHING by design: a numeric scale for some words and a binary label for others would
-    make the residuals incommensurable across the word set, and every readout here is a comparison
-    BETWEEN words. Partial coverage therefore falls the whole set back to the binary labels and
-    the report names the words that blocked the upgrade, so the fix is a lookup, not a mystery.
+    Returns ``(array of shape (n_labels, n_columns), covered word count, uncovered words)``.
+    Coverage is ALL-OR-NOTHING by design: a numeric scale for some words and a binary label for
+    others would make the residuals incommensurable across the word set, and every readout here is
+    a comparison BETWEEN words. Partial coverage therefore falls the whole set back to the binary
+    labels and the report names the words that blocked the upgrade, so the fix is a lookup, not a
+    mystery.
+
+    ``columns`` selects which norm dimensions to read; ``("valence",)`` is E1's certified readout
+    and the default. ``("valence", "arousal")`` is the widened run's pre-registered primary
+    (``docs/design/e1-widening.md`` §1). All-or-nothing now spans EVERY requested column: a word
+    with a valence rating but no arousal rating blocks the upgrade for the whole set, because a
+    design matrix with a hole in one column is not a partial answer, it is a different model on a
+    subset nobody chose.
     """
 
-    values: dict[str, float] = {}
+    if not columns:
+        raise ValueError("read_valence_norms needs at least one norm column")
+    values: dict[str, list[float]] = {}
     with Path(path).open("r", encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
             word = str(row["word"]).strip().lower()
-            raw = str(row.get("valence", "")).strip()
-            if word and raw:
-                values[word] = float(raw)
+            raw = [str(row.get(column, "")).strip() for column in columns]
+            if word and all(raw):
+                values[word] = [float(cell) for cell in raw]
     missing = tuple(label for label in labels if label not in values)
     covered = len(labels) - len(missing)
     if missing:
@@ -192,6 +202,10 @@ class MapGeometryReport(StrictModel):
     emotion_selected_block: int
     words_file_sha256: str
     norms_file: str | None
+    # Which nuisance columns the headline regression partialled out. Defaulted so every artifact
+    # written before the arousal option existed still validates: it was valence-only by
+    # construction, and saying so is not a change to it.
+    residualize_on: tuple[str, ...] = ("valence",)
     norms_covered_words: int
     norms_missing_words: tuple[str, ...]
     valence_source: str
@@ -228,13 +242,28 @@ _READOUT_NOTE = (
 
 
 def _designs(
-    binary_valence: np.ndarray, numeric_valence: np.ndarray | None
+    binary_valence: np.ndarray,
+    numeric_norms: np.ndarray | None,
+    columns: tuple[str, ...] = ("valence",),
 ) -> tuple[np.ndarray, np.ndarray, str]:
+    """The headline design, the binary design P5c always uses, and a name for the pair.
+
+    ``numeric_norms`` is ``(n_words, n_columns)`` in ``columns`` order, so adding arousal is one
+    more column rather than a second code path. The name records WHICH nuisances were partialled,
+    because ``numeric_norms`` alone would no longer say: E1's certified 0.018572 is the
+    valence-only readout and the widened run's primary is the arousal-partialled one, and a
+    report that cannot tell them apart cannot be compared to either.
+    """
+
     ones = np.ones(binary_valence.size)
     binary_design = np.column_stack([ones, binary_valence])
-    if numeric_valence is None:
+    if numeric_norms is None:
         return binary_design, binary_design, "binary_project_labels"
-    return np.column_stack([ones, numeric_valence]), binary_design, "numeric_norms"
+    numeric = np.atleast_2d(np.asarray(numeric_norms, dtype=float))
+    if numeric.shape[0] != binary_valence.size:
+        numeric = numeric.T
+    name = "numeric_norms" if columns == ("valence",) else f"numeric_norms[{'+'.join(columns)}]"
+    return np.column_stack([ones, numeric]), binary_design, name
 
 
 def _block_report(
@@ -381,8 +410,17 @@ def map_geometry(
     seed: int = EXTRACTION_SEED,
     n_permutations: int = 10_000,
     n_null_draws: int = 1_000,
+    residualize_on: tuple[str, ...] = ("valence",),
 ) -> MapGeometryReport:
-    """Run E1 over the two artifacts; headline at BOTH selected blocks, sweep over every block."""
+    """Run E1 over the two artifacts; headline at BOTH selected blocks, sweep over every block.
+
+    ``residualize_on`` names the nuisance columns partialled out of the cosines before every
+    readout. ``("valence",)`` is E1's certified analysis and stays the default, so the published
+    0.018572 remains reproducible from this code; ``("valence", "arousal")`` is the widened run's
+    pre-registered primary (``docs/design/e1-widening.md`` §1), which exists because the arousal
+    gap between the outcome and control families is part of what the valence-only contrast was
+    measuring. Both are recorded in ``valence_source``, so a report says which one it is.
+    """
 
     directions = read_reveal_rpe_directions(Path(directions_artifact))
     emotion = read_emotion_vectors(Path(emotion_artifact))
@@ -399,11 +437,15 @@ def map_geometry(
     rows = family_rows(words, index)
     pool = pair_pool_rows(words, rows)
     binary_valence = np.asarray([words.valence_by_word[label] for label in labels], dtype=float)
-    numeric_valence, covered, missing_norms = (
-        read_valence_norms(Path(norms_csv), labels) if norms_csv is not None else (None, 0, ())
+    numeric_norms, covered, missing_norms = (
+        read_valence_norms(Path(norms_csv), labels, residualize_on)
+        if norms_csv is not None
+        else (None, 0, ())
     )
-    designs = _designs(binary_valence, numeric_valence)
-    valence = binary_valence if numeric_valence is None else numeric_valence
+    designs = _designs(binary_valence, numeric_norms, residualize_on)
+    # P1's sanity correlation is rho(cos, VALENCE), whatever else the design partials out — so it
+    # takes the valence column alone, never the whole design.
+    valence = binary_valence if numeric_norms is None else numeric_norms[:, 0]
 
     headline = tuple(sorted({directions.metadata.selected_block, emotion.metadata.selected_block}))
     geometries = [
@@ -439,6 +481,7 @@ def map_geometry(
         emotion_selected_block=emotion.metadata.selected_block,
         words_file_sha256=file_sha256(Path(words_file)),
         norms_file=None if norms_csv is None else str(norms_csv),
+        residualize_on=residualize_on,
         norms_covered_words=covered,
         norms_missing_words=missing_norms,
         valence_source=designs[2],

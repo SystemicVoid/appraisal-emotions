@@ -405,6 +405,14 @@ def map_geometry_command(
     seed: SeedOption = 7,
     permutations: Annotated[int, typer.Option("--permutations")] = 10_000,
     null_draws: Annotated[int, typer.Option("--null-draws")] = 1_000,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            help="Run config; read ONLY for `residualize_on`. Omit for E1's certified "
+            "valence-only readout.",
+        ),
+    ] = None,
 ) -> None:
     """Rung E1: valence-residual geometry — the headline (design §4 E1).
 
@@ -414,8 +422,18 @@ def map_geometry_command(
     multiple-comparison correction and no confirmatory/exploratory caste. A flat residual with G0
     or P5c failed is ``harness_inadequate``, NOT evidence against appraisal inheritance. Licence
     capped at present-and-separable.
+
+    Which numeric norm columns are partialled out is the RUN's decision, not this command's, so it
+    is read from the config's ``residualize_on`` and from nowhere else — there is no override flag
+    to disagree with the config the run recorded. With no ``--config`` the readout is valence-only:
+    E1's certified analysis, so the published contrast stays reproducible from this command as it
+    stands. The widened run passes ``configs/emotion_vectors_wide.yaml``, whose pre-registered
+    primary adds arousal (``docs/design/e1-widening.md`` §1); running the same command WITHOUT
+    ``--config`` on the same artifacts produces the valence-only number beside it, which is what
+    makes the two comparable. The chosen columns are recorded in the report.
     """
 
+    residualize_on = load_config(config).emotion_vectors.residualize_on if config else ("valence",)
     report = map_geometry(
         directions,
         emotions,
@@ -424,6 +442,7 @@ def map_geometry_command(
         seed=seed,
         n_permutations=permutations,
         n_null_draws=null_draws,
+        residualize_on=residualize_on,
     )
     write_json(out, report)
     console.print(format_map_geometry_summary(report))

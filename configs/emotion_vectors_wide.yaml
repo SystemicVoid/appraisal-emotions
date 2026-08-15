@@ -1,0 +1,85 @@
+# Rung E0 on the WIDENED §5 word set — the run E1's null was under-powered to read
+# (design docs/design/e1-widening.md).
+#
+# Same instrument as `configs/emotion_vectors_base.yaml`, same model registry key, same capture
+# window, same centring, same G0 gate, same project story recipe. Three things move, and each is
+# a lever the widening document prices:
+#
+#   words        84 -> 111 (data/emotion_words.json, widened on this branch). The outcome families
+#                go 9/10 -> 11/15 and 17/21, which is most of the power gain and also what makes
+#                them size-ASYMMETRIC — see the P5c note in e1-widening.md §7/§8.
+#   stories      12 -> 24 per word. E1's own P1 decomposition put a large share of the word-level
+#                noise WITHIN word, which more stories per word buys down; §2 prices the pair.
+#   readout      the primary is the arousal-partialled valence residual, `[1, valence, arousal]`
+#                (`residualize_on` below), pre-registered before this run's first vector.
+#
+# `configs/emotion_vectors_base.yaml` is deliberately NOT edited: E1's published 0.018572 must stay
+# reproducible from the config that produced it. This is a new run in its own directory, and the
+# comparability readout is the SAME map-geometry command on these artifacts with no --config —
+# valence-only, exactly E1's certified analysis. Both numbers get reported (`just map-geometry-wide`).
+#
+# Cost: (111 words + 1 style control) x 24 stories = 2,688 short generations plus <=2,688
+# read-only forwards for the token-mean capture — roughly 2.6x the base arm's E0 slot
+# (docs/agents/lambda-runbook.md §5). No extend path: generating only the 27 new labels and
+# merging would reuse the very stories whose contrast motivated the widening, so the widened
+# estimate would inherit that selection instead of re-measuring it (e1-widening.md §7 item 9).
+#
+# The G0 gate and the first-contact checkpoint are copied from the base arm unchanged. G0 is still
+# the manipulation check for ALL of E1/E2: G0 fail => `gate_verdict=harness_inadequate` and every
+# downstream null inherits that cap. A widened run that returns a null below its own floors
+# records `harness_inadequate` too, and a positive from it is pilot-suggestive under the claim
+# ceiling — this config buys power, not licence.
+#
+# GPU runs and model downloads gate behind explicit human approval (`just extract-emotions-wide`).
+
+run:
+  id: emotion_vectors_wide
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-wide/v1
+  known_gaps:
+    - "E0 is a MEASUREMENT INSTRUMENT, not a result: an emotion-concept basis plus its
+      sensitivity gate. No emotion word here is a state attribution."
+    - "Every power projection behind this run assumes the 27 added words are drawn from the same
+      population as the original 84. The most canonical exemplars were taken first, so if the
+      additions are noisier the realised MDE80 is higher and the realised effect lower than
+      e1-widening.md §2.6 (§8, first bullet). This run re-measures both."
+    - "The arousal-partialled readout is primary because it is the honest estimand, not because
+      beta_arousal (1.57 sigma) is precisely measured. If it is really zero, primary and
+      comparability converge; if larger, the run is worse powered than §2.2 says. Both reported."
+    - "The outcome families are now size-asymmetric (11 vs 15, 17 vs 21). Family contrasts are
+      differences of means and stay unbiased, but any statistic built on the GRAND MEAN — which
+      the emotion-vector centring makes ubiquitous — now carries a family-imbalance term (§8)."
+    - "The story filter is frozen BLIND against unread model outputs; the first-contact
+      checkpoint is the licensed compensation, not a substitute for a reality sample."
+  decision_affected:
+    - docs/design/e1-widening.md
+    - docs/design/experiment.md
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: qwen_30b_primary
+
+emotion_vectors:
+  seed: 7
+  words_file: data/emotion_words.json
+  # The second lever: 24 stories per word, against the base arm's 12.
+  stories_per_emotion: 24
+  # The §5 project recipe, NOT the paper's — the Sofroniew arm is a separate one-variable A/B
+  # (configs/emotion_vectors_sofroniew.yaml) and mixing it in would confound prompt with width.
+  story_recipe: project
+  # Capture window, decode and gates: held identical to the base arm.
+  min_token: 50
+  max_tokens: 320
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 48
+  first_contact_n: 10
+  first_contact_max_drop_rate: 0.5
+  # The pre-registered primary readout. Valence stays column 1; arousal is the nuisance the
+  # widened design adds, because the arousal gap between the outcome families and their controls
+  # is part of what the valence-only contrast was measuring (e1-widening.md §1).
+  residualize_on: [valence, arousal]

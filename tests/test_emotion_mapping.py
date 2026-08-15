@@ -54,9 +54,11 @@ PERMUTATIONS = 2000
 NULL_DRAWS = 200
 
 
-def _axes(seed: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    basis, _r = np.linalg.qr(np.random.default_rng(seed).standard_normal((HIDDEN, 3)))
-    return basis[:, 0], basis[:, 1], basis[:, 2]
+def _axes(seed: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Four orthonormal axes: valence, appraisal, an unplanted third, and the style axis."""
+
+    basis, _r = np.linalg.qr(np.random.default_rng(seed).standard_normal((HIDDEN, 4)))
+    return basis[:, 0], basis[:, 1], basis[:, 2], basis[:, 3]
 
 
 def _unit(vector: np.ndarray) -> np.ndarray:
@@ -79,26 +81,51 @@ def _planted(
 
     words = read_emotion_words(WORDS_PATH)
     labels = words.labels
-    u_valence, w_appraisal, z_other = _axes(31)
+    u_valence, w_appraisal, z_other, s_style = _axes(31)
     rng = np.random.default_rng(seed)
 
     # The §5 expectations, planted at family level: ONLY the outcome-disconfirmation families
     # carry the appraisal excess, each on its own pole of the signed axis. The valence-matched
     # non-outcome controls, the confirmation family and every other family carry none — which is
     # both what the design predicts and what makes P5a's expectation of absence on `sad` testable.
-    amplitude = {"outcome_pos": 1.0, "outcome_neg": -1.0}
+    #
+    # The amplitudes are BALANCED so they sum to zero over words. A flat ±1 did that only while
+    # the two families were the same size, which is how the fixture was written; the widened
+    # families are 11 vs 15, so ±1 leaves the planted appraisal axis with a nonzero grand mean
+    # (−0.036), and every row is then centred by an offset that carries appraisal — including the
+    # style_control row, which is supposed to carry none. That leak alone drove cos_style to 0.371
+    # and failed P5c: an artifact of the planting convention meeting unequal n, never of
+    # `map_geometry`, which is why the fix belongs here (docs/design/e1-widening.md §7). The
+    # balance below reduces to the original ±1 at equal family sizes and keeps every per-word
+    # magnitude ~1.
+    n_by_family = {
+        family: len(words.words_in_category(family)) for family in ("outcome_pos", "outcome_neg")
+    }
+    balance = sum(n_by_family.values()) / 2.0
+    amplitude = {
+        "outcome_pos": balance / n_by_family["outcome_pos"],
+        "outcome_neg": -balance / n_by_family["outcome_neg"],
+    }
     appraisal = {
         word.word: amplitude.get(word.category, 0.0) * appraisal_scale for word in words.words
     }
+    assert abs(sum(appraisal.values())) < 1e-12, "the planted appraisal must not shift the origin"
     appraisal[str(words.expectations["p5a"])] += sad_excess
 
     rows = [
         words.valence_by_word[label] * u_valence + appraisal[label] * w_appraisal
         for label in labels
     ]
-    # The style_control row is planted at the origin: valence-free and appraisal-free, so P5c's
-    # residual should sit inside the word residuals' own spread.
-    rows.append(np.zeros(HIDDEN))
+    # The style_control row: valence-free and appraisal-free, so P5c's residual should sit inside
+    # the word residuals' own spread — but planted on its OWN axis at the scale a word carries,
+    # not at the origin. An origin-planted row has no content of its own, so after grand-mean
+    # subtraction it is nothing but MINUS the grand mean: a vector ~8x shorter than every word,
+    # whose cosine on any direction is that residue divided by its own small norm. P5c then
+    # compares an inflated style cosine against uninflated word residuals and fails on the
+    # unplanted axis by construction. The real style_control row is an ordinary vector with an
+    # ordinary norm (docs/design/e1-widening.md §7), and that is the regime this control is meant
+    # to test.
+    rows.append(s_style)
     base = np.stack(rows, axis=0)
     vectors = np.stack(
         [base + 0.01 * rng.standard_normal(base.shape) for _ in range(BLOCKS)], axis=1
@@ -159,6 +186,7 @@ def test_recovers_the_planted_family_contrasts(tmp_path, valence_load):
     effect. Both floors here resample the same post-residual scale as the statistic.
     """
 
+    words = read_emotion_words(WORDS_PATH)
     report = _report(tmp_path, appraisal_scale=1.0, valence_load=valence_load)
     block = report.blocks[0]
     assert block.valence_source == "binary_project_labels"
@@ -166,7 +194,9 @@ def test_recovers_the_planted_family_contrasts(tmp_path, valence_load):
     for contrast in block.family_contrasts:
         assert contrast.statistic > 0.0, f"{contrast.pole} pole lost its planted direction"
         assert contrast.p_value < 0.05, f"{contrast.pole} p={contrast.p_value}"
-        assert contrast.n_outcome == 9 and contrast.n_control == 10
+        outcome = len(words.words_in_category(contrast.outcome_family))
+        control = len(words.words_in_category(contrast.control_family))
+        assert (contrast.n_outcome, contrast.n_control) == (outcome, control)
     # And the effect clears both anisotropy floors, which is what makes it readable at all.
     assert block.clears_both_floors
     assert block.observed_family_contrast_max > block.label_shuffled_p95
@@ -201,7 +231,9 @@ def test_named_pairs_permute_inside_the_strict_pool_not_the_whole_valence_pole(t
     expected = {
         pole: sum(1 for word in pool if words.valence_by_word[word] == pole) for pole in (1, -1)
     }
-    assert expected == {1: 22, -1: 20}, expected
+    # Derived, not pinned: the pool is exactly the same-pole words of the pair-pool families, and
+    # both poles must be big enough for a within-pool permutation to have a null at all.
+    assert set(expected) == {1, -1} and all(size >= 3 for size in expected.values()), expected
     block = _report(tmp_path, appraisal_scale=1.0, permutations=200, null_draws=50).blocks[0]
     for pair in block.expected_pairs:
         assert pair.n_pool == expected[words.valence_by_word[pair.outcome]]
@@ -218,7 +250,7 @@ def test_p5a_holds_when_sad_carries_no_excess(tmp_path):
     assert block.p5a.word == "sad"
     assert block.p5a.passed, block.p5a.model_dump()
     assert abs(block.p5a.residual) <= block.p5a.word_residual_p95
-    assert block.p5a.n_words == 84
+    assert block.p5a.n_words == len(read_emotion_words(WORDS_PATH).labels)
     # And the contrast it is a discriminant AGAINST is positive, which is what gives it meaning.
     assert all(contrast.statistic > 0.0 for contrast in block.family_contrasts)
 
@@ -236,13 +268,13 @@ def test_every_word_is_tabled_with_its_family_and_valence(tmp_path):
     report = _report(tmp_path, appraisal_scale=1.0, permutations=200, null_draws=50)
     words = read_emotion_words(WORDS_PATH)
     for block in report.blocks:
-        assert len(block.word_residuals) == len(words.labels) == 84
+        assert len(block.word_residuals) == len(words.labels)
         assert {row.word for row in block.word_residuals} == set(words.labels)
         assert all(row.family == words.category_by_word[row.word] for row in block.word_residuals)
         assert all(row.valence == words.valence_by_word[row.word] for row in block.word_residuals)
     # The summary shows them all, sorted, rather than hiding them behind a summary statistic.
     summary = format_map_geometry_summary(report)
-    assert "all 84 words by valence residual" in summary
+    assert f"all {len(words.labels)} words by valence residual" in summary
     for label in words.labels:
         assert label in summary
 
@@ -346,18 +378,89 @@ def test_map_geometry_refuses_mismatched_artifacts(tmp_path):
         map_geometry(directions_path, emotion_path, WORDS_PATH, None, seed=7, n_permutations=10)
 
 
-def _norms_csv(path: Path, words, *, skip: tuple[str, ...] = ()) -> Path:
-    """A fetched-subset CSV in scripts/fetch_norms.py's output schema."""
+def _norms_csv(
+    path: Path, words, *, skip: tuple[str, ...] = (), blank_arousal: tuple[str, ...] = ()
+) -> Path:
+    """A fetched-subset CSV in scripts/fetch_norms.py's output schema.
+
+    Arousal VARIES across words rather than sitting at a constant: a constant column is collinear
+    with the intercept, so a design built on it would be singular and the arousal option would
+    appear to work while partialling out nothing. ``blank_arousal`` leaves the arousal cell empty
+    for named words, which is how the all-or-nothing rule gets tested on the second column.
+    """
 
     scale = {1: 7.4, -1: 2.6, 0: 5.1}
     rows = ["word,valence,arousal,source"]
-    rows += [
-        f"{label},{scale[words.valence_by_word[label]]},5.0,synthetic"
-        for label in words.labels
-        if label not in skip
-    ]
+    for index, label in enumerate(words.labels):
+        if label in skip:
+            continue
+        arousal = "" if label in blank_arousal else f"{3.0 + (index % 7) * 0.5:.2f}"
+        rows.append(f"{label},{scale[words.valence_by_word[label]]},{arousal},synthetic")
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
     return path
+
+
+def _norms_report(tmp_path: Path, norms_kwargs: dict, **map_kwargs):
+    directions, emotion = _planted(1.0)
+    words = read_emotion_words(WORDS_PATH)
+    directions_path = tmp_path / "reveal_directions.json"
+    emotion_path = tmp_path / "emotion_vectors.json"
+    write_reveal_rpe_directions(directions, directions_path)
+    write_emotion_vectors(emotion, emotion_path)
+    norms = _norms_csv(tmp_path / "norms.csv", words, **norms_kwargs)
+    return words, map_geometry(
+        directions_path,
+        emotion_path,
+        WORDS_PATH,
+        norms,
+        seed=7,
+        n_permutations=200,
+        n_null_draws=50,
+        **map_kwargs,
+    )
+
+
+def test_the_arousal_column_is_partialled_out_when_asked_and_never_by_default(tmp_path):
+    """The widened run's pre-registered primary readout, and the default that must not move.
+
+    E1's published contrast is the valence-only one, so the default has to stay reproducible from
+    this code (docs/design/e1-widening.md §7). Adding arousal must therefore be a request, visible
+    in the report, and it must actually change the residuals — a design that silently dropped the
+    column would look identical and mean something else.
+    """
+
+    _words, valence_only = _norms_report(tmp_path / "a", {})
+    _words2, partialled = _norms_report(tmp_path / "b", {}, residualize_on=("valence", "arousal"))
+
+    assert valence_only.residualize_on == ("valence",)
+    assert valence_only.valence_source == "numeric_norms"
+    assert partialled.residualize_on == ("valence", "arousal")
+    # The source string SAYS which nuisances went, so the two readouts are never confusable.
+    assert partialled.valence_source == "numeric_norms[valence+arousal]"
+
+    before = {row.word: row.residual for row in valence_only.blocks[0].word_residuals}
+    after = {row.word: row.residual for row in partialled.blocks[0].word_residuals}
+    assert set(before) == set(after)
+    assert any(abs(before[word] - after[word]) > 1e-9 for word in before), (
+        "partialling arousal changed nothing; the column is not reaching the design"
+    )
+    # And the readout still works: both family contrasts survive the extra covariate.
+    assert all(c.statistic > 0.0 for c in partialled.blocks[0].family_contrasts)
+
+
+def test_a_missing_arousal_rating_blocks_the_upgrade_for_the_whole_set(tmp_path):
+    """All-or-nothing spans EVERY requested column, not just the first one.
+
+    A word with a valence rating and no arousal rating would otherwise silently produce a design
+    on a subset nobody chose — the same incommensurability the valence rule already refuses.
+    """
+
+    words, report = _norms_report(
+        tmp_path, {"blank_arousal": ("wistful",)}, residualize_on=("valence", "arousal")
+    )
+    assert report.valence_source == "binary_project_labels"
+    assert report.norms_covered_words == len(words.labels) - 1
+    assert report.norms_missing_words == ("wistful",)
 
 
 def test_full_norm_coverage_upgrades_the_valence_scale(tmp_path):

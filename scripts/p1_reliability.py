@@ -35,10 +35,10 @@ from appraisal_emotions.analysis.emotion_mapping import read_valence_norms
 from appraisal_emotions.analysis.emotion_vectors import read_emotion_vectors
 from appraisal_emotions.analysis.story_projections import read_story_projections
 from appraisal_emotions.analysis.story_reliability import (
-    MDE80_COEFFICIENT,
     attenuation,
     floor_bootstrap,
     half_sample_cosines,
+    mde80_coefficient,
     prophecy,
     split_half_reliability,
     topic_adjusted_word_means,
@@ -113,7 +113,9 @@ def _verdict(icc: float, forecast: dict) -> tuple[str, str]:
     )
 
 
-def _analyse(artifact, labels, design, block, direction, shipped, *, rng_seed, n_splits, max_k):
+def _analyse(
+    artifact, labels, design, block, direction, shipped, *, rng_seed, n_splits, max_k, coefficient
+):
     stats = word_projection_stats(artifact, labels, block=block, direction=direction)
     components, residuals = variance_components(stats, design)
     halves = half_sample_cosines(
@@ -124,7 +126,13 @@ def _analyse(artifact, labels, design, block, direction, shipped, *, rng_seed, n
         rng=np.random.default_rng(rng_seed),
         n_splits=n_splits,
     )
-    forecast = prophecy(stats, components, observed_effect=shipped["observed_effect"], max_k=max_k)
+    forecast = prophecy(
+        stats,
+        components,
+        observed_effect=shipped["observed_effect"],
+        max_k=max_k,
+        coefficient=coefficient,
+    )
     return (
         stats,
         components,
@@ -146,7 +154,9 @@ def _analyse(artifact, labels, design, block, direction, shipped, *, rng_seed, n
     )
 
 
-def _block_report(artifact, labels, design, rows, contrasts, by_block, block, args) -> dict:
+def _block_report(
+    artifact, labels, design, rows, contrasts, by_block, block, args, *, coefficient
+) -> dict:
     """Everything reported for one block: gate first, then the decomposition it licenses."""
 
     shipped_block = by_block[block]
@@ -166,6 +176,7 @@ def _block_report(artifact, labels, design, rows, contrasts, by_block, block, ar
         rng_seed=args.seed + block,
         n_splits=args.n_splits,
         max_k=args.max_k,
+        coefficient=coefficient,
     )
 
     # THE GATE. Everything above describes E1's basis only if the cosines reconstructed from
@@ -217,6 +228,7 @@ def _block_report(artifact, labels, design, rows, contrasts, by_block, block, ar
         observed_effect=positive["statistic"],
         rng=np.random.default_rng(args.seed + block),
         n_resamples=args.n_bootstrap,
+        coefficient=coefficient,
     )
 
     if block == DECISION_BLOCK:
@@ -236,6 +248,7 @@ def _block_report(artifact, labels, design, rows, contrasts, by_block, block, ar
                 rng_seed=args.seed + block,
                 n_splits=args.n_splits,
                 max_k=args.max_k,
+                coefficient=coefficient,
             )[3]
             for name in EXPLORATORY_DIRECTIONS
         }
@@ -254,6 +267,17 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--max-k", type=int, default=400)
     parser.add_argument("--n-bootstrap", type=int, default=4000)
+    parser.add_argument(
+        "--residualize-on",
+        action="append",
+        choices=["valence", "arousal"],
+        help=(
+            "norm columns to partial out before the decomposition; repeatable. Default valence "
+            "only, which is E1's certified analysis. The widened run passes valence and arousal "
+            "(docs/design/e1-widening.md §1), so P1's variance components describe the same "
+            "estimand its primary readout reports."
+        ),
+    )
     parser.add_argument(
         "--exploratory",
         action="store_true",
@@ -276,13 +300,25 @@ def main() -> None:
     index = {label: position for position, label in enumerate(labels)}
     rows = family_rows(words, index)
     contrasts = words.expected_family_contrasts()
-    numeric_valence, covered, missing = read_valence_norms(NORMS, labels)
-    if numeric_valence is None or covered != len(labels):
-        raise SystemExit(f"norms cover {covered}/{len(labels)}; missing {missing}")
-    design = np.column_stack([np.ones(len(labels)), numeric_valence])
+    columns = tuple(args.residualize_on or ["valence"])
+    numeric_norms, covered, missing = read_valence_norms(NORMS, labels, columns)
+    if numeric_norms is None or covered != len(labels):
+        raise SystemExit(f"norms cover {covered}/{len(labels)} on {columns}; missing {missing}")
+    design = np.column_stack([np.ones(len(labels)), numeric_norms])
 
     report = json.loads(REPORT.read_text())
     by_block = {row["block"]: row for row in report["blocks"]}
+    # Off the contrast being scored, never a constant: the family widths live in
+    # data/emotion_words.json and the widened word set moves them (9/10 -> 11/15). A baked
+    # coefficient would report the old geometry's floors and prophecy against the new data with
+    # nothing in the artifact contradicting it.
+    decision_positive = next(
+        row for row in by_block[DECISION_BLOCK]["family_contrasts"] if row["pole"] == "positive"
+    )
+    coefficient = mde80_coefficient(
+        n_outcome=int(decision_positive["n_outcome"]),
+        n_control=int(decision_positive["n_control"]),
+    )
 
     result: dict[str, object] = {
         "capture": {
@@ -295,12 +331,27 @@ def main() -> None:
         },
         "prereg": "docs/design/p1-prereg.md",
         "decision_block": DECISION_BLOCK,
-        "mde80_coefficient": MDE80_COEFFICIENT,
+        "residualize_on": list(columns),
+        "mde80_coefficient": coefficient,
+        "mde80_family_sizes": {
+            "n_outcome": int(decision_positive["n_outcome"]),
+            "n_control": int(decision_positive["n_control"]),
+        },
         "blocks": {},
     }
 
     for block in (DECISION_BLOCK, ROBUSTNESS_BLOCK):
-        summary = _block_report(artifact, labels, design, rows, contrasts, by_block, block, args)
+        summary = _block_report(
+            artifact,
+            labels,
+            design,
+            rows,
+            contrasts,
+            by_block,
+            block,
+            args,
+            coefficient=coefficient,
+        )
         result["blocks"][str(block)] = summary
 
     decision = result["blocks"][str(DECISION_BLOCK)]

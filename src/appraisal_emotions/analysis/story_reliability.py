@@ -42,9 +42,24 @@ import numpy as np
 from appraisal_emotions.analysis.story_projections import StoryProjections
 from appraisal_emotions.analysis.valence_residual import ols_residuals
 
-# (z_.95 + z_.80) * sqrt(1/9 + 1/10): the analytic two-sample MDE80 coefficient at E1's family
-# sizes (9 outcome words vs 10 non-outcome). Fixed by the word file, not by any P1 number.
-MDE80_COEFFICIENT = (NormalDist().inv_cdf(0.95) + NormalDist().inv_cdf(0.80)) * sqrt(1 / 9 + 1 / 10)
+# z_.95 + z_.80 = 2.4865, the one part of the MDE80 coefficient that is a property of the test
+# rather than of the word set.
+MDE80_Z_SUM = NormalDist().inv_cdf(0.95) + NormalDist().inv_cdf(0.80)
+
+
+def mde80_coefficient(*, n_outcome: int, n_control: int) -> float:
+    """The analytic two-sample MDE80 coefficient at THIS contrast's family sizes.
+
+    Was a module constant baked at 9 vs 10 — E1's family widths at the time. That is a property of
+    ``data/emotion_words.json``, not of the test, and the widened word set moves it: at 11 vs 15 it
+    falls from 1.1425 to 0.9750, so a stale constant would report the old geometry's floors and
+    prophecy against the new data without anything contradicting it. Callers pass the sizes off the
+    contrast they are actually scoring.
+    """
+
+    if n_outcome < 1 or n_control < 1:
+        raise ValueError(f"MDE80 needs a word on each side, got {n_outcome} and {n_control}")
+    return MDE80_Z_SUM * sqrt(1 / n_outcome + 1 / n_control)
 
 
 @dataclass(frozen=True)
@@ -281,6 +296,7 @@ def prophecy(
     *,
     observed_effect: float,
     max_k: int,
+    coefficient: float,
 ) -> dict[str, object]:
     """Does ANY affordable capture size bring MDE80(k) below the effect it would then measure?
 
@@ -289,11 +305,11 @@ def prophecy(
     toward its true value. `k_star` is the first k where they cross, or None if they never do.
     """
 
-    floor = MDE80_COEFFICIENT * sqrt(max(components.between_word_variance_resid, 0.0))
+    floor = coefficient * sqrt(max(components.between_word_variance_resid, 0.0))
     lam_observed = lambda_at(stats, components.mean_k)
     if not np.isfinite(lam_observed) or lam_observed <= 0.0:
         return {
-            "mde80_at_observed_k": MDE80_COEFFICIENT * components.observed_residual_sd,
+            "mde80_at_observed_k": coefficient * components.observed_residual_sd,
             "mde80_floor_k_infinite": floor,
             "projected_effect_k_infinite": None,
             "detectable_at_any_k": False,
@@ -310,7 +326,7 @@ def prophecy(
     curve = []
     k_star = None
     for k in range(2, max_k + 1):
-        mde = MDE80_COEFFICIENT * residual_sd_at_k(components, k)
+        mde = coefficient * residual_sd_at_k(components, k)
         effect = observed_effect * lambda_at(stats, k) / lam_observed
         if k_star is None and mde <= effect:
             k_star = k
@@ -318,7 +334,7 @@ def prophecy(
             {"k": k, "mde80": mde, "projected_effect": effect, "detectable": mde <= effect}
         )
     return {
-        "mde80_at_observed_k": MDE80_COEFFICIENT * components.observed_residual_sd,
+        "mde80_at_observed_k": coefficient * components.observed_residual_sd,
         "mde80_floor_k_infinite": floor,
         "projected_effect_k_infinite": observed_effect / lam_observed,
         "detectable_at_any_k": floor <= observed_effect / lam_observed,
@@ -336,11 +352,13 @@ def floor_bootstrap(
     observed_effect: float,
     rng: np.random.Generator,
     n_resamples: int,
+    coefficient: float,
 ) -> dict[str, object]:
     """How firm is `k -> infinity` never suffices? Resample the WORDS and ask again.
 
     `prophecy` compares two point estimates, and the losing side of that comparison — the MDE80
-    floor `2.4865 * sqrt(sigma^2_tau,resid)` — is a variance component estimated from 84 words. Its
+    floor `coefficient * sqrt(sigma^2_tau,resid)` — is a variance component estimated from the word
+    set's own words. Its
     sampling error is large enough to matter at a gap this narrow, so reporting `detectable_at_any_k
     = False` without it would state a lean as a proof.
 
@@ -361,7 +379,7 @@ def floor_bootstrap(
         lam = lambda_at(drawn, components.mean_k)
         if not np.isfinite(lam) or lam <= 0.0:
             continue  # de-attenuation undefined for this word-set; it carries no comparison
-        floors.append(MDE80_COEFFICIENT * sqrt(max(components.between_word_variance_resid, 0.0)))
+        floors.append(coefficient * sqrt(max(components.between_word_variance_resid, 0.0)))
         effects.append(observed_effect / lam)
     floor_draws = np.asarray(floors)
     effect_draws = np.asarray(effects)

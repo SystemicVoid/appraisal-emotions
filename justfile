@@ -53,8 +53,11 @@ extract-rpe:
 extract-emotions-smoke:
     {{parallel_test_env}} uv run appraisal-emotions extract-emotions --config configs/emotion_vectors_smoke.yaml
 
-# E0 REAL on the design §2 primary: (84 words + 1 style control) x 12 = 1,020 short generations
-# plus <=1,020 read-only forwards. Read the ~10-generation reality sample first (skills/
+# E0 REAL on the design §2 primary: (every §5 word + 1 style control) x `stories_per_emotion`
+# short generations plus the same number of read-only forwards — 1,020 at the 84-word set this
+# arm was priced on, 1,344 at the widened 111 (docs/design/e1-widening.md; the widened RUN is
+# `extract-emotions-wide`, which also raises the story count).
+# Read the ~10-generation reality sample first (skills/
 # reality-sample) — the story filter is still frozen BLIND against this model.
 # G0 is the SENSITIVITY GATE for all of E1/E2. G0 fail => gate_verdict=harness_inadequate, and
 # every downstream null records harness_inadequate too: the emotion basis failed, not the
@@ -62,6 +65,24 @@ extract-emotions-smoke:
 # on THIS model/surface/recipe only. GPU runs gate behind explicit human approval.
 extract-emotions:
     {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_base.yaml
+
+# E0 WIDENED ARM, CONTRACT SMOKE (fake backend; numbers MEANINGLESS). Same path as
+# `extract-emotions-smoke` over the widened word set, carrying `residualize_on: [valence, arousal]`
+# into the readout. Run before renting the GPU: it proves the arm is wired, nothing more.
+extract-emotions-wide-smoke:
+    {{parallel_test_env}} uv run appraisal-emotions extract-emotions --config configs/emotion_vectors_wide_smoke.yaml
+
+# E0 WIDENED ARM, REAL — the run E1's null was under-powered to read (docs/design/e1-widening.md).
+# Same instrument as `extract-emotions`; three levers move: the word set (84 -> 111, so the outcome
+# families go 9/10 -> 11/15 and 17/21), the stories per word (12 -> 24, which buys down the
+# WITHIN-word noise P1 measured), and the primary readout (arousal-partialled). Its own run
+# directory, so E1's certified artifacts are untouched and stay reproducible.
+# (111 words + 1 style control) x 24 = 2,688 generations plus <=2,688 read-only forwards, ~2.6x the
+# base E0 slot. G0 is still the sensitivity gate: G0 fail => harness_inadequate downstream. More
+# power is not more licence — a positive here is still capped at present-and-separable.
+# GPU runs gate behind explicit human approval.
+extract-emotions-wide:
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_wide.yaml
 
 # E0 PAPER-PROMPT ARM, CONTRACT SMOKE (fake backend; numbers MEANINGLESS). Exercises the parts
 # the arm adds: loading data/sofroniew2026/, rendering Sofroniew et al. 2026's own appendix
@@ -132,17 +153,30 @@ extract-story-projections rpe="runs/reveal_rpe_base/reveal_rpe":
 map-geometry run=smoke_rpe_dir emo=smoke_emo_dir norms="":
     NORMS='{{norms}}'; {{parallel_test_env}} uv run appraisal-emotions map-geometry --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --words data/emotion_words.json --out {{emo}}/map_geometry_report.json --seed 7 --permutations 10000 --null-draws 1000 ${NORMS:+--norms "$NORMS"}
 
+# E1 on the WIDENED arm: BOTH readouts, from the same artifacts and the same command.
+# `map_geometry_report.json` is the pre-registered primary — valence AND arousal partialled out,
+# per configs/emotion_vectors_wide.yaml. `map_geometry_report_valence_only.json` is the same
+# analysis with no --config, i.e. exactly E1's certified valence-only estimand, which is what makes
+# the widened number comparable to the published 0.018572 (docs/design/e1-widening.md §1, §7).
+# Both are reported; neither is chosen after seeing the other. Norms are REQUIRED here — the
+# arousal column only exists in the fetched subset, and with none the primary silently degrades to
+# the binary fallback and partials no arousal at all.
+map-geometry-wide run="runs/reveal_rpe_base/reveal_rpe" emo="runs/emotion_vectors_wide/emotions" norms="data/norms/vad_subset.csv":
+    {{parallel_test_env}} uv run appraisal-emotions map-geometry --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --words data/emotion_words.json --norms {{norms}} --out {{emo}}/map_geometry_report.json --seed 7 --permutations 10000 --null-draws 1000 --config configs/emotion_vectors_wide.yaml
+    {{parallel_test_env}} uv run appraisal-emotions map-geometry --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --words data/emotion_words.json --norms {{norms}} --out {{emo}}/map_geometry_report_valence_only.json --seed 7 --permutations 10000 --null-draws 1000
+
 # Numeric valence/arousal norms (Warriner 2013 / NRC-VAD). The ONLY recipe that touches the
 # network; NRC-VAD is research-use-only and non-redistributable, so the subset is fetched, never
 # vendored. Optional: without it the run uses the §5 minted binary labels.
-# Warriner alone covers 62/84 of the §5 words, which is BELOW the all-or-nothing threshold
-# map-geometry applies — so this default lands on the binary fallback. Use `fetch-norms-nrc` for
-# the configuration that actually reaches 84/84.
+# Warriner alone leaves a large minority of the §5 words uncovered, which is BELOW the
+# all-or-nothing threshold map-geometry applies — so this default lands on the binary fallback.
+# Use `fetch-norms-nrc` for the configuration that actually reaches full coverage; the realised
+# per-source counts are in data/norms/MANIFEST.json, never restated here.
 fetch-norms out="data/norms":
     uv run --frozen python scripts/fetch_norms.py --out {{out}}
 
-# 84/84 coverage: NRC-VAD v2.x alone (one protocol, one scale, 80/84) plus the recorded four-word
-# verb-lemma backoff. NRC-VAD is RESEARCH USE ONLY and non-redistributable — download it yourself
+# Full coverage: NRC-VAD v2.x alone (one protocol, one scale) plus the recorded four-word
+# verb-lemma backoff — 111/111 at the widened word set, 107 of them direct (MANIFEST.json). NRC-VAD is RESEARCH USE ONLY and non-redistributable — download it yourself
 # from https://saifmohammad.com/WebPages/nrc-vad.html and pass the URL or a file:// path.
 fetch-norms-nrc url out="data/norms":
     uv run --frozen python scripts/fetch_norms.py --skip-warriner --lemma-backoff --nrc-vad-url "{{url}}" --out {{out}}
