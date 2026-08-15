@@ -149,5 +149,9 @@ patch-reveals-forward config run=smoke_rpe_dir emo=smoke_emo_dir:
 e4-surface-preflight config run=smoke_rpe_dir out="e4_preflight.json" *flags="":
     {{offline_env}} {{parallel_test_env}} uv run --extra hf python scripts/e4_surface_preflight.py --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --out {{out}} {{flags}}
 
-behavioral-transfer config run=smoke_rpe_dir emo=smoke_emo_dir:
-    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions behavioral-transfer --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/behavioral_transfer_report.json --seed 7
+#
+# --answer-form is REQUIRED and has no default anywhere: it is the one value the preflight's
+# reality sample measures and hands over. Guessing it does not raise -- both forms are single-token
+# by construction -- it silently reads a margin between two tokens the model never emits.
+behavioral-transfer config answer_form run=smoke_rpe_dir emo=smoke_emo_dir *flags="":
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions behavioral-transfer --config {{config}} --states {{run}}/reveal_states.json --battery {{run}}/battery.json --directions {{run}}/reveal_directions.json --emotions {{emo}}/emotion_vectors.json --out {{emo}}/behavioral_transfer_report.json --seed 7 --answer-form {{answer_form}} {{flags}}

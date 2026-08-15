@@ -50,15 +50,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-DECISION_PROBES_CONTRACT_VERSION = "decision_probes/v1"
+from appraisal_emotions.stimuli.gambles import outcome_line_parts
 
 WindowName = Literal["choice", "outcome_recall", "running_total", "reachability"]
-WINDOW_NAMES: tuple[WindowName, ...] = (
-    "choice",
-    "outcome_recall",
-    "running_total",
-    "reachability",
-)
 # The two windows whose correct answer is pinned by the reward cell, so any patched movement is
 # instrument damage rather than transfer.
 CORRUPTION_WINDOWS: tuple[WindowName, ...] = ("outcome_recall", "running_total")
@@ -92,13 +86,17 @@ RUNNING_TOTAL_FOIL_OFFSET = 10
 # readout. Disjointness is re-checked at run time against the real battery, not assumed here.
 ANSWER_SYMBOL_CANDIDATES: tuple[str, ...] = ("KER", "PON", "TUR", "VEL")
 
-# The assistant turn, split at the byte the capture stopped at. The reveal read prompt ENDS with
+# The assistant turn is split at the byte the capture stopped at. The reveal read prompt ENDS with
 # the realised symbol — that token is what E0/E3 captured — so the extension appends only what
 # follows it. The split is what makes the concatenation construction checkable: ``extend`` asserts
 # the pinned prompt ends with the head, which fails closed if a probe is ever paired with the wrong
 # reveal.
-_REVEAL_HEAD = " {symbol}"
-_REVEAL_REMAINDER = " = {reward:g} points"
+#
+# The bytes come from ``gambles.outcome_line_parts``, which is what RENDERED the line in the first
+# place, never from a copy of it here (``docs/agents/rails.md``: load, do not transcribe). Only the
+# head is guarded at run time -- ``extend`` checks the pinned prompt ends with it -- so a
+# hand-copied remainder would be a free-floating claim about text the model actually emitted, with
+# nothing to catch it drifting.
 
 _CHOICE_WINDOW = (
     "Next round. Two options:\n"
@@ -143,10 +141,6 @@ class DecisionProbe:
     user_turn: str
     answer_tokens: tuple[str, str]
     metadata: dict[str, object]
-
-    @property
-    def assistant_turn(self) -> str:
-        return self.assistant_head + self.assistant_remainder
 
 
 @dataclass(frozen=True)
@@ -216,19 +210,13 @@ def answer_symbols(pool: tuple[str, ...], *, exclude: frozenset[str]) -> tuple[s
 def reveal_head(symbol: str) -> str:
     """The part of the assistant turn the pinned reveal read prompt ALREADY ends with."""
 
-    return _REVEAL_HEAD.format(symbol=symbol)
+    return outcome_line_parts(symbol, 0.0)[0]
 
 
 def reveal_remainder(reward: float) -> str:
     """The part of the assistant turn the extension appends after the captured token."""
 
-    return _REVEAL_REMAINDER.format(reward=reward)
-
-
-def reveal_completion(*, symbol: str, reward: float) -> str:
-    """The assistant turn: the model's own observed completion of the ledger line."""
-
-    return reveal_head(symbol) + reveal_remainder(reward)
+    return outcome_line_parts("", reward)[1]
 
 
 def choice_probe(
@@ -387,8 +375,8 @@ def probe_texts() -> dict[str, str]:
     """
 
     return {
-        "reveal_head": _REVEAL_HEAD,
-        "reveal_remainder": _REVEAL_REMAINDER,
+        "reveal_head": reveal_head("{symbol}"),
+        "reveal_remainder": reveal_remainder(0.0),
         "choice": _CHOICE_WINDOW,
         "certain_line": _CERTAIN_LINE,
         "risky_line": _RISKY_LINE,

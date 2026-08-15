@@ -39,6 +39,7 @@ __all__ = [
     "StoryCaptureBackend",
     "capture_state",
     "capture_states",
+    "block_layers",
     "capture_token_mean_states",
     "decoder_layers",
 ]
@@ -72,6 +73,22 @@ class StoryCaptureBackend(
     def render_prompt(self, prompt: str) -> RenderedPrompt: ...
 
 
+def block_layers(blocks: Iterable[int]) -> tuple[int, ...]:
+    """Block numbers as ``layers=`` indices — ``hf_hidden_states_post_block/v1``: block l is l+1.
+
+    The one place this arithmetic is written. It exists because getting it wrong is SILENT: element
+    0 of ``hidden_states`` is the embedding output, so passing a block number reads the block's
+    INPUT instead of its output — in range, no error, and every downstream number quietly describes
+    the wrong block. A patch-block control row would then read zero by construction rather than by
+    verification, which is exactly the shape of a passing control (``docs/agents/gotchas.md``).
+
+    Analysis modules call this rather than spelling ``block + 1`` themselves; :func:`decoder_layers`
+    is the all-blocks case of the same conversion.
+    """
+
+    return tuple(block + 1 for block in blocks)
+
+
 def decoder_layers(backend: DecoderDepthBackend, *, fallback_blocks: int) -> tuple[int, ...]:
     """All decoder blocks as layer indices — ``hf_hidden_states_post_block/v1``: block l at index l+1.
 
@@ -80,7 +97,7 @@ def decoder_layers(backend: DecoderDepthBackend, *, fallback_blocks: int) -> tup
     """
 
     n_blocks = backend.decoder_block_count() or fallback_blocks
-    return tuple(range(1, n_blocks + 1))
+    return block_layers(range(n_blocks))
 
 
 def capture_state(

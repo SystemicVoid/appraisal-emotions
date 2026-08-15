@@ -39,10 +39,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import NormalDist
-from typing import Literal, Protocol
+from typing import Literal
 
 import numpy as np
 
+from appraisal_emotions.activation.capture import block_layers
 from appraisal_emotions.analysis.activation_patching import (
     ARMS,
     FLOOR_QUANTILE,
@@ -51,19 +52,30 @@ from appraisal_emotions.analysis.activation_patching import (
     matched_random_value,
     substituted_value,
 )
+from appraisal_emotions.analysis.behavioral_surface import (
+    ChatPatchingBackend,
+    ExtendedPrompt,
+    Readout,
+    chat_tail,
+    choice_probe_for,
+    corruption_probe_for,
+    extend,
+    read,
+    renderings_for,
+    rotating_rendering,
+)
 from appraisal_emotions.analysis.direction_stats import seed_int
 from appraisal_emotions.analysis.emotion_vectors import read_emotion_vectors
 from appraisal_emotions.analysis.expectation_control import align_reveals, emotion_axes
 from appraisal_emotions.analysis.reveal_rpe import (
     read_reveal_rpe_directions,
     read_reveal_rpe_states,
-    reveal_read_prompt,
 )
 from appraisal_emotions.analysis.symbol_preflight import (
     AnswerPoolPreflight,
+    battery_symbols,
     preflight_answer_symbols,
 )
-from appraisal_emotions.backends.base import PatchedForwardResult, RenderedPrompt
 from appraisal_emotions.core.schema import Comparison, StrictModel
 from appraisal_emotions.core.stats import add_one_p
 from appraisal_emotions.core.util import file_sha256, read_json, unit_vector
@@ -77,8 +89,6 @@ from appraisal_emotions.stimuli.decision_probes import (
     OptionRendering,
     WindowName,
     answer_symbols,
-    choice_probe,
-    corruption_probe,
     option_renderings,
     reachability_probe,
 )
@@ -93,6 +103,11 @@ GATE_ALPHA = 0.01
 # reason the continuation window's was.
 GATE_MDE_FRACTION = 0.5
 GATE_POWER = 0.80
+# The arm's own cell-clustered null must clear this before "functionally-used" may be written. The
+# usual 0.05 rather than the gate's 0.01: the gate protects a SPEND decision (get it wrong and
+# thousands of forwards buy an unreadable table), while this protects a CLAIM that is already capped
+# at pilot-suggestive and already has to outrun two controls.
+ARM_ALPHA = 0.05
 # Mean |shift| on an invariant-answer window must stay under this fraction of the CHOICE window's
 # own natural gap. Judged in the units of the thing being claimed, not as a fraction of the
 # corruption window's own baseline: both of those answers appear verbatim in the assistant turn
@@ -125,259 +140,6 @@ ANSWER_POOL_NOTE = (
     "from every symbol the reveal battery rendered, so the answer slot carries no repetition "
     "prior from the surface the patch sits on."
 )
-
-
-class ChatPatchingBackend(Protocol):
-    """What E4 needs beyond E3: multi-turn rendering, an interior patch site, and logits."""
-
-    def token_ids(self, text: str) -> tuple[int, ...]: ...
-
-    def render_prompt(self, prompt: str) -> RenderedPrompt: ...
-
-    def render_chat(self, messages: tuple[dict[str, str], ...]) -> RenderedPrompt: ...
-
-    def patched_forward(
-        self,
-        prompt: str,
-        *,
-        block: int,
-        position: int | str,
-        replacement: np.ndarray,
-        layers: tuple[int, ...],
-        max_new_tokens: int = 0,
-        readout_position: int | str | None = None,
-        logit_tokens: tuple[str, ...] = (),
-    ) -> PatchedForwardResult: ...
-
-
-@dataclass(frozen=True)
-class ExtendedPrompt:
-    """The three-turn prompt, and the token index the reveal state must be patched at."""
-
-    text: str
-    patch_position: int
-    answer_tokens: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Readout:
-    """One patched forward's product: the answer-slot margin and the residual read there."""
-
-    margin: float
-    states: np.ndarray
-
-
-# Sentinels for deriving the template's own control tokens. Private-use codepoints: they cannot
-# occur in a probe, they survive the template's ``|trim`` untouched, and they tokenize to
-# something — we never read their ids, only slice the rendered string around them.
-_USER_SENTINEL = "USER"
-_ASSISTANT_SENTINEL = "ASSISTANT"
-
-
-def chat_tail(backend: ChatPatchingBackend) -> str:
-    """Everything the template puts between an assistant turn's end and the next answer slot.
-
-    Derived by rendering a sentinel conversation and slicing, rather than hand-written: the control
-    tokens, the ``<|im_end|>`` placement and the no-think scaffold are the checkpoint's business and
-    ``docs/agents/rails.md`` forbids transcribing text that already lives in a file.
-
-    The tail is the second half of the concatenation construction. The first half is the pinned
-    reveal read prompt itself, which is why this is not simply ``render_chat`` on three messages:
-    measured on the pinned checkpoint, that render does NOT reproduce the pinned bytes — the
-    ``<think>\\n\\n</think>\\n\\n`` scaffold is emitted only by ``add_generation_prompt`` and a past
-    assistant turn's content is ``|trim``med, so the patch position would land on a different token
-    than the one E0/E3 captured (``docs/agents/gotchas.md``).
-    """
-
-    rendered = backend.render_chat(
-        (
-            {"role": "user", "content": "REVEAL"},
-            {"role": "assistant", "content": _ASSISTANT_SENTINEL},
-            {"role": "user", "content": _USER_SENTINEL},
-        )
-    ).rendered_prompt
-    if rendered.count(_ASSISTANT_SENTINEL) != 1 or rendered.count(_USER_SENTINEL) != 1:
-        raise ValueError(
-            "the chat template did not reproduce both sentinels verbatim exactly once, so the "
-            "control tokens between the assistant turn and the answer slot cannot be derived from "
-            "it; the extension would have to be hand-written, which this design refuses"
-        )
-    return rendered.split(_ASSISTANT_SENTINEL, 1)[1]
-
-
-def extend(
-    backend: ChatPatchingBackend,
-    reveal: Comparison,
-    probe: DecisionProbe,
-    *,
-    tail: str | None = None,
-) -> ExtendedPrompt:
-    """Append the completion and the probe onto the PINNED reveal prompt. Fail-closed.
-
-    Concatenation, never a re-render: the byte-pinned reveal read prompt is the model's own real
-    transcript up to the captured token, and E0/E3 read their state at its last token. The
-    extension appends only what follows that token — the rest of the ledger line, then the
-    template's own control tokens with the probe spliced in.
-
-    Two guards, both of which abort rather than degrade. The pinned prompt must END with the
-    probe's own assistant head, which catches a probe built for a different reveal; and the pinned
-    prompt's token ids must be an exact PREFIX of the extended prompt's, because byte-level
-    prefixing does not imply token-level prefixing — BPE can re-merge across the boundary. Patching
-    an index that means something else is worse than not running.
-    """
-
-    reveal_prompt = reveal_read_prompt(backend, reveal)  # type: ignore[arg-type]
-    if not reveal_prompt.endswith(probe.assistant_head):
-        raise ValueError(
-            f"the pinned reveal read prompt does not end with {probe.assistant_head!r}: this probe "
-            "was built for a different reveal, so its extension would append the wrong ledger line "
-            "to the captured token"
-        )
-    text = (
-        reveal_prompt
-        + probe.assistant_remainder
-        + (chat_tail(backend) if tail is None else tail).replace(_USER_SENTINEL, probe.user_turn)
-    )
-    reveal_ids = backend.token_ids(reveal_prompt)
-    extended_ids = backend.token_ids(text)
-    if extended_ids[: len(reveal_ids)] != reveal_ids:
-        raise ValueError(
-            "the reveal read prompt's token ids are not a prefix of the extended prompt's: the "
-            "tokenizer re-merged across the boundary, so token "
-            f"{len(reveal_ids) - 1} is no longer the reveal symbol"
-        )
-    return ExtendedPrompt(
-        text=text, patch_position=len(reveal_ids) - 1, answer_tokens=probe.answer_tokens
-    )
-
-
-def read(
-    backend: ChatPatchingBackend,
-    reveal: Comparison,
-    probe: DecisionProbe,
-    *,
-    block: int,
-    replacement: np.ndarray,
-    readout_blocks: tuple[int, ...],
-) -> Readout:
-    """One patched forward: the answer-slot margin, and the residual at that same slot.
-
-    The margin is ``logit(first answer token) − logit(second)``. The order is the probe's own
-    convention, never the rendering's — every window lists its target option first — so a
-    counterbalance flip cannot silently flip the readout's sign.
-
-    ``readout_blocks`` are BLOCK numbers and are converted here to the raw ``hidden_states`` indices
-    the backend contract takes (``hf_hidden_states_post_block/v1``: post-block *l* is index *l+1*).
-    The conversion is not cosmetic — without it every free-rider projection would put a
-    post-block-(l−1) state onto a post-block-l axis, which is exactly the basis mismatch
-    :func:`_axis_means` exists to avoid, and the patch-block control row would read the block's
-    INPUT and so be zero by construction rather than by verification.
-    """
-
-    extended = extend(backend, reveal, probe)
-    result = backend.patched_forward(
-        extended.text,
-        block=block,
-        position=extended.patch_position,
-        replacement=replacement,
-        layers=tuple(readout + 1 for readout in readout_blocks),
-        readout_position="last",
-        logit_tokens=extended.answer_tokens,
-    )
-    logits = result.logits
-    if logits is None or len(logits) != len(extended.answer_tokens):
-        raise ValueError(
-            "the patched forward did not return one logit per answer token; the readout the whole "
-            "design rests on is missing rather than merely small"
-        )
-    return Readout(
-        margin=float(logits[0] - logits[1]),
-        states=np.asarray(result.states, dtype=np.float64),
-    )
-
-
-# --------------------------------------------------------------------------------------
-# Probe construction: which symbols a pair answers with, and in which counterbalance cell
-# --------------------------------------------------------------------------------------
-
-
-def _pair_symbols(reveal: Comparison, answer_pool: tuple[str, ...]) -> tuple[str, str]:
-    excluded = frozenset({str(reveal.metadata["symbol_high"]), str(reveal.metadata["symbol_low"])})
-    return answer_symbols(answer_pool, exclude=excluded)
-
-
-def _unrealised_symbol(reveal: Comparison) -> str:
-    """The draw's OTHER symbol — the only distractor that makes "which was the outcome?" a recall
-    question rather than a spot-the-odd-pool-member one."""
-
-    realised = str(reveal.metadata["realised_symbol"])
-    high, low = str(reveal.metadata["symbol_high"]), str(reveal.metadata["symbol_low"])
-    return low if realised == high else high
-
-
-def _choice_probe_for(
-    reveal: Comparison, *, rendering: OptionRendering, certain: int, form: AnswerForm
-) -> DecisionProbe:
-    return choice_probe(
-        symbol=str(reveal.metadata["realised_symbol"]),
-        reward=float(reveal.metadata["reward"]),
-        rendering=rendering,
-        certain=certain,
-        form=form,
-    )
-
-
-def _corruption_probe_for(
-    reveal: Comparison, window: WindowName, *, rendering: OptionRendering, form: AnswerForm
-) -> DecisionProbe:
-    return corruption_probe(
-        window,
-        symbol=str(reveal.metadata["realised_symbol"]),
-        reward=float(reveal.metadata["reward"]),
-        rendering=rendering,
-        foil_symbol=_unrealised_symbol(reveal),
-        form=form,
-    )
-
-
-def _renderings_for(
-    reveals: tuple[Comparison, ...], pair: PatchPair, answer_pool: tuple[str, ...]
-) -> tuple[OptionRendering, ...]:
-    """The pair's 2x2 counterbalance cells.
-
-    Built from the RECIPIENT's excluded set and then required to be legal for the donor too: the
-    two members of a pair must answer with the same option symbols, or the "natural gap" would be
-    partly a difference between answer tokens rather than between conditions.
-    """
-
-    symbol_a, symbol_b = _pair_symbols(reveals[pair.recipient_row], answer_pool)
-    donor_excluded = {
-        str(reveals[pair.donor_row].metadata["symbol_high"]),
-        str(reveals[pair.donor_row].metadata["symbol_low"]),
-    }
-    if donor_excluded & {symbol_a, symbol_b}:
-        raise ValueError(
-            f"pair in cell {pair.reward_cell_id} cannot share answer symbols: the donor's own "
-            "reveal used one of them, so the two members would answer with different tokens"
-        )
-    return option_renderings(symbol_a, symbol_b)
-
-
-def _rotating_rendering(
-    reveals: tuple[Comparison, ...],
-    pair: PatchPair,
-    answer_pool: tuple[str, ...],
-    index: int,
-) -> OptionRendering:
-    """One counterbalance cell, rotating with the caller's index across pairs.
-
-    For readouts whose estimand is a mean over pairs, rotating the cell marginalises the
-    counterbalance at a quarter of the forwards. It is NOT used for the choice window, where each
-    pair's own gap is a unit of the analysis and must not carry a rendering offset.
-    """
-
-    renderings = _renderings_for(reveals, pair, answer_pool)
-    return renderings[index % len(renderings)]
 
 
 # --------------------------------------------------------------------------------------
@@ -593,6 +355,12 @@ class BehavioralTransferReport(StrictModel):
     )
     seed: int
     patch_block: int
+    # Where the patched direction was CERTIFIED, and under which verdict, copied from the
+    # directions artifact. When ``patch_block`` differs from it the arm labelled
+    # ``v_rpe_component`` is injecting an uncertified vector, and a reader cannot tell from
+    # ``patch_block`` alone -- so both numbers are recorded rather than one.
+    direction_block: int
+    direction_verdict: str
     readout_blocks: tuple[int, ...]
     n_pairs: int
     n_cells: int
@@ -623,6 +391,11 @@ class BehavioralTransferReport(StrictModel):
     corruption: tuple[CorruptionControl, ...]
     corruption_clean: bool
     corruption_note: str
+    # Whether the full-residual ceiling shows this design could have SEEN a within-cell shift at
+    # all. A flat arm table means something different depending on this, so it is a reported field
+    # rather than only a phrase inside ``verdict_cap``.
+    ceiling_readable: bool
+    ceiling_note: str
     cross_position_note: str
     identification_limit: str
     verdict_cap: str
@@ -722,7 +495,7 @@ def _choice_margins(
         readout = read(
             backend,
             reveal,
-            _choice_probe_for(reveal, rendering=rendering, certain=certain, form=answer_form),
+            choice_probe_for(reveal, rendering=rendering, certain=certain, form=answer_form),
             block=patch_block,
             replacement=replacement,
             readout_blocks=readout_blocks,
@@ -762,12 +535,17 @@ def sensitivity_gate(
     """
 
     cells = _cell_groups(pairs)
-    per_level = {
-        certain: _level_pass(
+    # Two phases, and the split is a budget decision that changes no reported number. Titration is
+    # decided entirely on recipient margins, so phase one reads the recipients at every level;
+    # phase two buys the donors at the winning level only, and reuses phase one's recipients there
+    # rather than re-reading them.
+    recipients = {
+        certain: _role_pass(
             backend,
             reveals,
             pairs,
             block_states,
+            role="recipient",
             certain=certain,
             patch_block=patch_block,
             readout_blocks=readout_blocks,
@@ -786,15 +564,28 @@ def sensitivity_gate(
             mean_abs_baseline_margin=float(np.abs(level.margins.mean(axis=1)).mean()),
             selected=False,
         )
-        for certain, level in per_level.items()
+        for certain, level in recipients.items()
     )
     selected = min(levels, key=lambda level: level.mean_abs_baseline_margin)
     levels = tuple(
         level.model_copy(update={"selected": level.certain == selected.certain}) for level in levels
     )
 
-    level = per_level[selected.certain]
-    gaps, state_gaps = level.gaps, level.state_gaps
+    recipient = recipients[selected.certain]
+    donor = _role_pass(
+        backend,
+        reveals,
+        pairs,
+        block_states,
+        role="donor",
+        certain=selected.certain,
+        patch_block=patch_block,
+        readout_blocks=readout_blocks,
+        answer_pool=answer_pool,
+        answer_form=answer_form,
+    )
+    gaps = donor.margins.mean(axis=1) - recipient.margins.mean(axis=1)
+    state_gaps = donor.states.mean(axis=1) - recipient.states.mean(axis=1)
     cell_gaps = _cell_means(gaps, cells)
     observed = float(cell_gaps.mean())
     p_value = _cell_permutation_p(
@@ -826,61 +617,59 @@ def sensitivity_gate(
         free_rider_note=_FREE_RIDER_NOTE,
         verdict=_gate_verdict(passed, p_value, mde80, observed, len(cells), n_permutations),
     )
-    return gate, Baselines(margins=level.margins, states=level.states)
+    return gate, Baselines(margins=recipient.margins, states=recipient.states)
 
 
 @dataclass(frozen=True)
-class _LevelPass:
-    """One titration level's unpatched readouts. ``margins``/``states`` are the RECIPIENTS'."""
+class _RolePass:
+    """One role's unpatched readouts at one titration level, marginalised over nothing yet."""
 
-    gaps: np.ndarray  # (pairs,) donor minus recipient, marginalised over renderings
-    state_gaps: np.ndarray  # (pairs, blocks, hidden)
     margins: np.ndarray  # (pairs, renderings)
     states: np.ndarray  # (pairs, renderings, blocks, hidden)
 
 
-def _level_pass(
+def _role_pass(
     backend: ChatPatchingBackend,
     reveals: tuple[Comparison, ...],
     pairs: tuple[PatchPair, ...],
     block_states: np.ndarray,
     *,
+    role: Literal["donor", "recipient"],
     certain: int,
     patch_block: int,
     readout_blocks: tuple[int, ...],
     answer_pool: tuple[str, ...],
     answer_form: AnswerForm,
-) -> _LevelPass:
-    """One titration level, unpatched: per-pair gap, recipient baselines, and axis-state gap."""
+) -> _RolePass:
+    """Every pair's donor OR recipient, unpatched, in all four counterbalance cells.
 
-    donor_margins, recipient_margins = [], []
-    donor_states, recipient_states = [], []
+    Split by role because the two are wanted at different times. Titration is decided on the
+    RECIPIENTS alone -- ``mean_abs_baseline_margin`` is a recipient quantity -- so the recipients
+    are read at every level and the donors only at the level that wins. Reading both at every level
+    buys 960 forwards whose numbers no field of the report ever contains.
+
+    Every forward here is a self-patch: the row's own captured value written back at its own
+    position, inert by contract. Deliberate -- the baseline is measured through the same code path
+    the arms use rather than through a second one that might not agree with it.
+    """
+
+    margins: list[np.ndarray] = []
+    states: list[np.ndarray] = []
     for pair in pairs:
-        renderings = _renderings_for(reveals, pair, answer_pool)
-        for row, margins, states in (
-            (pair.donor_row, donor_margins, donor_states),
-            (pair.recipient_row, recipient_margins, recipient_states),
-        ):
-            margin, state = _choice_margins(
-                backend,
-                reveals[row],
-                renderings=renderings,
-                certain=certain,
-                patch_block=patch_block,
-                replacement=block_states[row],
-                readout_blocks=readout_blocks,
-                answer_form=answer_form,
-            )
-            margins.append(margin)
-            states.append(state)
-    recipient = np.stack(recipient_margins)
-    recipient_state = np.stack(recipient_states)
-    return _LevelPass(
-        gaps=np.stack(donor_margins).mean(axis=1) - recipient.mean(axis=1),
-        state_gaps=np.stack(donor_states).mean(axis=1) - recipient_state.mean(axis=1),
-        margins=recipient,
-        states=recipient_state,
-    )
+        row = pair.donor_row if role == "donor" else pair.recipient_row
+        margin, state = _choice_margins(
+            backend,
+            reveals[row],
+            renderings=renderings_for(reveals, pair, answer_pool),
+            certain=certain,
+            patch_block=patch_block,
+            replacement=block_states[row],
+            readout_blocks=readout_blocks,
+            answer_form=answer_form,
+        )
+        margins.append(margin)
+        states.append(state)
+    return _RolePass(margins=np.stack(margins), states=np.stack(states))
 
 
 def _attainable_p(n_cells: int, n_permutations: int) -> float:
@@ -1067,7 +856,7 @@ def _arm_pass(
     state_shifts: list[np.ndarray] = []
     for index in kept:
         pair = pairs[index]
-        renderings = _renderings_for(reveals, pair, answer_pool)
+        renderings = renderings_for(reveals, pair, answer_pool)
         chosen_cells = (
             (rendering_index % len(renderings),)
             if rendering_index is not None
@@ -1084,7 +873,7 @@ def _arm_pass(
             readout = read(
                 backend,
                 reveals[pair.recipient_row],
-                _choice_probe_for(
+                choice_probe_for(
                     reveals[pair.recipient_row],
                     rendering=renderings[cell],
                     certain=certain,
@@ -1214,10 +1003,10 @@ def corruption_controls(
     controls: list[CorruptionControl] = []
     for window in CORRUPTION_WINDOWS:
         probes = tuple(
-            _corruption_probe_for(
+            corruption_probe_for(
                 reveals[pair.recipient_row],
                 window,
-                rendering=_rotating_rendering(reveals, pair, answer_pool, index),
+                rendering=rotating_rendering(reveals, pair, answer_pool, index),
                 form=answer_form,
             )
             for index, pair in enumerate(pairs)
@@ -1305,7 +1094,9 @@ def _corruption_arm(
     )
 
 
-def corruption_reading(controls: tuple[CorruptionControl, ...]) -> tuple[bool, str]:
+def corruption_reading(
+    controls: tuple[CorruptionControl, ...], arms: tuple[ArmTransfer, ...] = ()
+) -> tuple[bool, str]:
     """Are the invariant-answer windows undisturbed enough for the choice result to be read?
 
     W2/W3 are corruption controls and NOT an affect-versus-arithmetic dissociation: within a
@@ -1317,14 +1108,27 @@ def corruption_reading(controls: tuple[CorruptionControl, ...]) -> tuple[bool, s
 
     if not controls:
         return False, "no corruption-control windows were run; the choice reading is uncontrolled"
-    offenders = [control for control in controls if not control.within_tolerance]
+    # Two bars, and the second is the one the tolerance constant only PROMISED. CORRUPTION_TOLERANCE
+    # is a fixed fraction of the natural gap, so at 0.5 it admits damage of half a gap against an
+    # effect that is itself a fraction of a gap -- damage larger than the result, passing a control
+    # whose whole purpose is to exclude that. So each window is also required to have moved less
+    # than the arm it was run under actually moved the choice. Fixed before any data, and it can
+    # only ever tighten the gate, never loosen it.
+    claimed = {arm.arm: abs(arm.mean_shift) for arm in arms}
+    offenders = [
+        control
+        for control in controls
+        if not control.within_tolerance
+        or control.mean_abs_shift >= claimed.get(control.arm, float("inf"))
+    ]
     if offenders:
         names = ", ".join(f"{control.arm}/{control.window}" for control in offenders)
         return False, (
             f"CORRUPTION: {names} moved a window whose correct answer is identical across the "
             f"pair by more than {CORRUPTION_TOLERANCE:.0%} of the CHOICE window's own natural "
-            "gap. The patch is damaging numeric bookkeeping on the scale of the effect being "
-            "claimed, so the choice shift is reported with that confound named and capped."
+            "gap, or by more than that arm moved the choice itself. The patch is damaging numeric "
+            "bookkeeping on the scale of the effect being claimed, so the choice shift is reported "
+            "with that confound named and capped."
         )
     return True, (
         "Both invariant-answer windows stayed inside tolerance, so the choice shift is not the "
@@ -1467,13 +1271,25 @@ def reachability_control(
 
 
 def _arm_beats_its_controls(arms: tuple[ArmTransfer, ...]) -> bool:
-    """Does the certified direction outrun BOTH the random floor and the same-condition no-op?
+    """Does the certified direction outrun its controls AND its own null?
 
-    Compared on ``transfer_fraction`` and per-rendering where the comparison would otherwise be
-    unfair: the floor scores one rendering cell per draw, so its 95th percentile is compared
-    against the certified arm's WEAKEST per-rendering fraction rather than against the
-    four-rendering mean, whose rendering noise is a quarter as large. Conservative by construction
-    — a positive here is one the noise structure cannot manufacture.
+    FOUR conditions, and the fourth is the one an earlier draft was missing. The three point
+    comparisons -- positive, above the floor, above the no-op -- are comparisons of estimates with
+    no noise model between them, so on a flat surface the certified arm clears all three roughly one
+    time in eight by arithmetic alone. ``p_value`` is the arm's own cell-clustered sign-flip null,
+    it was already being computed, and nothing read it; requiring it here is what stops
+    "functionally-used" resting on three coin flips.
+
+    The floor comparison is deliberately conservative where the comparison would otherwise be
+    unfair: the floor scores one rendering cell per draw, so its 95th percentile is compared against
+    the certified arm's WEAKEST per-rendering fraction rather than the four-rendering mean, whose
+    rendering noise is a quarter as large.
+
+    ``transfer_fraction`` is the comparison quantity throughout, and the arms are only ever compared
+    to each other -- so the one requirement is that all four numbers are the same estimand, which
+    they are. ``normalised_shift`` is the reported headline and the gate's MDE80 powers it; it is
+    not used here because it divides by ``mean(gap)``, which on mixed-sign gaps is a denominator the
+    floor and no-op do not share.
     """
 
     by_arm = {arm.arm: arm for arm in arms}
@@ -1485,9 +1301,51 @@ def _arm_beats_its_controls(arms: tuple[ArmTransfer, ...]) -> bool:
     no_op = by_arm.get("same_condition_donor")
     return bool(
         certified.transfer_fraction > 0.0
+        and certified.p_value is not None
+        and certified.p_value < ARM_ALPHA
         and (floor is None or weakest > floor.transfer_fraction)
         and (no_op is None or certified.transfer_fraction > no_op.transfer_fraction)
     )
+
+
+def _ceiling_is_readable(
+    arms: tuple[ArmTransfer, ...], gate: SensitivityGate, cells: tuple[tuple[int, ...], ...]
+) -> tuple[bool, str]:
+    """Can this design SEE a within-cell shift at all? Answered by the full-residual arm.
+
+    Without this, a flat arm table is ambiguous in a way the reachability control does not resolve.
+    Reachability swaps a whole residual across a +-160-point reward difference; the arms inject a
+    within-reward-cell EV difference, which is orders of magnitude smaller by construction because
+    the cell pins the reward. So reachability establishes reach at an EXTREME magnitude only, and
+    "no transfer" would still be consistent with "the injected magnitude is below the readout's
+    resolution" -- the same unmeasured-denominator shape E4 exists to escape, moved one level down.
+
+    ``full_residual`` is the within-design ceiling: the largest shift anything in this pair set can
+    produce, at exactly the magnitude the arms work at. The run already buys it. If IT cannot clear
+    the random floor, no arm below it could have, and the correct verdict is that the harness could
+    not have seen the effect -- not that the effect is absent.
+    """
+
+    by_arm = {arm.arm: arm for arm in arms}
+    ceiling = by_arm.get("full_residual")
+    floor = by_arm.get("random_component")
+    if ceiling is None:
+        return False, "the full-residual ceiling was not run, so no arm's null is readable"
+    if floor is not None and ceiling.transfer_fraction <= floor.transfer_fraction:
+        return False, (
+            f"the full-residual ceiling ({ceiling.transfer_fraction:+.3f}) does not clear the "
+            f"magnitude-matched random floor ({floor.transfer_fraction:+.3f}). Swapping the WHOLE "
+            "residual is the largest shift this pair set can produce at the magnitude the arms "
+            "work at, so a rank-1 component of it could not have been seen either"
+        )
+    mde = _mde80(_cell_means(np.asarray(ceiling.per_pair_shift), cells))
+    if not mde < GATE_MDE_FRACTION * abs(gate.mean_natural_gap):
+        return False, (
+            f"the ceiling arm's MDE80 ({mde:.4f}) is not below {GATE_MDE_FRACTION:g} x the natural "
+            f"gap ({abs(gate.mean_natural_gap):.4f}), so a half-sized transfer would not have been "
+            "detectable in the arms even though B0 passed on the unpatched gap"
+        )
+    return True, ""
 
 
 def verdict_cap(
@@ -1497,6 +1355,8 @@ def verdict_cap(
     g0_passed: bool,
     reachable: bool,
     arms: tuple[ArmTransfer, ...],
+    ceiling_readable: bool = True,
+    ceiling_note: str = "",
 ) -> str:
     """The one string that says what this run licensed.
 
@@ -1504,50 +1364,72 @@ def verdict_cap(
     the three gate booleans and so wrote "functionally-used, pilot-suggestive" onto a run whose
     every arm read zero — its own prose promised a comparison against the floor and the no-op that
     nothing computed. The comparison is made here, on the arm table.
+
+    A table rather than a chain of ifs, because the ORDER is the design: the first unmet condition
+    wins, and it is ordered from "the instrument is not established" down to "the instrument is fine
+    and the effect is not there". Reading it top to bottom is the whole routing rule.
     """
 
-    if not g0_passed:
-        return (
+    beats_controls = _arm_beats_its_controls(arms)
+    routes: tuple[tuple[bool, str], ...] = (
+        (
+            g0_passed,
             "harness_inadequate — the E0 G0 sensitivity gate did NOT pass, so the emotion basis "
             "the off-position free-rider readout depends on is not established. The behavioural "
             "leg still reads on its own logit margin, but nothing here adjudicates anything about "
-            "emotion geometry."
-        )
-    if not reachable:
-        return (
+            "emotion geometry.",
+        ),
+        (
+            reachable,
             "harness_inadequate — the reachability control FAILED: patching the reveal token does "
             "not move the answer slot even where the donor's own bookkeeping predicts it should. "
             "Nothing below distinguishes 'the expectation state is not used' from 'this surface "
-            "carries nothing across positions'. The functional-use claim stays OPEN."
-        )
-    if not gate_passed:
-        return (
+            "carries nothing across positions'. The functional-use claim stays OPEN.",
+        ),
+        (
+            gate_passed,
             "harness_inadequate for the window — B0 failed, so the transfer fraction has no "
             "measured denominator and no patched number below it is readable in either "
-            "direction. The functional-use claim stays OPEN."
-        )
-    if not _arm_beats_its_controls(arms):
-        return (
+            "direction. The functional-use claim stays OPEN.",
+        ),
+        (
+            beats_controls or ceiling_readable,
+            "harness_inadequate for the arms — the certified arm does not outrun its controls, but "
+            f"neither could anything: {ceiling_note}. Reachability passed at the extreme cross-cell "
+            "magnitude, which does not establish resolution at the within-cell magnitude the arms "
+            "actually inject. So this is NOT a readable null — it does not distinguish 'the "
+            "direction is not used' from 'the design could not have seen it'. The functional-use "
+            "claim stays OPEN.",
+        ),
+        (
+            beats_controls,
             "no transfer — the surface is reachable and the window moves, but the certified "
             "signed-RPE arm does not outrun BOTH the magnitude-matched random floor and the "
-            "same-condition no-op. This IS a readable null for the certified direction on this "
-            "model and recipe: the denominator was measured, the floor is now perturbation-matched "
-            "and the readout sits where the identity path cannot reach it. It says nothing about "
-            "whether some other direction carries the effect."
-        )
-    if not corruption_clean:
-        return (
+            "same-condition no-op, or does not clear its own cell-clustered null. This IS a "
+            "readable null for the certified direction on this model and recipe: the denominator "
+            "was measured, the floor is perturbation-matched, the full-residual ceiling shows the "
+            "design can see a shift at the magnitude the arms inject, and the readout sits where "
+            "the identity path cannot reach it. It says nothing about whether some other direction "
+            "carries the effect.",
+        ),
+        (
+            corruption_clean,
             "functionally-used, CONFOUNDED — a window whose correct answer is invariant across "
             "the pair moved under the patch, so the choice shift may be context corruption "
-            "rather than transfer. Report both and claim neither."
-        )
+            "rather than transfer. Report both and claim neither.",
+        ),
+    )
+    for holds, verdict in routes:
+        if not holds:
+            return verdict
     return (
         "functionally-used, pilot-suggestive — the strongest tier this project licenses, and only "
-        "on THIS model/surface/recipe, and only if the certified-direction arm outruns BOTH the "
-        "random floor and the same-condition no-op. The readout sits at a LATER token than the "
-        "patch, so unlike E3's same-position reading it cannot be produced by the residual "
-        "stream's identity path. Identification limit unchanged; no welfare, sentience or "
-        "experience claim follows."
+        "on THIS model/surface/recipe. The certified-direction arm outruns BOTH the random floor "
+        "and the same-condition no-op AND clears its own cell-clustered null, and the full-residual "
+        "ceiling shows the design could see a shift at the magnitude injected. The readout sits at "
+        "a LATER token than the patch, so unlike E3's same-position reading it cannot be produced "
+        "by the residual stream's identity path. Identification limit unchanged; no welfare, "
+        "sentience or experience claim follows."
     )
 
 
@@ -1585,7 +1467,7 @@ def behavioral_transfer(
 
     Then the reachability control, which runs even when B0 fails — §5's discard clause forbids
     spending the patched ARMS against an unmeasured denominator, and this is not that. It is the
-    240-forward measurement that tells the operator whether a flat run means the model or the
+    60-forward measurement that tells the operator whether a flat run means the model or the
     instrument, which is precisely the question a failed B0 raises.
     """
 
@@ -1593,11 +1475,19 @@ def behavioral_transfer(
     battery = RevealProbeBattery.model_validate(read_json(Path(battery_file)))
     directions = read_reveal_rpe_directions(Path(directions_artifact))
     emotion = read_emotion_vectors(Path(emotion_artifact))
-    patch_block = emotion.metadata.selected_block if block is None else block
-    if not 0 <= patch_block < states.metadata.n_blocks - 1:
+    # The DIRECTIONS artifact's block, not the emotion artifact's. The thing patched here is the
+    # certified signed-RPE direction, and "certified" is a property of the block it was selected
+    # at (``source_verdict`` is recorded beside it); read it at any other block and the arm injects
+    # an uncertified vector under the certified arm's name. The emotion artifact's block answers a
+    # different question (where the emotion basis separates) and on the run of record the two
+    # disagree -- 35 vs 63 -- with 63 out of range for a patch that must leave a deeper readout.
+    patch_block = directions.metadata.selected_block if block is None else block
+    n_blocks = states.metadata.n_blocks
+    states_sha256 = states.metadata.states_sha256
+    if not 0 <= patch_block < n_blocks - 1:
         raise ValueError(
             f"patch block {patch_block} must leave a deeper readout block "
-            f"(n_blocks={states.metadata.n_blocks}); patching the deepest block would leave "
+            f"(n_blocks={n_blocks}); patching the deepest block would leave "
             "nothing downstream to read"
         )
     reveals = align_reveals(states, battery)
@@ -1606,13 +1496,18 @@ def behavioral_transfer(
     )
     preflight = _preflight_pool(backend, reveals, answer_candidates)
     answer_pool = preflight.valid
-    block_states = np.asarray(states.states[:, patch_block, :])
+    # ascontiguousarray, not asarray: a basic slice on axis 1 is a VIEW, and ``np.asarray`` on an
+    # ndarray is a no-op, so the 81 MB actually wanted would keep all 5.2 GB of ``states.states``
+    # alive for the whole run -- beside 27B of weights. Copying breaks the reference; ``states`` is
+    # dropped once the two scalars still needed are in locals.
+    block_states = np.ascontiguousarray(states.states[:, patch_block, :])
+    del states
     v_rpe = unit_vector(directions.directions[0, patch_block, :])
     # The patch block itself and the deepest block. The patch-block row is a free control rather
     # than a readout: the patch sits at an EARLIER position of the SAME block, and no path inside
     # one block moves a later position, so anything but ~0 there means the patch leaked somewhere
     # the design does not model.
-    readout_blocks = (patch_block, states.metadata.n_blocks - 1)
+    readout_blocks = (patch_block, n_blocks - 1)
     axes_by_block = {
         readout: {
             name: axis for name, (axis, _description) in emotion_axes(emotion, readout).items()
@@ -1627,6 +1522,19 @@ def behavioral_transfer(
         answer_pool=answer_pool,
         answer_form=answer_form,
         n_reachability_pairs=n_reachability_pairs,
+    )
+    # ONE forward, and its UNEXPECTED branch declares every number below it unverified -- so it
+    # runs before the 2,880 the gate costs, not after them. The §5 discard clause it used to sit
+    # behind is about the patched ARMS; a single forward is far under that bar, and the same
+    # reasoning already exempts the 60-forward reachability control on the next line.
+    wiring = _wiring_check(
+        backend,
+        reveals,
+        pairs,
+        block_states,
+        patch_block=patch_block,
+        answer_pool=answer_pool,
+        answer_form=answer_form,
     )
     reachability = reachability_control(
         backend,
@@ -1655,18 +1563,21 @@ def behavioral_transfer(
     )
     arms: tuple[ArmTransfer, ...] = ()
     corruption: tuple[CorruptionControl, ...] = ()
-    corruption_clean, corruption_note = False, "not run: B0 did not pass, so nothing was spent"
-    wiring = "not run: B0 did not pass, so no patched forward was spent (e4-prereg §5)"
-    if gate.passed:
-        wiring = _wiring_check(
-            backend,
-            reveals,
-            pairs,
-            block_states,
-            patch_block=patch_block,
-            answer_pool=answer_pool,
-            answer_form=answer_form,
-        )
+    # Both conditions, because ``verdict_cap`` refuses to READ the arm table under either. A failed
+    # B0 means the transfer fraction has no measured denominator; a failed reachability means
+    # nothing crosses positions on this surface at all, so a flat arm table would be a fact about
+    # the instrument. Spending 4,560 patched forwards to fill in a table the verdict will not look
+    # at is the pure form of the dual (CLAUDE.md): harness cost capped by run cost.
+    spend_arms = gate.passed and reachability.passed
+    unspent = (
+        "not run: B0 did not pass, so no patched forward was spent (e4-prereg §5)"
+        if not gate.passed
+        else "not run: the reachability control found no cross-position path, so an arm table "
+        "would describe the instrument rather than the direction (e4-prereg §5)"
+    )
+    corruption_clean, corruption_note = False, unspent
+    ceiling_readable, ceiling_note = False, unspent
+    if spend_arms:
         arms = behavioral_arms(
             backend,
             reveals,
@@ -1696,15 +1607,18 @@ def behavioral_transfer(
             choice_natural_gap=gate.mean_natural_gap,
             answer_form=answer_form,
         )
-        corruption_clean, corruption_note = corruption_reading(corruption)
+        corruption_clean, corruption_note = corruption_reading(corruption, arms)
+        ceiling_readable, ceiling_note = _ceiling_is_readable(arms, gate, _cell_groups(pairs))
     g0 = emotion.metadata.gate_verdict
     return BehavioralTransferReport(
         seed=seed,
         patch_block=patch_block,
+        direction_block=directions.metadata.selected_block,
+        direction_verdict=directions.metadata.source_verdict,
         readout_blocks=readout_blocks,
         n_pairs=len(pairs),
         n_cells=len({pair.reward_cell_id for pair in pairs}),
-        n_random_draws=n_random_draws if gate.passed else 0,
+        n_random_draws=n_random_draws if spend_arms else 0,
         symbol_matched=symbol_matched,
         symbol_confound=None if symbol_matched else SYMBOL_CONFOUND,
         answer_pool=answer_pool,
@@ -1712,7 +1626,7 @@ def behavioral_transfer(
         answer_form=answer_form,
         answer_pool_preflight=preflight,
         no_op_surface_match_rate=_surface_match_rate(reveals, pairs),
-        states_sha256=states.metadata.states_sha256,
+        states_sha256=states_sha256,
         battery_sha256=file_sha256(Path(battery_file)),
         directions_sha256=directions.metadata.directions_sha256,
         emotion_vectors_sha256=emotion.metadata.vectors_sha256,
@@ -1727,12 +1641,16 @@ def behavioral_transfer(
         corruption_note=corruption_note,
         cross_position_note=CROSS_POSITION_NOTE,
         identification_limit=IDENTIFICATION_LIMIT,
+        ceiling_readable=ceiling_readable,
+        ceiling_note=ceiling_note,
         verdict_cap=verdict_cap(
             gate_passed=gate.passed,
             corruption_clean=corruption_clean,
             g0_passed=g0 == "pass",
             reachable=reachability.passed,
             arms=arms,
+            ceiling_readable=ceiling_readable,
+            ceiling_note=ceiling_note,
         ),
     )
 
@@ -1740,12 +1658,9 @@ def behavioral_transfer(
 def _preflight_pool(
     backend: ChatPatchingBackend, reveals: tuple[Comparison, ...], candidates: tuple[str, ...]
 ) -> AnswerPoolPreflight:
-    used = frozenset(
-        str(reveal.metadata[key])
-        for reveal in reveals
-        for key in ("symbol_high", "symbol_low", "realised_symbol")
+    preflight = preflight_answer_symbols(
+        backend, candidates=candidates, used_symbols=battery_symbols(reveals)
     )
-    preflight = preflight_answer_symbols(backend, candidates=candidates, used_symbols=used)
     if not preflight.passed:
         raise ValueError(preflight.note)
     return preflight
@@ -1760,64 +1675,75 @@ def _preflight_probes(
     answer_form: AnswerForm,
     n_reachability_pairs: int,
 ) -> None:
-    """Build every probe this run will ever build, and check every readout token. Zero forwards.
+    """Build every probe this run will ever build, and extend every row it will touch. Zero forwards.
 
-    Constructing the probes is pure string work and the token check is one tokenizer call each, so
-    the entire sweep costs nothing and runs before the first forward. It exists because the
-    alternative was measured: an answer token that is not single-token raises inside ``read``, and
-    with the corruption windows scheduled after the gate and every arm, that raise lands hours in —
-    at which point ``cli_emotions`` never reaches ``write_json`` and the run is lost whole.
+    Constructing the probes is pure string work and each extension is a few tokenizer calls, so the
+    whole sweep costs nothing and runs before the first forward. It exists because the alternative
+    was measured: a probe that cannot be built, or a prompt that will not concatenate, raises inside
+    ``read``, and with the corruption windows scheduled after the gate and every arm that raise
+    lands hours in — at which point ``cli_emotions`` never reaches ``write_json`` and the run is
+    lost whole (``docs/agents/gotchas.md``).
 
-    The extension itself is exercised once here too, so a chat template that will not concatenate
-    cleanly (``docs/agents/gotchas.md``) also fails now rather than later.
+    The answer tokens are NOT re-checked here. ``_preflight_pool`` has already gated every pool
+    symbol as single-token in BOTH forms, and every probe's answer tokens are pool symbols by
+    construction, so a check here could not fire — a control that cannot fail is worse than none,
+    because it reads as coverage.
     """
 
-    seen: set[str] = set()
-    probes: list[DecisionProbe] = []
+    # One probe per distinct row the run will extend -- recipients, donors and the reachability
+    # rows. The dict is the work list for the extension sweep at the bottom.
+    by_row: dict[int, DecisionProbe] = {}
     for index, pair in enumerate(pairs):
         recipient = reveals[pair.recipient_row]
-        renderings = _renderings_for(reveals, pair, answer_pool)
+        renderings = renderings_for(reveals, pair, answer_pool)
         for rendering in renderings:
             for certain in CERTAIN_LEVELS:
-                probes.append(
-                    _choice_probe_for(
-                        recipient, rendering=rendering, certain=certain, form=answer_form
-                    )
+                # Constructed for the raise inside ``choice_probe``/``renderings_for``, which is
+                # pair-dependent; only one per row is kept for the extension sweep.
+                probe = choice_probe_for(
+                    recipient, rendering=rendering, certain=certain, form=answer_form
                 )
+                by_row.setdefault(pair.recipient_row, probe)
         for window in CORRUPTION_WINDOWS:
-            probes.append(
-                _corruption_probe_for(
-                    recipient,
-                    window,
-                    rendering=renderings[index % len(renderings)],
-                    form=answer_form,
-                )
+            corruption_probe_for(
+                recipient,
+                window,
+                rendering=renderings[index % len(renderings)],
+                form=answer_form,
             )
+        # The donor is extended too, and B0 reads it FIRST -- pair 0's donor is the run's very
+        # first forward -- so it cannot be left out of the sweep.
+        by_row.setdefault(
+            pair.donor_row,
+            choice_probe_for(
+                reveals[pair.donor_row],
+                rendering=renderings[0],
+                certain=CERTAIN_LEVELS[0],
+                form=answer_form,
+            ),
+        )
     symbol_a, symbol_b = answer_symbols(answer_pool, exclude=frozenset())
     for index, (donor_row, recipient_row) in enumerate(
         _reachability_pairs(reveals, n_reachability_pairs)
     ):
-        probes.append(
+        by_row.setdefault(
+            recipient_row,
             reachability_probe(
                 symbol=str(reveals[recipient_row].metadata["realised_symbol"]),
                 reward=float(reveals[recipient_row].metadata["reward"]),
                 donor_reward=float(reveals[donor_row].metadata["reward"]),
                 rendering=option_renderings(symbol_a, symbol_b)[index % 4],
                 form=answer_form,
-            )
+            ),
         )
-    for probe in probes:
-        for token in probe.answer_tokens:
-            if token in seen:
-                continue
-            seen.add(token)
-            if len(backend.token_ids(token)) != 1:
-                raise ValueError(
-                    f"answer token {token!r} is not single-token on this tokenizer, so the "
-                    f"{probe.window!r} window has no logit to read. Change the answer form or the "
-                    "answer pool; do not spend a forward."
-                )
-    extend(backend, reveals[pairs[0].recipient_row], probes[0])
+    # EVERY distinct row, not just the first. The token-prefix guard inside ``extend`` is a
+    # per-reveal property: the pinned prompt ends with that row's own symbol and the appended
+    # remainder carries that row's own reward, so both sides of the BPE boundary vary across the
+    # pair set and a re-merge on ANY row raises inside ``read``. Checking one row would leave the
+    # other ~250 to fail up to 1,920 forwards in, with the artifact unwritable. ~250 tokenizer
+    # round-trips, no forward.
+    for row, probe in by_row.items():
+        extend(backend, reveals[row], probe)
 
 
 def _surface_match_rate(reveals: tuple[Comparison, ...], pairs: tuple[PatchPair, ...]) -> float:
@@ -1866,7 +1792,7 @@ def _wiring_check(
 
     pair = pairs[0]
     recipient = reveals[pair.recipient_row]
-    probe = _choice_probe_for(
+    probe = choice_probe_for(
         recipient,
         rendering=option_renderings(answer_pool[0], answer_pool[1])[0],
         certain=CERTAIN_LEVELS[0],
@@ -1879,7 +1805,7 @@ def _wiring_check(
         block=patch_block,
         position=extended.patch_position,
         replacement=replacement,
-        layers=(patch_block + 1,),
+        layers=block_layers((patch_block,)),
         readout_position=extended.patch_position,
     )
     read_back = np.asarray(site.states, dtype=np.float64)[0]
@@ -1989,6 +1915,7 @@ __all__ = [
     "behavioral_arms",
     "behavioral_transfer",
     "chat_tail",
+    "choice_probe_for",
     "corruption_controls",
     "corruption_reading",
     "extend",

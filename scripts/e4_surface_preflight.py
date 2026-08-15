@@ -37,10 +37,10 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from appraisal_emotions.analysis.behavioral_transfer import chat_tail, extend
-from appraisal_emotions.analysis.expectation_control import align_reveals
-from appraisal_emotions.analysis.reveal_rpe import read_reveal_rpe_states, reveal_read_prompt
-from appraisal_emotions.analysis.symbol_preflight import preflight_answer_symbols
+from appraisal_emotions.analysis.behavioral_transfer import chat_tail, choice_probe_for, extend
+from appraisal_emotions.analysis.expectation_control import align_reveal_ids
+from appraisal_emotions.analysis.reveal_rpe import read_reveal_rpe_metadata, reveal_read_prompt
+from appraisal_emotions.analysis.symbol_preflight import battery_symbols, preflight_answer_symbols
 from appraisal_emotions.backends.factory import create_backend, free_backend
 from appraisal_emotions.config import load_config, resolve_model_spec
 from appraisal_emotions.core.util import read_json, write_json
@@ -48,36 +48,28 @@ from appraisal_emotions.stimuli.decision_probes import (
     ANSWER_FORMS,
     ANSWER_SYMBOL_CANDIDATES,
     CERTAIN_LEVELS,
-    AnswerForm,
     answer_token,
-    choice_probe,
     option_renderings,
 )
 from appraisal_emotions.stimuli.reveal_probes import RevealProbeBattery
 
 SAMPLE_TRIALS = 10
 SAMPLE_MAX_TOKENS = 8
-
-
-def _probe_for(reveal, *, form: AnswerForm, rendering, certain: int):
-    return choice_probe(
-        symbol=str(reveal.metadata["realised_symbol"]),
-        reward=float(reveal.metadata["reward"]),
-        rendering=rendering,
-        certain=certain,
-        form=form,
-    )
+# How often the model must actually answer with one of the two option symbols before the logit
+# margin at that slot is a readout of anything. Set at a bare majority rather than high: the run
+# reads a MARGIN, not an argmax, so it does not need the model to comply every time -- it needs
+# the two option tokens to be live candidates at the slot. Below this the slot is measuring the
+# model's preference between two tokens it was not going to emit, which is not a null, it is an
+# instrument that was never pointed at the question.
+MIN_ON_OPTION_RATE = 0.5
 
 
 def tokenizer_checks(backend, reveals, candidates: tuple[str, ...]) -> dict[str, object]:
     """Findings 1, 2 and 4 — everything that costs no forward and no weights."""
 
-    used = frozenset(
-        str(reveal.metadata[key])
-        for reveal in reveals
-        for key in ("symbol_high", "symbol_low", "realised_symbol")
+    pool = preflight_answer_symbols(
+        backend, candidates=candidates, used_symbols=battery_symbols(reveals)
     )
-    pool = preflight_answer_symbols(backend, candidates=candidates, used_symbols=used)
 
     numbers = {
         f"{value:g}": len(backend.token_ids(f" {value:g}"))
@@ -92,7 +84,9 @@ def tokenizer_checks(backend, reveals, candidates: tuple[str, ...]) -> dict[str,
         extended = extend(
             backend,
             reveals[0],
-            _probe_for(reveals[0], form="bare", rendering=rendering, certain=CERTAIN_LEVELS[0]),
+            choice_probe_for(
+                reveals[0], rendering=rendering, certain=CERTAIN_LEVELS[0], form="bare"
+            ),
         )
         extension = {
             "ok": True,
@@ -131,11 +125,11 @@ def reality_sample(backend, reveals, pool: tuple[str, ...]) -> dict[str, object]
     for index in range(SAMPLE_TRIALS):
         reveal = reveals[index % len(reveals)]
         rendering = renderings[index % len(renderings)]
-        probe = _probe_for(
+        probe = choice_probe_for(
             reveal,
-            form="bare",
             rendering=rendering,
             certain=CERTAIN_LEVELS[index % len(CERTAIN_LEVELS)],
+            form="bare",
         )
         extended = extend(backend, reveal, probe)
         continuation = backend.generate_with_metadata(
@@ -180,12 +174,14 @@ def main() -> None:
 
     spec = resolve_model_spec(load_config(args.config))
     backend = create_backend(spec)
-    reveals = align_reveals(
-        read_reveal_rpe_states(args.states),
+    # Metadata only: this gate advertises itself as costing seconds, and the states array it
+    # would otherwise load is 5.2 GB of numbers no check here reads.
+    reveals = align_reveal_ids(
+        read_reveal_rpe_metadata(args.states).reveal_ids,
         RevealProbeBattery.model_validate(read_json(args.battery)),
     )
     report: dict[str, object] = {
-        "model": spec.model_key,
+        "model": spec.key,
         "tokenizer_only": args.tokenizer_only,
         "checks": tokenizer_checks(backend, reveals, tuple(args.answer_candidates)),
     }
@@ -201,16 +197,38 @@ def main() -> None:
         if not ok
     ]
     if not args.tokenizer_only and not blocking:
-        report["reality_sample"] = reality_sample(backend, reveals, pool)
+        sample = reality_sample(backend, reveals, pool)
+        report["reality_sample"] = sample
+        # The sample is what makes the answer slot readable at all, so its own verdict has to be
+        # able to stop the run. Without this the slot can be pure noise -- the model answering in
+        # prose, or with the option TEXT rather than its symbol -- and every logit margin the run
+        # reads is then a difference between two tokens the model was never going to emit. B0
+        # nulls, and _gate_verdict writes that up as a model fact. rails.md #1 wants the failure
+        # routed before full spend; this is that route.
+        if float(sample["on_option_rate"]) < MIN_ON_OPTION_RATE:  # type: ignore[arg-type]
+            blocking.append("on_option_rate")
     report["blocking"] = blocking
+    sample_report = report.get("reality_sample")
+    form = sample_report["recommended_answer_form"] if isinstance(sample_report, dict) else None
+    # The recommended form goes in the verdict, not just in the JSON body. It is the one value the
+    # operator has to carry by hand from this script into the run's --answer-form, and a number
+    # buried 200 lines into a report is a number that gets defaulted instead.
+    report["answer_form"] = form
     report["verdict"] = (
         "PREFLIGHT FAILED: " + ", ".join(blocking) + ". Do not spend a forward."
         if blocking
         else "PREFLIGHT CLEAN: the answer pool is legal and the extension holds on this tokenizer."
+        + (
+            f" The reality sample sets --answer-form {form}."
+            if form
+            else " Re-run WITHOUT --tokenizer-only to set --answer-form before the run."
+        )
     )
     write_json(args.out, report)
     free_backend(backend)
-    print(json.dumps({key: report[key] for key in ("verdict", "blocking")}, indent=2))
+    print(
+        json.dumps({key: report[key] for key in ("verdict", "blocking", "answer_form")}, indent=2)
+    )
     if blocking:
         raise SystemExit(1)
 

@@ -53,6 +53,7 @@ readings; it has no causal arm and licenses no welfare / sentience / experience 
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -147,6 +148,25 @@ class _CellDesign:
     rpe: np.ndarray  # signed RPE aligned to ``rows``
 
 
+def align_reveal_ids(
+    reveal_ids: Sequence[str], battery: RevealProbeBattery
+) -> tuple[Comparison, ...]:
+    """The battery reveals in a capture's row order (fail-closed on a mismatch).
+
+    Takes the ids rather than the artifact so a caller that has only the states METADATA can align
+    without paying for the states array -- see ``reveal_rpe.read_reveal_rpe_metadata``.
+    """
+
+    by_id = {comparison.comparison_id: comparison for comparison in battery.reveals}
+    missing = [rid for rid in reveal_ids if rid not in by_id]
+    if missing:
+        raise ValueError(
+            f"{len(missing)} reveal id(s) in the states artifact are absent from the battery "
+            "(e.g. " + ", ".join(missing[:3]) + "); these artifacts are from different runs."
+        )
+    return tuple(by_id[rid] for rid in reveal_ids)
+
+
 def align_reveals(states: RevealRpeStates, battery: RevealProbeBattery) -> tuple[Comparison, ...]:
     """The battery reveals in the states artifact's capture row order (fail-closed on a mismatch).
 
@@ -154,14 +174,7 @@ def align_reveals(states: RevealRpeStates, battery: RevealProbeBattery) -> tuple
     through the same row alignment, so a mismatch fails the same way in both.
     """
 
-    by_id = {comparison.comparison_id: comparison for comparison in battery.reveals}
-    missing = [rid for rid in states.metadata.reveal_ids if rid not in by_id]
-    if missing:
-        raise ValueError(
-            f"{len(missing)} reveal id(s) in the states artifact are absent from the battery "
-            "(e.g. " + ", ".join(missing[:3]) + "); these artifacts are from different runs."
-        )
-    return tuple(by_id[rid] for rid in states.metadata.reveal_ids)
+    return align_reveal_ids(states.metadata.reveal_ids, battery)
 
 
 def _cell_design(reveals: tuple[Comparison, ...], family: CellFamily) -> _CellDesign:
