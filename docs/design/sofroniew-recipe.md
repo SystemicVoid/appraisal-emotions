@@ -208,7 +208,7 @@ moves one variable at a time:
 | Prompt | ours | the paper's | the paper's |
 | Projection | none | none | the paper's, 50% of variance |
 
-Four implementation decisions, each a decision rather than an accident:
+Five implementation decisions, each a decision rather than an accident:
 
 1. **Where in the pipeline.** After grand-mean centring, before the G0 gate. Projection is
    linear, so word rows that summed to zero still do — the centring frame survives — and G0 has to
@@ -218,7 +218,15 @@ Four implementation decisions, each a decision rather than an accident:
    `g0_table`, unconditionally. Whether the step helped the gate or hurt it is a fact about the
    run, not something to look up only when it flatters the arm (`docs/agents/rails.md`,
    symmetric-amendment test).
-3. **Topics reused, not redrawn.** The appendix says the same 100 topics "seed the generation of
+3. **A random frame of the same width, as the null.** Removing k directions shortens and rotates
+   every vector whatever those k directions are, so a G0 shift between the two tables above is not
+   by itself evidence about the *neutral subspace*. A projected run therefore also writes
+   `g0_table_random_projection`: the same pre-projection vectors with a Haar-random orthonormal
+   frame of the same per-block width removed. If the neutral projection and the random frame move
+   the gate by the same amount, the paper's step did something generic here and should be read
+   that way. The control costs no generation and no forward passes — one QR per block on arrays
+   the run already holds.
+4. **Topics reused, not redrawn.** The appendix says the same 100 topics "seed the generation of
    our stories and dialogues datasets", so the subspace the paper removes is fit on the same
    topic material its stories came from. At our scale that has to be *derived*: the neutral grid
    takes a prefix of the story grid's own topic list, and refuses when it would need more calls
@@ -226,7 +234,7 @@ Four implementation decisions, each a decision rather than an accident:
    a longer neutral prefix runs off the end of the story prefix onto premises no story saw, and
    the paper's topics carry affect. That caps the corpus at 6 calls (24 transcripts at 4 per
    call) for a 6-topic story grid.
-4. **Pooling granularity — an unresolved ambiguity, stated as one.** The paper says "activations
+5. **Pooling granularity — an unresolved ambiguity, stated as one.** The paper says "activations
    on this dataset" without saying whether the PCA ran over individual tokens or over
    per-transcript means. We use one mean per transcript over the same token-50-onward window the
    emotion vectors themselves are built from: the *matched* reduction, so the confound basis lives

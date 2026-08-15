@@ -26,6 +26,7 @@ from appraisal_emotions.analysis.emotion_vectors import (
 from appraisal_emotions.analysis.neutral_projection import (
     fit_neutral_basis,
     project_out,
+    random_orthonormal_basis,
 )
 from appraisal_emotions.backends.fake import FakeBackend
 from appraisal_emotions.config import EmotionVectorsConfig
@@ -376,6 +377,40 @@ def test_projection_is_idempotent():
     assert np.allclose(project_out(once, basis), once, atol=1e-9)
 
 
+def test_the_random_control_frame_matches_the_fit_in_shape_and_nothing_else():
+    """The counterfactual for the projection: same widths, unrelated directions, no spend."""
+
+    rng = np.random.default_rng(11)
+    basis = fit_neutral_basis(rng.normal(size=(9, 3, 8)), variance_target=0.7)
+    control = random_orthonormal_basis(basis, seed=5)
+
+    assert control.n_blocks == basis.n_blocks
+    assert control.rows == basis.rows
+    for fitted, random_frame in zip(basis.components, control.components, strict=True):
+        assert random_frame.shape == fitted.shape
+        gram = random_frame @ random_frame.T
+        assert np.allclose(gram, np.eye(random_frame.shape[0]), atol=1e-9)
+        # Not the fitted subspace: a random k-frame of an 8-dimensional space almost surely
+        # shares no direction with it.
+        assert not np.allclose(random_frame, fitted)
+    # It projects, so it is a fair comparison operator rather than an arbitrary transform.
+    vectors = rng.normal(size=(4, 3, 8))
+    once = project_out(vectors, control)
+    assert np.allclose(project_out(once, control), once, atol=1e-9)
+    # Seeded: the control a run reports is the control a rerun reports.
+    other = random_orthonormal_basis(basis, seed=5)
+    for a, b in zip(control.components, other.components, strict=True):
+        assert np.array_equal(a, b)
+
+
+def test_the_random_control_leaves_an_empty_block_empty():
+    """A degenerate block removes nothing on either side, so the comparison stays like-for-like."""
+
+    basis = fit_neutral_basis(np.ones((4, 2, 6)), variance_target=0.5)
+    control = random_orthonormal_basis(basis, seed=3)
+    assert [array.shape for array in control.components] == [(0, 6), (0, 6)]
+
+
 def test_projection_refuses_a_block_count_mismatch():
     basis = fit_neutral_basis(np.random.default_rng(2).normal(size=(6, 3, 5)), variance_target=0.5)
     with pytest.raises(ValueError, match="blocks"):
@@ -470,3 +505,10 @@ def test_the_projection_arm_records_g0_on_both_sides_of_the_projection():
     assert projected.metadata.g0_table_before_projection == plain.metadata.g0_table
     # ...and the vectors really did move.
     assert projected.metadata.vectors_sha256 != plain.metadata.vectors_sha256
+    # The random-frame control is scored on the same blocks and the same words, and it is a
+    # DIFFERENT frame from the fitted one, so it is a comparison rather than a restatement.
+    control = projected.metadata.g0_table_random_projection
+    assert plain.metadata.g0_table_random_projection == ()
+    assert [row.block for row in control] == [row.block for row in projected.metadata.g0_table]
+    assert all(row.n_words == len(words.labels) for row in control)
+    assert control != projected.metadata.g0_table

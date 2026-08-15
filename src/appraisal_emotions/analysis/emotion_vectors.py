@@ -17,7 +17,9 @@ carries the certified appraisal directions:
    out the top PCs of activations on an emotionally neutral dialogue corpus, enough to explain
    50% of their variance (``analysis.neutral_projection``). Off by default because the paper's own
    footnote 3 reports it as a denoiser whose qualitative findings hold without it — so it is an
-   arm, and a run that uses it records the G0 table on both sides of it.
+   arm, and a run that uses it records the G0 table on both sides of it plus under a random
+   orthonormal frame of the same width, which is what separates "the neutral subspace mattered"
+   from "removing k directions mattered".
 
 **Gate G0** (the manipulation check that licenses every later null): PC1 of the per-block
 mean-centred ``{e_j}`` correlates with the §5 minted binary valence labels at
@@ -69,6 +71,7 @@ from appraisal_emotions.analysis.neutral_projection import (
     basis_sha256,
     fit_neutral_basis,
     project_out,
+    random_orthonormal_basis,
 )
 from appraisal_emotions.core.schema import ModelSpec, StrictModel
 from appraisal_emotions.core.util import (
@@ -525,6 +528,11 @@ class EmotionVectorsMetadata(StrictModel):
     # helped the gate or hurt it is a fact about the run, not something to look up only when it
     # flatters the arm (docs/agents/rails.md, symmetric-amendment).
     g0_table_before_projection: tuple[G0BlockRow, ...] = ()
+    # The counterfactual for the pair above: the same vectors with a RANDOM orthonormal frame of
+    # the same per-block width removed. Removing k directions moves G0 whatever those directions
+    # are, so before/after alone cannot say the neutral subspace was the thing that mattered. Costs
+    # no generation and no forwards — a QR per block on vectors the run already has.
+    g0_table_random_projection: tuple[G0BlockRow, ...] = ()
     selected_block: int
     g0_abs_rho: float
     g0_spearman_rho: float
@@ -988,6 +996,7 @@ def extract_emotion_vectors(
     projection_record: NeutralProjectionRecord | None = None
     neutral_basis: NeutralBasis | None = None
     table_before: tuple[G0BlockRow, ...] = ()
+    table_random: tuple[G0BlockRow, ...] = ()
     if neutral_projection:
         # After centring, before the gate: projection is linear, so word rows that summed to zero
         # still do, and G0 has to score the vectors the run keeps.
@@ -1008,6 +1017,15 @@ def extract_emotion_vectors(
             first_contact_max_drop_rate=first_contact_max_drop_rate,
             story_topics_per_label=plan.topics_per_label,
             data_dir=sofroniew_data_dir,
+        )
+        # The random-frame counterfactual, on the SAME pre-projection vectors, before they are
+        # overwritten. Seeded off the run seed so it is reproducible without being the run seed
+        # (which already drives the stimulus draw).
+        table_random = _g0_table(
+            project_out(vectors, random_orthonormal_basis(neutral_basis, seed=seed + 1))[
+                : len(labels)
+            ],
+            valence,
         )
         vectors = project_out(vectors, neutral_basis)
 
@@ -1051,6 +1069,7 @@ def extract_emotion_vectors(
         g0_threshold=g0_threshold,
         g0_table=table,
         g0_table_before_projection=table_before,
+        g0_table_random_projection=table_random,
         selected_block=selected_block,
         g0_abs_rho=abs_rho,
         g0_spearman_rho=best_row.spearman_rho,

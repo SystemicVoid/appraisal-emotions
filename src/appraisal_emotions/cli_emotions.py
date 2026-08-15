@@ -97,6 +97,9 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
         best_before = max(
             (abs(row.spearman_rho) for row in meta.g0_table_before_projection), default=0.0
         )
+        best_random = max(
+            (abs(row.spearman_rho) for row in meta.g0_table_random_projection), default=0.0
+        )
         console.print(
             f"  neutral projection: {proj.total_components} components over "
             f"{len(proj.blocks)} blocks (<= {proj.max_components_in_a_block} per block) at "
@@ -111,7 +114,13 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
             f"(ceiling {proj.max_drop_rate:.2f}); first-contact "
             f"{proj.first_contact_drop_rate:.2f} over n={proj.first_contact_n}"
         )
-        console.print(f"    G0 |rho| before projection {best_before:.3f}")
+        # Three numbers, not two: a random frame of the same width is what says whether the move
+        # from `before` to the gate line above belongs to the neutral subspace or to removing k
+        # directions at all.
+        console.print(
+            f"    G0 |rho| before projection {best_before:.3f}; "
+            f"random {proj.max_components_in_a_block}-frame control {best_random:.3f}"
+        )
     console.print(
         f"  G0: |rho|={meta.g0_abs_rho:.3f} vs threshold {meta.g0_threshold} at block "
         f"{meta.selected_block}/{meta.n_blocks} (p={meta.g0_spearman_p:.4f})"

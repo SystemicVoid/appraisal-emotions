@@ -19,7 +19,12 @@ Projection is linear, so a set of word rows that summed to zero still sums to ze
 the centring frame survives -- and G0 must score the vectors the run actually keeps, or the
 sensitivity gate would be certifying an instrument nobody uses. The run records the G0 table on
 BOTH sides of the projection (``EmotionVectorsMetadata.g0_table_before_projection``), so the
-projection's effect on the gate is visible in the artifact rather than inferred.
+projection's effect on the gate is visible in the artifact rather than inferred. It also records
+the gate under a RANDOM orthonormal frame of the same per-block width
+(``g0_table_random_projection``, from :func:`random_orthonormal_basis`), because removing k
+directions moves G0 whatever those directions are: without that control, before/after cannot say
+the neutral subspace was the thing that mattered. The control costs no generation and no forward
+passes.
 
 **One faithfulness gap, stated plainly.** The paper says "activations on this dataset" without
 saying at what granularity they were pooled: every token, or one mean per transcript. We use one
@@ -57,6 +62,7 @@ __all__ = [
     "basis_sha256",
     "fit_neutral_basis",
     "project_out",
+    "random_orthonormal_basis",
 ]
 
 NEUTRAL_PROJECTION_CONTRACT_VERSION = "neutral_projection/v1"
@@ -244,6 +250,35 @@ def basis_from_arrays(
             raise ValueError(f"the payload has no {name} array; the confound basis is incomplete")
         components.append(np.ascontiguousarray(arrays[name], dtype=np.float64))
     return NeutralBasis(components=tuple(components), rows=rows)
+
+
+def random_orthonormal_basis(basis: NeutralBasis, *, seed: int) -> NeutralBasis:
+    """A same-shape confound basis pointing nowhere in particular — the projection's null.
+
+    Removing k directions from a vector shortens it and rotates it whatever those directions are.
+    So "G0 moved when we projected" is not by itself evidence that the NEUTRAL subspace was what
+    mattered: a random k-frame of the same per-block width is the counterfactual that separates
+    the two. Run both and the artifact says whether the paper's step did something specific or
+    something generic.
+
+    Costs no generation and no forward passes: it is a QR of a Gaussian per block, applied to
+    vectors the run already has. The rows carried over are the fitted basis's own — the variance
+    figures describe the neutral corpus, not this frame — so this object is a projection operator
+    for comparison only and is never published as a run's confound basis.
+    """
+
+    rng = np.random.default_rng(seed)
+    components: list[np.ndarray] = []
+    for array in basis.components:
+        k, hidden = array.shape
+        if k == 0:
+            components.append(np.zeros((0, hidden), dtype=np.float64))
+            continue
+        # QR of a Gaussian (hidden, k) gives k orthonormal columns, Haar-distributed on the
+        # Stiefel manifold. Transposed to match the (k, hidden) row convention project_out uses.
+        frame = np.linalg.qr(rng.standard_normal((hidden, k)))[0]
+        components.append(np.ascontiguousarray(frame.T, dtype=np.float64))
+    return NeutralBasis(components=tuple(components), rows=basis.rows)
 
 
 def basis_sha256(basis: NeutralBasis) -> str:

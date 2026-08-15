@@ -37,7 +37,10 @@
 #
 # The artifact records the G0 table on BOTH sides of the projection
 # (`g0_table_before_projection`), so what the projection did to the sensitivity gate is a fact in
-# the file rather than something to infer by diffing two runs.
+# the file rather than something to infer by diffing two runs. It also records the gate under a
+# random orthonormal frame of the same per-block width (`g0_table_random_projection`): removing k
+# directions moves G0 whatever they are, so that third table is what licenses reading a before/
+# after shift as being about the NEUTRAL subspace. It costs no generation and no forwards.
 #
 # Cost on top of the prompt arm: 6 extra generations (24 transcripts, 4 per call) plus <=24
 # read-only forwards. Rounding error next to the 510 story generations.
