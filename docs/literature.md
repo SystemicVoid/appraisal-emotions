@@ -142,6 +142,16 @@ skeptical corpus on self-report and this arm licenses nothing on its own.
   fill.
 - **arXiv:2607.12631** — prompt-induced emotion is behaviorally inert in sequential gambling.
   This is why E3 intervenes on activations and never by prompt induction.
+- **Berg 2026 — "Why Learning Requires Feeling."** AAAI Spring Symposium Series 8(1),
+  227–233, doi:10.1609/aaaiss.v8i1.42547. Position paper, one level of abstraction above this
+  project. Two separable parts: a computational premise — valence *is* goal-relative
+  prediction error, so evaluative signal and affect are one computation — and a phenomenal
+  conclusion — "the training of modern AI systems already induces experience at scale."
+  E2/E2b make empirical contact with the **premise only** (an LLM carries a signed
+  goal-relative prediction-error signal and emotion-concept readouts track it); the
+  conclusion is precisely what our claim ceiling forbids endorsing, so any citation must
+  state the bracket in the same sentence. Read at abstract level from the publisher page
+  (2026-08-15); full PDF unread — verify quotes before citing.
 - **CAIS AI-Wellbeing** (ai-wellbeing.org) — experienced vs decision utility; includes a probe
   decodability figure. Numbers here need primary verification (below).
 - **arXiv:2602.06801** and **arXiv:2602.06256** — steering non-identifiability and safety
