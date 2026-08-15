@@ -197,9 +197,9 @@ uses (`SIL WAN GIS PIL`) only the leading-space form is single-token, while the 
 
 `backends.base.HiddenStateRequest.layers` indexes the transformers `hidden_states` tuple, whose
 element 0 is the *embedding* output — so post-block *l* is index *l+1*
-(`hf_hidden_states_post_block/v1`). `activation/capture.all_block_layers` does that conversion and
-says so; nothing else in the tree did, and E4's readout was built passing block numbers straight
-through. The failure is silent and plausible-looking: every free-rider projection lands a
+(`hf_hidden_states_post_block/v1`). `activation/capture.decoder_layers` did that conversion for the
+all-blocks case and said so; nothing handled an arbitrary block tuple, and E4's readout was built
+passing block numbers straight through. The failure is silent and plausible-looking: every free-rider projection lands a
 post-block-(*l*−1) state onto a post-block-*l* axis and still produces finite, well-scaled
 numbers, and the patch-block row would have read the block's *input* — zero by construction rather
 than by verification, i.e. exactly the shape of a passing control.
@@ -209,10 +209,13 @@ a recording backend that asserts on the `HiddenStateRequest` the analysis actual
 `test_the_readout_asks_for_a_later_position_and_the_contracts_own_layer_indices` in
 `tests/test_behavioral_transfer.py` pins `layers == tuple(b + 1 for b in blocks)`.
 
-*Fix path:* [#4](https://github.com/SystemicVoid/appraisal-emotions/issues/4) — a caller that means
-"block" should never construct `layers=` itself. `capture.all_block_layers` is the model; a
-`block_layers(blocks)` helper beside it, used by every analysis, makes the off-by-one
-unrepresentable.
+*Fixed* (2026-08-15, closes [#4](https://github.com/SystemicVoid/appraisal-emotions/issues/4)): a
+caller that means "block" no longer constructs `layers=` itself. `capture.block_layers(blocks)` is
+the one site of the arithmetic and `decoder_layers` is now its all-blocks case. Note the earlier
+version of this entry, and issue #4 itself, both named `capture.all_block_layers` as the model to
+copy — **there has never been a symbol by that name**. A pointer to a symbol that does not exist
+costs the next agent the whole lookup the entry was written to save, so a fix path naming a helper
+is worth grepping for before it is written down.
 
 ### Private-use sentinel characters are invisible in every tool you will use to debug them
 
@@ -228,3 +231,36 @@ apply.
 *Fix path:* `environmental` — the invisibility is the point of a private-use codepoint, and the
 alternative (a visible ASCII sentinel) trades a debugging annoyance for a real collision risk with
 prompt text. Recorded so the next agent spends seconds on it, not minutes.
+
+
+### `uv` hardlinks editable-install `.pth` files across git worktrees, so the CLI runs another branch's code
+
+`environmental`, and it hides from the one check you would run. The repo `.venv`'s
+`site-packages/appraisal_emotions.pth` was a **hardlink** to the `.pth` in
+`.claude/worktrees/sofroniew-faithful/.venv`, and therefore contained that worktree's `src` path.
+Every `uv run appraisal-emotions ...` in the main checkout imported the worktree's package. Since
+that branch has no E4, `just behavioral-transfer` — the documented way to start the run — failed
+with `No such command 'behavioral-transfer'`.
+
+What makes it dangerous is that the obvious verification does not see it. `pyproject.toml` sets
+`pythonpath = ["src"]`, so **pytest prepends the local source and never consults the `.pth`**: the
+full suite passes, green, against code the CLI will not run. Five reviewers ran the suite and none
+of them caught this; it took invoking the console script.
+
+```
+$ cat .venv/lib/python3.12/site-packages/appraisal_emotions.pth
+/home/eugenia/appraisal-emotions/.claude/worktrees/sofroniew-faithful/src   # <- not this checkout
+$ find . -name appraisal_emotions.pth -samefile .venv/lib/python3.12/site-packages/appraisal_emotions.pth
+```
+
+Fix by **breaking the link**, never by editing in place — an in-place edit rewrites the worktree's
+copy too:
+
+```
+rm  .venv/lib/python3.12/site-packages/appraisal_emotions.pth
+printf '%s/src\n' "$PWD" > .venv/lib/python3.12/site-packages/appraisal_emotions.pth
+```
+
+Before any run that costs money, invoke the real entry point (`--help` is enough) rather than
+trusting a green suite. `uv run python -c "import appraisal_emotions; print(appraisal_emotions.__file__)"`
+answers it in one line.

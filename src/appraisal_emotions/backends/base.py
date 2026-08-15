@@ -198,6 +198,19 @@ class PatchedForwardBackend(Protocol):
         """
 
 
+class ChatRenderingBackend(Protocol):
+    """Multi-turn rendering: the checkpoint's own chat template applied to a message list.
+
+    Separate from ``render_prompt`` (one user turn) because E4 needs the control tokens the
+    template puts BETWEEN turns, and the only authority on those is the template itself. Declared
+    here beside the other capability protocols rather than inside the analysis that first wanted it,
+    so a second surface needing multi-turn rendering has something to depend on.
+    """
+
+    def render_chat(self, messages: tuple[dict[str, str], ...]) -> RenderedPrompt:
+        """Render a full message list through the checkpoint's chat template."""
+
+
 class ModelBackend(DecoderDepthBackend, Protocol):
     """What the reveal-RPE capture path consumes: tokenize, render, read hidden states."""
 

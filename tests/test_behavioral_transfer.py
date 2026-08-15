@@ -586,7 +586,7 @@ def test_no_controls_at_all_is_not_the_same_as_clean_controls():
 # --------------------------------------------------------------------------------------
 
 
-def _arm(name, *, fraction, per_rendering=None):
+def _arm(name, *, fraction, per_rendering=None, p_value=0.001):
     from appraisal_emotions.analysis.behavioral_transfer import ArmTransfer
 
     return ArmTransfer(
@@ -597,7 +597,7 @@ def _arm(name, *, fraction, per_rendering=None):
         mean_shift=fraction,
         normalised_shift=fraction,
         transfer_fraction=fraction,
-        p_value=None,
+        p_value=p_value,
         per_rendering_fraction=tuple(per_rendering or (fraction,) * 4),
         free_rider_axis_shift={},
         per_pair_shift=(),
@@ -632,6 +632,65 @@ def test_verdict_cap_routes_g0_then_reachability_then_b0_then_the_arms():
     assert "functionally-used, CONFOUNDED" in verdict_cap(
         gate_passed=True, corruption_clean=False, g0_passed=True, reachable=True, arms=WINNING_ARMS
     )
+
+
+def test_an_arm_that_beats_its_controls_by_arithmetic_alone_is_not_a_positive():
+    """Three point comparisons with no noise model clear roughly one time in eight on a flat
+    surface. The arm's own cell-clustered null was already being computed and read by nothing."""
+
+    noisy = (
+        _arm("v_rpe_component", fraction=0.8, p_value=0.40),
+        _arm("random_component", fraction=0.05),
+        _arm("same_condition_donor", fraction=0.1),
+    )
+    cap = verdict_cap(
+        gate_passed=True, corruption_clean=True, g0_passed=True, reachable=True, arms=noisy
+    )
+    assert cap.startswith("no transfer")
+
+    unpermuted = (
+        _arm("v_rpe_component", fraction=0.8, p_value=None),
+        _arm("random_component", fraction=0.05),
+        _arm("same_condition_donor", fraction=0.1),
+    )
+    assert verdict_cap(
+        gate_passed=True,
+        corruption_clean=True,
+        g0_passed=True,
+        reachable=True,
+        arms=unpermuted,
+    ).startswith("no transfer")
+
+
+def test_a_null_is_only_readable_once_the_ceiling_shows_the_design_could_see_it():
+    """Reachability swaps a whole residual across +-160 points; the arms inject a within-cell EV
+    difference. A flat table under an unreadable ceiling is an instrument fact, not a null."""
+
+    flat = (
+        _arm("full_residual", fraction=0.01),
+        _arm("v_rpe_component", fraction=0.0),
+        _arm("random_component", fraction=0.05),
+        _arm("same_condition_donor", fraction=0.0),
+    )
+    cap = verdict_cap(
+        gate_passed=True,
+        corruption_clean=True,
+        g0_passed=True,
+        reachable=True,
+        arms=flat,
+        ceiling_readable=False,
+        ceiling_note="the full-residual ceiling does not clear the random floor",
+    )
+    assert cap.startswith("harness_inadequate for the arms")
+    assert "claim stays OPEN" in cap
+    assert verdict_cap(
+        gate_passed=True,
+        corruption_clean=True,
+        g0_passed=True,
+        reachable=True,
+        arms=flat,
+        ceiling_readable=True,
+    ).startswith("no transfer")
 
 
 def test_a_flat_arm_table_may_not_be_reported_as_a_positive():
@@ -685,7 +744,12 @@ def _artifacts(tmp_path, reveals, battery):
         seed=7,
         battery_contract_version=REVEAL_RPE_STATES_CONTRACT_VERSION,
     )
-    directions = synthetic_directions_artifact(np.stack([np.stack([v_rpe] * BLOCKS)] * 3, axis=0))
+    # selected_block on the DIRECTIONS artifact, because that is what the patch block now
+    # defaults to -- the direction is certified at a block, and reading it at another block
+    # injects an uncertified vector under the certified arm's name.
+    directions = synthetic_directions_artifact(
+        np.stack([np.stack([v_rpe] * BLOCKS)] * 3, axis=0), selected_block=PATCH_BLOCK
+    )
     paths = {name: tmp_path / f"{name}.json" for name in ("states", "battery", "emo", "dirs")}
     write_reveal_rpe_states(states, paths["states"])
     write_json(paths["battery"], battery)
@@ -714,6 +778,12 @@ def test_end_to_end_report_reads_as_one_licensed_claim(tmp_path, reveals, batter
     )
 
     assert report.artifact_contract_version == "behavioral_transfer/v1"
+    assert report.patch_block == PATCH_BLOCK == report.direction_block, (
+        "the patch block must default to where the direction was CERTIFIED, not to the emotion "
+        "artifact's block; on the run of record those differ and the emotion one is out of range"
+    )
+    assert report.direction_verdict == "separable-signed-rpe"
+    assert report.ceiling_readable
     assert report.gate.passed
     assert report.n_cells == report.n_pairs, "stratification must spread pairs across cells"
     assert report.answer_pool == POOL
@@ -752,3 +822,80 @@ def test_the_report_records_which_wiring_semantics_this_stack_has(tmp_path, reve
     )
     assert report.gate.passed, "the wiring check is only spent behind a passing gate"
     assert report.wiring_check.split(":")[0] in {"POST-HOOK", "PRE-HOOK", "UNEXPECTED"}
+
+
+# --------------------------------------------------------------------------------------
+# The preflight script — the one thing that runs BEFORE the weights are worth renting
+# --------------------------------------------------------------------------------------
+
+
+def test_the_surface_preflight_script_runs_end_to_end(tmp_path, reveals, battery, monkeypatch):
+    """``main()`` had never been executed by anything.
+
+    It shipped with ``spec.model_key`` for a field named ``key``, so every invocation died with an
+    AttributeError — in the full mode, immediately AFTER the 27B had been downloaded and loaded.
+    Python evaluates dict values in order, so the crash preceded every check the script exists to
+    perform. The four surface defects §10 credits it with finding were unfindable as shipped.
+
+    This test does the one thing that would have caught it: it calls ``main()``.
+    """
+
+    import json as _json
+    import sys
+
+    import scripts.e4_surface_preflight as preflight
+
+    paths = _artifacts(tmp_path, reveals, battery)
+    out = tmp_path / "preflight.json"
+    monkeypatch.setattr(preflight, "create_backend", lambda spec: FakeBackend(MODEL_SPEC))
+    monkeypatch.setattr(preflight, "free_backend", lambda backend: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "e4_surface_preflight.py",
+            "--states",
+            str(paths["states"]),
+            "--battery",
+            str(paths["battery"]),
+            "--config",
+            "configs/reveal_rpe_smoke.yaml",
+            "--out",
+            str(out),
+            "--tokenizer-only",
+            "--answer-candidates",
+            *POOL,
+        ],
+    )
+
+    preflight.main()
+
+    report = _json.loads(out.read_text())
+    assert report["model"] == "fake-functional"
+    assert report["blocking"] == []
+    assert report["verdict"].startswith("PREFLIGHT CLEAN")
+    # --tokenizer-only cannot set the answer form, and the verdict has to SAY so rather than
+    # leaving an operator to default it.
+    assert report["answer_form"] is None
+    assert "Re-run WITHOUT --tokenizer-only" in report["verdict"]
+    checks = report["checks"]
+    assert checks["answer_pool"]["passed"] and tuple(checks["answer_pool"]["valid"]) == POOL
+    assert checks["extension"]["ok"] and checks["extension"]["pinned_is_byte_prefix"]
+    assert checks["chat_tail"]
+    # Every pool symbol single-token in BOTH forms, which is what the run's own gate requires.
+    assert all(
+        count == 1
+        for per_form in checks["answer_form_token_counts"].values()
+        for count in per_form.values()
+    )
+
+
+def test_the_preflight_blocks_when_the_model_does_not_answer_with_an_option():
+    """rails.md #1: a contract frozen against outputs nobody read needs a first-contact checkpoint
+    that routes to harness_inadequate BEFORE full spend. The reality sample computed
+    ``on_option_rate`` and then let a 0/10 run through to a 2,880-forward B0 whose null would have
+    been written up as a fact about the model."""
+
+    import scripts.e4_surface_preflight as preflight
+
+    assert preflight.MIN_ON_OPTION_RATE > 0.0

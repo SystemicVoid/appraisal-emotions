@@ -291,13 +291,31 @@ class SymbolAssignment:
     order: Literal["forward", "reverse"]
 
 
-def _outcome_line(symbol: str, value: int) -> str:
-    # Single leading space (not a two-space indent) so the symbol renders at the SAME
-    # exactly-one-leading-space slot as every other position (reveal line, gamble line,
-    # calibration frames). That keeps the single-token preflight gate
-    # ``len(token_ids(" " + symbol)) == 1`` representative of every render position with no
-    # whitespace-collapse argument.
-    return f" {symbol} = {value} points"
+def outcome_line_parts(symbol: str, value: float) -> tuple[str, str]:
+    """The outcome line split at the symbol token: ``(" SIL", " = -30 points")``.
+
+    Split rather than whole because the capture stops ON the symbol. E0/E3 read their residual at
+    that token, so E4's extension appends only the remainder onto the byte-pinned prompt, and
+    ``reveal_probes``'s ``read_prefix`` pins the head. All three want the same bytes, which is why
+    the format lives here once instead of being re-spelled at each of them.
+
+    Single leading space (not a two-space indent) so the symbol renders at the SAME
+    exactly-one-leading-space slot as every other position (reveal line, gamble line,
+    calibration frames). That keeps the single-token preflight gate
+    ``len(token_ids(" " + symbol)) == 1`` representative of every render position with no
+    whitespace-collapse argument.
+
+    ``:g`` rather than ``str``: the battery builds these from ints and E4 rebuilds them from the
+    floats its artifact metadata carries, and ``:g`` is the formatting under which those two agree.
+    """
+
+    return f" {symbol}", f" = {value:g} points"
+
+
+def outcome_line(symbol: str, value: float) -> str:
+    """The whole outcome line — the ledger row the model reads for one draw outcome."""
+
+    return "".join(outcome_line_parts(symbol, value))
 
 
 def render_options_block(spec: GambleSpec, symbols: SymbolAssignment) -> str:
@@ -305,13 +323,13 @@ def render_options_block(spec: GambleSpec, symbols: SymbolAssignment) -> str:
 
     if symbols.order == "forward":
         first, second = (
-            _outcome_line(symbols.symbol_high, spec.high),
-            _outcome_line(symbols.symbol_low, spec.low),
+            outcome_line(symbols.symbol_high, spec.high),
+            outcome_line(symbols.symbol_low, spec.low),
         )
     else:
         first, second = (
-            _outcome_line(symbols.symbol_low, spec.low),
-            _outcome_line(symbols.symbol_high, spec.high),
+            outcome_line(symbols.symbol_low, spec.low),
+            outcome_line(symbols.symbol_high, spec.high),
         )
     return f"{first}\n{second}"
 

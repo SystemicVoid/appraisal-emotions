@@ -58,7 +58,7 @@ from typing import Literal, cast
 
 import numpy as np
 
-from appraisal_emotions.activation.capture import RenderedCaptureBackend
+from appraisal_emotions.activation.capture import RenderedCaptureBackend, block_layers
 from appraisal_emotions.analysis.direction_stats import seed_int
 from appraisal_emotions.analysis.emotion_vectors import read_emotion_vectors
 from appraisal_emotions.analysis.expectation_control import align_reveals, emotion_axes
@@ -566,7 +566,7 @@ def _forward_projections(
         block=plan.patch_block,
         position="last",
         replacement=replacement,
-        layers=tuple(block + 1 for block in plan.readout_blocks),
+        layers=block_layers(plan.readout_blocks),
         max_new_tokens=plan.continuation_tokens if continuation else 0,
     )
     projections = {

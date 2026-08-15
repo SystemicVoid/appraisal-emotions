@@ -16,9 +16,10 @@ answer labels for its forced-choice readouts; the reveal battery renders no answ
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Protocol
 
-from appraisal_emotions.core.schema import StrictModel
+from appraisal_emotions.core.schema import Comparison, StrictModel
 from appraisal_emotions.stimuli.decision_probes import ANSWER_FORMS, answer_token
 from appraisal_emotions.stimuli.emotion_lexicon import emotion_words_in
 
@@ -50,6 +51,21 @@ class AnswerPoolPreflight(StrictModel):
     collided: tuple[str, ...]
     passed: bool
     note: str
+
+
+def battery_symbols(reveals: Iterable[Comparison]) -> frozenset[str]:
+    """Every outcome symbol the reveal battery puts in front of the model, in any role.
+
+    This frozenset IS E4's collision gate, so it has exactly one spelling. The preflight script
+    and the run itself both call it: two spellings would let the preflight clear a pool the run
+    then rejects, and the run is the expensive one.
+    """
+
+    return frozenset(
+        str(reveal.metadata[key])
+        for reveal in reveals
+        for key in ("symbol_high", "symbol_low", "realised_symbol")
+    )
 
 
 def preflight_answer_symbols(

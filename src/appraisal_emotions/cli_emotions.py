@@ -62,7 +62,7 @@ from appraisal_emotions.backends.base import PatchedForwardBackend
 from appraisal_emotions.backends.factory import create_backend, free_backend
 from appraisal_emotions.config import StudyConfig, load_config, resolve_model_spec
 from appraisal_emotions.core.util import file_sha256, write_json
-from appraisal_emotions.stimuli.decision_probes import DEFAULT_ANSWER_FORM, AnswerForm
+from appraisal_emotions.stimuli.decision_probes import ANSWER_FORMS, AnswerForm
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 console = Console()
@@ -184,8 +184,23 @@ def behavioral_transfer_command(
     directions: Annotated[Path, typer.Option("--directions", help="reveal_directions.json")],
     emotions: Annotated[Path, typer.Option("--emotions", help="emotion_vectors.json")],
     out: Annotated[Path, typer.Option("--out", help="Report JSON path.")],
+    # REQUIRED, and deliberately so. The answer form is a measurement -- which of ` KER` and `KER`
+    # the model actually continues with at a slot that follows the template's own newlines -- and
+    # the run cannot infer it. Both forms are single-token by construction (the pool is gated on
+    # both), so guessing wrong does not raise: it reads a margin between two tokens the model was
+    # never going to emit, B0 nulls, and the report writes that up as a fact about the model. A
+    # default here would be the whole failure, so there is none. `e4-surface-preflight` prints the
+    # value to pass.
+    answer_form: Annotated[
+        str,
+        typer.Option(
+            "--answer-form",
+            help="Answer-slot token form, SET BY THE REALITY SAMPLE: bare | leading_space.",
+        ),
+    ],
     block: Annotated[
-        int | None, typer.Option("--block", help="Patch block; defaults to the emotion artifact's.")
+        int | None,
+        typer.Option("--block", help="Patch block; defaults to the DIRECTIONS artifact's."),
     ] = None,
     seed: SeedOption = 7,
     max_pairs: Annotated[int, typer.Option("--max-pairs")] = DEFAULT_MAX_PAIRS,
@@ -204,13 +219,6 @@ def behavioral_transfer_command(
             help="Off-cell pairs for the positive control that makes every null readable.",
         ),
     ] = DEFAULT_REACHABILITY_PAIRS,
-    answer_form: Annotated[
-        str,
-        typer.Option(
-            "--answer-form",
-            help="Answer-slot token form, SET BY THE REALITY SAMPLE: bare | leading_space.",
-        ),
-    ] = DEFAULT_ANSWER_FORM,
 ) -> None:
     """Rung E4: does the patched expectation state change what the model DOES (e4-prereg)?
 
@@ -226,6 +234,12 @@ def behavioral_transfer_command(
     same-position arithmetic this rung exists to escape.
     """
 
+    if answer_form not in ANSWER_FORMS:
+        raise typer.BadParameter(
+            f"--answer-form must be one of {list(ANSWER_FORMS)}, not {answer_form!r}. It is set by "
+            "the reality sample: run `just e4-surface-preflight` without --tokenizer-only and pass "
+            "the form it prints."
+        )
     spec = resolve_model_spec(load_config(config))
     backend = create_backend(spec)
     try:

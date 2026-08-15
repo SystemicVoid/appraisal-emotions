@@ -175,20 +175,67 @@ round-robin now covers all 60. The forward budget is the one figure that genuine
 **~7,500** forwards, ~4,350 of them genuinely patched and the rest inert self-patches, against the
 frozen "~2,880" which counted the gate alone. `e4-prereg.md` §10 itemises the arithmetic.
 
+## What the pre-run review changed (2026-08-15, fourth pass, zero GPU)
+
+Five agents reviewed the built harness before it met a GPU. Everything below was changed before the
+harness saw data, so none of it needs the symmetric-amendment test; `e4-prereg.md` §11 is the full
+record and the short version is:
+
+1. **Four launch blockers**, each reproduced by running the code — see next-step 0.
+2. **Two changes to what the verdict may say**, both of which make a null readable rather than a
+   positive easier. The arm's own cell-clustered `p_value` was being computed and read by nothing,
+   so "functionally-used" rested on three point comparisons that a flat surface clears about one
+   time in eight; it is now a required condition. And the `full_residual` ceiling — the within-design
+   maximum, at exactly the magnitude the arms inject, which the run already pays for — is now
+   consulted before any "readable null" may be written, because reachability only ever established
+   reach at a ±160-point extreme.
+3. **A corruption control that could not fail its own promise.** The tolerance shipped at 0.5 while
+   the frozen §6 text says 10%, and ruling 9 recorded the change of form but not of value. Each
+   window must now also have moved less than the arm moved the choice.
+4. **~1,000 wasted forwards and one 5.2 GB array** pinned for the whole run by a strided view.
+5. **One reviewer finding rejected on inspection**: the sentinel constants were read as plain ASCII
+   and reported as a stale comment; `cat -A` shows the private-use wrappers are there. The reviewer
+   was fooled by exactly the invisibility the gotchas entry documents.
+
+The full suite is **209 passed, 2 failed** — the two failures are the pre-existing golden-parity
+BLAS-digest comparisons, verified independent of this work by stashing it and confirming both
+mismatched hashes are byte-identical on either side.
+
 ## Next steps, in order
 
-0. **Decide whether to buy the E4 session.** The harness is built, tested against planted
-   controls, reviewed twice adversarially, and every review finding is folded in; nothing is
-   authorized and the ask is still outstanding. On the instance the order is fixed by
-   `e4-prereg.md` §8 as amended by §10: `just e4-surface-preflight … --tokenizer-only` (seconds,
-   no weights) → the same recipe with weights for the ~10-trial reality sample, which SETS
-   `--answer-form` → B0 and the titration freeze → the patched arms, with the reachability
-   control, the corruption windows and the off-position re-read riding along. ~7,500
-   forwards, ~35–60 min at batch 1 on a 27B. Budget for a clean B0 null: a strong instruct model
-   computing round 2 from the round-2 numbers and ignoring round-1 history is *normatively correct
-   behaviour*, and that outcome is a reportable instrument fact rather than a harness bug — a
-   failed B0 spends zero patched forwards, and reachability still runs, because a failed B0 is
-   exactly when the operator needs to know which of the two they bought.
+0. **Decide whether to buy the E4 session.** The harness is built, tested against planted controls,
+   reviewed **five times** adversarially — one run-readiness pass and four code-quality passes — and
+   every finding is folded in; nothing is authorized and the ask is still outstanding. The
+   run-readiness review found **four defects that made the run impossible to launch**, all verified
+   by executing the code rather than reading it: the preflight script crashed on an attribute typo
+   *after* loading the weights and had never been called by any test; the patch block defaulted to
+   the emotion artifact's 63, which is out of range against `n_blocks=64` and is the wrong artifact
+   besides (the direction is certified at the **directions** artifact's block 35); `--answer-form`
+   was optional, unpassable through the recipe and unenforced by the preflight; and the `.venv`'s
+   editable install was hardlinked to a git worktree, so `appraisal-emotions behavioral-transfer`
+   resolved to a branch with no E4 and exited "No such command". That last one is the instructive
+   miss: `pytest` uses `pythonpath = ["src"]`, so the suite was green against code the CLI would not
+   run, and all five reviewers were looking at the suite. All four are fixed, and §11 of
+   `e4-prereg.md` records them.
+
+   On the instance the order is fixed by `e4-prereg.md` §8 as amended by §10 and §11:
+   `just e4-surface-preflight … --tokenizer-only` (now genuinely seconds — it used to load 5.2 GB
+   to read 54 KB) → the same recipe with weights for the ~10-trial reality sample, which SETS
+   `--answer-form` and now BLOCKS if the model does not answer with an option symbol → B0 and the
+   titration freeze → the patched arms, with the reachability control, the corruption windows and
+   the off-position re-read riding along. **6,541 forwards, 4,140 of them genuinely patched, ~30–50
+   min at batch 1 on a 27B** — down from 7,501 because B0 no longer buys donor readouts at the two
+   titration levels it discards. Two early exits now cost almost nothing: an unreachable surface
+   stops after **61** forwards, and a failed B0 after **1,981**.
+
+   Budget for a clean B0 null: a strong instruct model computing round 2 from the round-2 numbers
+   and ignoring round-1 history is *normatively correct behaviour*, and that outcome is a reportable
+   instrument fact rather than a harness bug — a failed B0 spends zero patched forwards, and
+   reachability still runs, because a failed B0 is exactly when the operator needs to know which of
+   the two they bought. And a flat ARM table is no longer automatically a null: the `full_residual`
+   ceiling must show the design could have seen a within-cell shift at all, or the verdict routes to
+   `harness_inadequate for the arms` rather than to "no transfer".
+
 1. **Widen the word families before buying any more compute.** This is P1's actionable finding
    and the only one with a number attached: at the current story count the families would need
    ≈26 words each for the observed effect to be detectable, ≈12 each at large k, against 9 and
@@ -245,5 +292,8 @@ clean, no file over the agent read boundary, and the suite green apart from two 
 dependent failures — `test_states_metadata_is_byte_identical_to_the_parent_golden` and
 `test_directions_metadata_is_byte_identical_to_the_parent_golden` compare BLAS-digest-bearing
 metadata against the parent's goldens and fail on this machine's OpenBLAS. Verified pre-existing
-and independent of the E4 work by stashing the E4 changes and re-running: 205 passed, the same 2
+and independent of the E4 work by stashing the changes and re-running: the two mismatched hashes
+are byte-identical on either side of the diff, which is a stronger check than "the same two names
+failed" — the pre-run pass touched the ledger-line rendering, and a rendering change WOULD have
+moved `battery_sha256`, which is among the fields that stayed identical. Current: 209 passed, 2
 failed.

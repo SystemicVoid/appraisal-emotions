@@ -67,7 +67,9 @@ max-line-length = 120
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "." so scripts/ is importable: the E4 preflight shipped with a crash on its first line of
+# report-building because nothing in the suite could call its main().
+pythonpath = ["src", "."]
 addopts = [
     "-q",
     "-ra",

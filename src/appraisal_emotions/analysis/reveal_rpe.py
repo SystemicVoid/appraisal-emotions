@@ -363,10 +363,23 @@ def write_reveal_rpe_states(artifact: RevealRpeStates, metadata_path: Path) -> t
     return metadata_path, states_path
 
 
+def read_reveal_rpe_metadata(metadata_path: Path) -> RevealRpeStatesMetadata:
+    """The states artifact's metadata WITHOUT its states array.
+
+    The array is 5.2 GB on the run of record and ``RevealRpeStates`` re-hashes and finite-checks a
+    full second copy of it on construction, so reading it costs ~120 s and ~12 GB. Callers that
+    only need ``reveal_ids``, ``n_blocks`` or the recorded hashes -- the tokenizer-only preflight,
+    which advertises itself as costing seconds -- read this instead. Anything that touches an
+    actual state still goes through :func:`read_reveal_rpe_states`, hash binding included.
+    """
+
+    return _read_metadata(metadata_path, RevealRpeStatesMetadata)
+
+
 def read_reveal_rpe_states(metadata_path: Path) -> RevealRpeStates:
     """Read and revalidate a reveal-states artifact (metadata + states hash binding)."""
 
-    metadata = _read_metadata(metadata_path, RevealRpeStatesMetadata)
+    metadata = read_reveal_rpe_metadata(metadata_path)
     with np.load(reveal_rpe_states_path(metadata_path), allow_pickle=False) as bundle:
         array = np.array(bundle[_STATES_ARRAY_NAME])
     return RevealRpeStates(metadata=metadata, states=array)

@@ -87,6 +87,7 @@ from appraisal_emotions.stimuli.gambles import (
     _outcomes_match_trial_type,
     _select_decorrelated,
     _template_header,
+    outcome_line_parts,
     render_options_block,
 )
 
@@ -246,8 +247,10 @@ def _reveal_comparison(
         "reward_cell_id": f"r{reward:g}_a{abs_rpe:g}",
         "augmented": augmented,
         "rendering_index": rendering_index,
-        # The single leading-space outcome-symbol token; capture reads position="last".
-        "read_prefix": f" {realised_symbol}",
+        # The single leading-space outcome-symbol token; capture reads position="last". Taken
+        # from the renderer that produced the line, not re-spelled: this byte-pin and the
+        # rendered prompt must agree or the capture reads the wrong token.
+        "read_prefix": outcome_line_parts(realised_symbol, 0.0)[0],
         "partition": partition,
     }
     return Comparison(
