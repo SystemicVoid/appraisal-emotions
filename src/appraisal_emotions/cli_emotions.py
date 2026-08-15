@@ -28,10 +28,9 @@ from appraisal_emotions.analysis.emotion_mapping import (
     map_geometry,
 )
 from appraisal_emotions.analysis.emotion_vectors import (
+    E0Refusal,
     EmotionVectors,
-    FirstContactFailure,
-    NeutralCorpusTooThin,
-    StoryYieldShortfall,
+    GeneratedStory,
     extract_emotion_vectors,
     read_emotion_vectors,
     read_story_log,
@@ -72,6 +71,34 @@ def emotion_paths(cfg: StudyConfig) -> dict[str, Path]:
         "projections": root / "story_projections.json",
         "projections_quarantine": root / "story_projections_gate_failed.json",
     }
+
+
+def _write_corpora(
+    paths: dict[str, Path],
+    stories: tuple[GeneratedStory, ...],
+    neutral: tuple[GeneratedStory, ...],
+    *,
+    n: int,
+) -> list[Path]:
+    """Write every generated corpus and its early-N sample; return what was written.
+
+    The SAME four files on the success path and on every refusal path, because the operator's
+    question is identical either way ("what did the model actually produce?") and a refusal is
+    when they most need the answer. The neutral corpus keeps its own file rather than being
+    appended to the story log: P1 re-feeds that log as emotion stories, and a neutral transcript
+    is not a story of any emotion.
+    """
+
+    written: list[Path] = []
+    if stories:
+        write_json(paths["stories"], story_log_records(stories))
+        write_json(paths["first_contact"], story_log_records(stories[:n]))
+        written += [paths["stories"], paths["first_contact"]]
+    if neutral:
+        write_json(paths["neutral_dialogues"], story_log_records(neutral))
+        write_json(paths["neutral_first_contact"], story_log_records(neutral[:n]))
+        written += [paths["neutral_dialogues"], paths["neutral_first_contact"]]
+    return written
 
 
 def _print_e0(artifact: EmotionVectors, path: Path) -> None:
@@ -180,40 +207,20 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
             first_contact_n=ev.first_contact_n,
             first_contact_max_drop_rate=ev.first_contact_max_drop_rate,
         )
-    except FirstContactFailure as failure:
-        # The BLIND filter's compensation: write the sample a human must READ, record the cap,
-        # and stop before the capture pass rather than scoring a basis built from the survivors.
-        # Two surfaces are frozen blind, so the sample goes to the path for the one that tripped.
-        key = "neutral_first_contact" if failure.surface.startswith("neutral") else "first_contact"
-        write_json(paths[key], story_log_records(failure.sample))
+    except E0Refusal as failure:
+        # QUARANTINE, not discard. All three refusals fire after generation and before the
+        # verdict, so the generations are already paid for and they are the only evidence for why
+        # the run refused — and two of the messages send the operator to go read a sample. Write
+        # the corpora first, then exit non-zero: same shape as the P1 gate handler below.
+        written = _write_corpora(paths, failure.stories, failure.neutral, n=ev.first_contact_n)
         console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
-        console.print(f"  first-contact sample written to {paths[key]}")
-        raise typer.Exit(code=1) from failure
-    except NeutralCorpusTooThin as failure:
-        # The corpus behind the projection is too small or too heavily filtered to be the one the
-        # config designed. Refused rather than recorded, because the basis it would fit is
-        # subtracted from every emotion vector before G0 can see anything.
-        console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
-        raise typer.Exit(code=1) from failure
-    except StoryYieldShortfall as failure:
-        # The other half of the BLIND freeze: the filter can only audit pieces that exist, so a
-        # splitter returning fewer than the prompt asked for is invisible to it. Refuse before the
-        # capture pass rather than score a basis at an unrecorded fraction of its sample size.
-        console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
+        for path in written:
+            console.print(f"  quarantined: {path}")
         raise typer.Exit(code=1) from failure
     finally:
         free_backend(backend)
 
-    write_json(paths["stories"], story_log_records(stories))
-    write_json(paths["first_contact"], story_log_records(stories[: ev.first_contact_n]))
-    if neutral:
-        # The neutral corpus gets the same written early-N sample the stories get: its <NEW
-        # DIALOGUE> splitter is a blind freeze on the same footing, so it needs the same reading.
-        write_json(paths["neutral_first_contact"], story_log_records(neutral[: ev.first_contact_n]))
-        # Its own file, not appended to stories.json: P1 re-feeds that log as emotion stories, and
-        # a neutral transcript is not a story of any emotion. Written regardless of the fit, so
-        # the corpus behind a projection can be READ.
-        write_json(paths["neutral_dialogues"], story_log_records(neutral))
+    _write_corpora(paths, stories, neutral, n=ev.first_contact_n)
     write_emotion_vectors(artifact, paths["vectors"])
     _print_e0(artifact, paths["vectors"])
 

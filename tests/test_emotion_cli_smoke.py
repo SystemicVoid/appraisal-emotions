@@ -36,6 +36,11 @@ from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RPE_SMOKE = REPO_ROOT / "configs" / "reveal_rpe_smoke.yaml"
 EMOTION_SMOKE = REPO_ROOT / "configs" / "emotion_vectors_smoke.yaml"
+# Globbed, not listed: a new Sofroniew smoke arm inherits the E0 -> P1 chain by existing, which is
+# what stops the next arm from shipping with no test that ever loaded it.
+SOFRONIEW_SMOKE_CONFIGS = sorted(
+    path.name for path in (REPO_ROOT / "configs").glob("emotion_vectors_sofroniew*_smoke.yaml")
+)
 WORDS = REPO_ROOT / "data" / "emotion_words.json"
 
 
@@ -84,10 +89,7 @@ def chain(tmp_path_factory) -> _Chain:
     )
 
 
-@pytest.mark.parametrize(
-    "config_name",
-    ["emotion_vectors_sofroniew_smoke.yaml", "emotion_vectors_sofroniew_projected_smoke.yaml"],
-)
+@pytest.mark.parametrize("config_name", SOFRONIEW_SMOKE_CONFIGS)
 def test_the_sofroniew_arms_run_e0_then_p1_through_the_cli(tmp_path, chain, config_name):
     """E0 -> P1 on both shipped Sofroniew smoke configs, through the real command surface.
 
@@ -150,6 +152,36 @@ def test_the_sofroniew_arms_run_e0_then_p1_through_the_cli(tmp_path, chain, conf
         observed = projections.projections[projections.rows_for(label)].mean(axis=0)
         expected = np.einsum("bh,bdh->bd", emotion.vectors[index], unit)
         assert np.allclose(observed, expected, rtol=0.0, atol=1e-12), label
+
+
+def test_a_refused_e0_quarantines_the_corpora_it_already_paid_for(tmp_path):
+    """A refusal must not throw away the generations that produced it.
+
+    All three E0 refusals fire after generation and before the artifact is written. They used to
+    exit(1) before any write, discarding the whole story corpus — and the yield check's own
+    message told the operator to go read a first-contact sample that path never wrote. Here the
+    projected smoke config is pushed into a shortfall (2 stories per call from a backend that
+    emits one undivided completion), and the files it names must be on disk afterwards.
+    """
+
+    runner = CliRunner()
+    name = "emotion_vectors_sofroniew_projected_smoke.yaml"
+    config = _config_into(REPO_ROOT / "configs" / name, tmp_path, name)
+    payload = yaml.safe_load(config.read_text(encoding="utf-8"))
+    payload["emotion_vectors"]["sofroniew_stories_per_call"] = 2
+    config.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    emotion_dir = tmp_path / "runs" / payload["run"]["id"] / "emotions"
+
+    result = runner.invoke(app, ["extract-emotions", "--config", str(config)])
+    assert result.exit_code == 1, result.output
+    assert "harness_inadequate" in result.output
+    # The refusal's own advice, honoured.
+    assert (emotion_dir / "stories.json").is_file()
+    assert (emotion_dir / "first_contact_sample.json").is_file()
+    # ...and it stopped before scoring anything, so no basis was published.
+    assert not (emotion_dir / "emotion_vectors.json").exists()
+    log = json.loads((emotion_dir / "stories.json").read_text(encoding="utf-8"))
+    assert log, "the quarantined log must hold the generations, not be an empty placeholder"
 
 
 def test_e0_writes_its_artifacts_and_reports_the_gate_cap(chain):

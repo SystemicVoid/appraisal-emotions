@@ -49,7 +49,8 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -105,11 +106,13 @@ __all__ = [
     "DEFAULT_G0_THRESHOLD",
     "DEFAULT_MIN_TOKEN",
     "EMOTION_VECTORS_CONTRACT_VERSION",
+    "E0Refusal",
     "EmotionVectors",
     "EmotionVectorsMetadata",
     "FirstContactFailure",
     "G0BlockRow",
     "GeneratedStory",
+    "NeutralCorpusTooThin",
     "StoryYieldShortfall",
     "emotion_vectors_path",
     "extract_emotion_vectors",
@@ -238,7 +241,22 @@ def read_story_log(path: Path) -> tuple[GeneratedStory, ...]:
     )
 
 
-class FirstContactFailure(RuntimeError):
+class E0Refusal(RuntimeError):
+    """Base of the three pre-verdict refusals, carrying the corpora the run already paid for.
+
+    All three fire AFTER generation and BEFORE the artifact is written, so at the moment of the
+    refusal the expensive thing — the generated text — exists only in memory. Losing it means the
+    operator cannot read WHY the run refused without paying for the generations again, and two of
+    these refusals tell them to go read a sample. So the logs ride out on the exception:
+    :func:`extract_emotion_vectors` attaches the story log, :func:`fit_neutral_projection`
+    attaches the neutral one, and the CLI quarantines both before exiting.
+    """
+
+    stories: tuple[GeneratedStory, ...] = ()
+    neutral: tuple[GeneratedStory, ...] = ()
+
+
+class FirstContactFailure(E0Refusal):
     """A BLIND-frozen filter dropped too much of its first-contact sample.
 
     Raised before full spend so the run records ``harness_inadequate`` rather than producing an
@@ -270,7 +288,7 @@ class FirstContactFailure(RuntimeError):
         self.surface = surface
 
 
-class StoryYieldShortfall(RuntimeError):
+class StoryYieldShortfall(E0Refusal):
     """A label came back with fewer stories than the recipe asked for.
 
     This is the failure the BLIND ``<NEW STORY>`` freeze is actually exposed to, and it is not a
@@ -291,22 +309,34 @@ class StoryYieldShortfall(RuntimeError):
             f"stories_per_emotion={requested} stories: {short}. The splitter returned fewer "
             "pieces than the prompt asked for, so this run would score a basis at an unrecorded "
             "fraction of its designed sample size while reporting a clean drop rate. Read the "
-            "first-contact sample, fix the prompt or the splitter (or lower "
-            "sofroniew_stories_per_call to what the model actually emits), then re-run."
+            "quarantined stories.json (or its first_contact_sample.json), fix the prompt or the "
+            "splitter — or lower sofroniew_stories_per_call to what the model actually emits — "
+            "then re-run."
         )
         self.requested = requested
         self.realized = realized
         self.short = short
 
 
-class NeutralCorpusTooThin(RuntimeError):
+class NeutralCorpusTooThin(E0Refusal):
     """The neutral corpus cleared ``>= 2`` but not the floors the arm is actually exposed to.
 
     ``fit_neutral_basis`` needs two transcripts to have any variance at all, and that was the
-    whole adequacy gate: 38 of 40 transcripts dropped still fits a rank-1 basis, which is then
-    subtracted from every emotion vector before G0. Two transcripts are enough to compute
-    something; they are not enough for it to be the confound subspace the paper's step means.
+    whole adequacy gate: 22 of the real arm's 24 transcripts dropped still fits a rank-1 basis,
+    which is then subtracted from every emotion vector before G0. Two transcripts are enough to
+    compute something; they are not enough for it to be the confound subspace the paper means.
     """
+
+
+@contextmanager
+def _attaching_story_log(stories: tuple[GeneratedStory, ...]) -> Iterator[None]:
+    """Let a refusal carry the story log out of the frame that holds it (see :class:`E0Refusal`)."""
+
+    try:
+        yield
+    except E0Refusal as failure:
+        failure.stories = stories
+        raise
 
 
 def _yield_check(stories: tuple[GeneratedStory, ...], *, requested: int) -> dict[str, int]:
@@ -836,7 +866,7 @@ def fit_neutral_projection(
     ``min_kept`` and ``max_drop_rate`` are floors on the corpus itself: what they catch is a
     confound basis fit on a handful of survivors and then subtracted from every emotion vector
     BEFORE G0, where nothing downstream can distinguish its effect from the instrument's. Their
-    defaults are sized to the real config's 40 transcripts (see ``config.EmotionVectorsConfig``).
+    defaults are sized to the real config's 24 transcripts (see ``config.EmotionVectorsConfig``).
     """
 
     recipe = read_sofroniew_recipe(data_dir)
@@ -855,30 +885,39 @@ def fit_neutral_projection(
         temperature=temperature,
         split=neutral_completion_splitter(recipe.speaker_substitutions),
     )
-    contact_n, contact_rate = _first_contact_check(
-        transcripts,
-        n=first_contact_n,
-        max_drop_rate=first_contact_max_drop_rate,
-        surface="neutral transcripts",
-    )
-    kept = tuple(transcript for transcript in transcripts if transcript.kept)
-    drop_rate = 1.0 - len(kept) / len(transcripts)
-    if drop_rate > max_drop_rate:
-        raise NeutralCorpusTooThin(
-            f"the filter dropped {drop_rate:.2f} of the {len(transcripts)} neutral transcripts "
-            f"that came back (ceiling {max_drop_rate:.2f}, reasons "
-            f"{dict(sorted(Counter(t.drop_reason for t in transcripts if t.drop_reason).items()))}"
-            "). The surviving corpus is not the one the config designed, so the subspace it fits "
-            "is not the one the arm meant to remove."
+    # Every refusal below carries the transcripts out with it: the generations are already paid
+    # for, they are the evidence for WHY the corpus was refused, and two of these messages send
+    # the operator to go read them (see :class:`E0Refusal`).
+    try:
+        contact_n, contact_rate = _first_contact_check(
+            transcripts,
+            n=first_contact_n,
+            max_drop_rate=first_contact_max_drop_rate,
+            surface="neutral transcripts",
         )
-    if len(kept) < max(min_kept, 2):
-        raise NeutralCorpusTooThin(
-            f"only {len(kept)} neutral transcripts survived, below the floor of {min_kept} "
-            f"({len(transcripts)} pieces came back from {len(requests)} calls asking for "
-            f"{n_transcripts}). A basis fit on this few is subtracted from every emotion vector "
-            "before G0, and nothing downstream can tell its effect from the instrument's. Raise "
-            "neutral_dialogues or max_tokens, or lower min_token."
-        )
+        kept = tuple(transcript for transcript in transcripts if transcript.kept)
+        drop_rate = 1.0 - len(kept) / len(transcripts)
+        if drop_rate > max_drop_rate:
+            raise NeutralCorpusTooThin(
+                f"the filter dropped {drop_rate:.2f} of the {len(transcripts)} neutral "
+                f"transcripts that came back (ceiling {max_drop_rate:.2f}, reasons "
+                f"{dict(sorted(Counter(t.drop_reason for t in transcripts if t.drop_reason).items()))}"
+                "). The surviving corpus is not the one the config designed, so the subspace it "
+                "fits is not the one the arm meant to remove. Read the quarantined "
+                "neutral_dialogues.json."
+            )
+        if len(kept) < max(min_kept, 2):
+            raise NeutralCorpusTooThin(
+                f"only {len(kept)} neutral transcripts survived, below the floor of {min_kept} "
+                f"({len(transcripts)} pieces came back from {len(requests)} calls asking for "
+                f"{n_transcripts}). A basis fit on this few is subtracted from every emotion "
+                "vector before G0, and nothing downstream can tell its effect from the "
+                "instrument's. Read the quarantined neutral_dialogues.json, then raise "
+                "neutral_dialogues or max_tokens, or lower min_token."
+            )
+    except E0Refusal as failure:
+        failure.neutral = transcripts
+        raise
     states = capture_token_mean_states(
         backend, [transcript.text for transcript in kept], layers=layers, min_token=min_token
     )
@@ -975,12 +1014,13 @@ def extract_emotion_vectors(
         temperature=temperature,
         split=plan.split,
     )
-    contact_n, contact_rate = _first_contact_check(
-        stories, n=first_contact_n, max_drop_rate=first_contact_max_drop_rate
-    )
-    # Before the capture pass, and separate from the drop audit: the filter can only report on
-    # pieces that exist, so a splitter that returned half of them looks like a clean run to it.
-    generated_by_label = _yield_check(stories, requested=stories_per_emotion)
+    with _attaching_story_log(stories):
+        contact_n, contact_rate = _first_contact_check(
+            stories, n=first_contact_n, max_drop_rate=first_contact_max_drop_rate
+        )
+        # Before the capture pass, and separate from the drop audit: the filter can only report on
+        # pieces that exist, so a splitter that returned half of them looks like a clean run to it.
+        generated_by_label = _yield_check(stories, requested=stories_per_emotion)
 
     kept = tuple(story for story in stories if story.kept)
     if not kept:
@@ -1007,23 +1047,26 @@ def extract_emotion_vectors(
         # After centring, before the gate: projection is linear, so word rows that summed to zero
         # still do, and G0 has to score the vectors the run keeps.
         table_before = _g0_table(vectors[: len(labels)], valence)
-        neutral_basis, projection_record, neutral_transcripts = fit_neutral_projection(
-            backend,
-            layers=layers,
-            n_transcripts=neutral_dialogues,
-            dialogues_per_call=neutral_dialogues_per_call,
-            variance_target=neutral_variance_target,
-            seed=seed,
-            min_token=min_token,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            min_kept=neutral_min_kept,
-            max_drop_rate=neutral_max_drop_rate,
-            first_contact_n=first_contact_n,
-            first_contact_max_drop_rate=first_contact_max_drop_rate,
-            story_topics_per_label=plan.topics_per_label,
-            data_dir=sofroniew_data_dir,
-        )
+        # The neutral refusals attach their own corpus; this adds the story log, so a run that
+        # dies here still writes out both of the things it spent generations on.
+        with _attaching_story_log(stories):
+            neutral_basis, projection_record, neutral_transcripts = fit_neutral_projection(
+                backend,
+                layers=layers,
+                n_transcripts=neutral_dialogues,
+                dialogues_per_call=neutral_dialogues_per_call,
+                variance_target=neutral_variance_target,
+                seed=seed,
+                min_token=min_token,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                min_kept=neutral_min_kept,
+                max_drop_rate=neutral_max_drop_rate,
+                first_contact_n=first_contact_n,
+                first_contact_max_drop_rate=first_contact_max_drop_rate,
+                story_topics_per_label=plan.topics_per_label,
+                data_dir=sofroniew_data_dir,
+            )
         # The random-frame counterfactual, on the SAME pre-projection vectors, before they are
         # overwritten. Seeded off the run seed so it is reproducible without being the run seed
         # (which already drives the stimulus draw).
