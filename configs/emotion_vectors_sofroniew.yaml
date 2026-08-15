@@ -48,8 +48,10 @@ provenance:
       This arm runs 6 topics x 2 stories (12 per emotion), a ~100x downscale on the stimulus
       count. It reproduces the paper's PROMPT, not the paper's sample size."
     - "The paper projects out the top PCs of activations on a neutral-dialogue corpus (enough for
-      50% of variance) before using the vectors. Neither arm does this; the neutral-dialogue
-      prompt is extracted into data/sofroniew2026/prompts.json but is not run."
+      50% of variance) before using the vectors. This arm does NOT, deliberately: it keeps the
+      A/B against the base arm to one variable. The step is implemented and runs in
+      configs/emotion_vectors_sofroniew_projected.yaml, and the paper's own footnote reports its
+      qualitative findings holding without it."
     - "The topic subset is drawn once and shared across every label, so topic cancels in the
       grand-mean centring exactly as it does in the paper. A per-label topic draw would NOT be
       safe here, because the paper's topics carry affect."

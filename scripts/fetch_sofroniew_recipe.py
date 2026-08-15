@@ -58,13 +58,22 @@ ANCHOR_TOPICS = r"\subsection{Dataset generation}"
 ANCHOR_STORY_PROMPT = r"\textbf{Emotional stories prompt. }"
 ANCHOR_NEUTRAL_PROMPT = r"\textbf{Neutral dialogues prompt. }"
 ANCHOR_EMOTIONAL_DIALOGUE_PROMPT = r"\textbf{Emotional dialogues prompt. }"
+# The neutral-dialogue prompt writes its speakers as "Person"/"AI"; the paper renames them after
+# generation, in one prose sentence right under that prompt block. The rename is part of the
+# recipe (it decides what token strings the neutral transcripts actually carry), so it is
+# EXTRACTED rather than retyped -- see parse_speaker_substitutions.
+ANCHOR_SPEAKER_CONVERSION = "Post-hoc, we converted "
 
 EXPECTED_EMOTION_COUNT = 171
 EXPECTED_TOPIC_COUNT = 100
+EXPECTED_SPEAKER_SUBSTITUTIONS = 2
 
 _PROMPTBLOCK_RE = re.compile(
     r"\\begin\{promptblock\}\n(?P<body>.*?)\n\\end\{promptblock\}", re.DOTALL
 )
+# LaTeX quoting: ``like this''. The sentence names the two source strings first, then the two
+# replacements, in the same order.
+_TEX_QUOTED_RE = re.compile(r"``(?P<inner>.*?)''")
 
 
 class ExtractionError(RuntimeError):
@@ -179,6 +188,58 @@ def parse_topics(block: str) -> list[str]:
     return topics
 
 
+def _parse_conversion_sentence(sentence: str) -> list[dict[str, str]]:
+    quoted = [match.group("inner") for match in _TEX_QUOTED_RE.finditer(sentence)]
+    if len(quoted) != 2 * EXPECTED_SPEAKER_SUBSTITUTIONS:
+        raise ExtractionError(
+            f"the speaker-conversion sentence carries {len(quoted)} quoted strings, expected "
+            f"{2 * EXPECTED_SPEAKER_SUBSTITUTIONS}: {sentence!r}"
+        )
+    sources = quoted[:EXPECTED_SPEAKER_SUBSTITUTIONS]
+    targets = quoted[EXPECTED_SPEAKER_SUBSTITUTIONS:]
+    pairs = [
+        {"from": normalize_promptblock(src), "to": normalize_promptblock(dst)}
+        for src, dst in zip(sources, targets, strict=True)
+    ]
+    if any(not pair["from"] or not pair["to"] for pair in pairs):
+        raise ExtractionError(f"empty speaker substitution parsed from {sentence!r}")
+    return pairs
+
+
+def parse_speaker_substitutions(tex: str) -> list[dict[str, str]]:
+    """The post-hoc speaker rename applied to the neutral dialogues, read from the source prose.
+
+    The sentence is of the form ``Post-hoc, we converted ``A'' and ``B'' to ``C'' and ``D''.`` —
+    four LaTeX-quoted strings, sources first, replacements second, pairwise in order. Anything
+    other than exactly four is a shape this parser does not understand, and it says so rather
+    than guessing: a wrong rename would change every token of every neutral transcript.
+
+    The appendix states the same sentence twice, once under the neutral-dialogues prompt and once
+    under the emotional-dialogues prompt. This returns the neutral one and asserts every other
+    occurrence parses identically, so *which* occurrence was read cannot matter.
+    """
+
+    starts: list[int] = []
+    cursor = tex.find(ANCHOR_SPEAKER_CONVERSION)
+    while cursor != -1:
+        starts.append(cursor)
+        cursor = tex.find(ANCHOR_SPEAKER_CONVERSION, cursor + 1)
+    if not starts:
+        raise ExtractionError(f"anchor {ANCHOR_SPEAKER_CONVERSION!r} does not occur in main.tex")
+    parsed = [_parse_conversion_sentence(tex[start : tex.index("\n", start)]) for start in starts]
+    if any(other != parsed[0] for other in parsed[1:]):
+        raise ExtractionError(
+            f"the {len(parsed)} speaker-conversion sentences disagree: {parsed}. Read the source "
+            "and pick the neutral-dialogue one deliberately."
+        )
+
+    neutral_at = tex.index(ANCHOR_NEUTRAL_PROMPT)
+    after_neutral = [start for start in starts if start > neutral_at]
+    if not after_neutral:
+        raise ExtractionError("no speaker-conversion sentence follows the neutral-dialogues prompt")
+    return parsed[starts.index(after_neutral[0])]
+
+
 def parse_story_prompt(block: str) -> str:
     """The emotional-stories system prompt, with its three template slots checked present."""
 
@@ -200,6 +261,18 @@ def build_payloads(tex: str) -> dict[str, dict]:
     story_raw = promptblock_after(tex, ANCHOR_STORY_PROMPT)
     neutral_raw = promptblock_after(tex, ANCHOR_NEUTRAL_PROMPT)
     emotional_dialogue_raw = promptblock_after(tex, ANCHOR_EMOTIONAL_DIALOGUE_PROMPT)
+
+    neutral_text = normalize_promptblock(neutral_raw)
+    substitutions = parse_speaker_substitutions(tex)
+    # Cross-check the parse against the prompt it applies to: every renamed speaker tag must
+    # actually occur in the neutral prompt. A parse that drifted onto some other sentence would
+    # produce strings this prompt never asks the model to emit.
+    for pair in substitutions:
+        if pair["from"] not in neutral_text:
+            raise ExtractionError(
+                f"speaker substitution source {pair['from']!r} does not occur in the neutral "
+                "dialogues prompt; the conversion sentence was parsed from the wrong place"
+            )
 
     source = {
         "arxiv_id": ARXIV_ID,
@@ -246,7 +319,10 @@ def build_payloads(tex: str) -> dict[str, dict]:
                     "role": "system",
                     "slots": ["n_stories", "topic"],
                     "raw": neutral_raw,
-                    "text": normalize_promptblock(neutral_raw),
+                    "text": neutral_text,
+                    # Applied to the generated transcript, not to the prompt. Extracted from the
+                    # prose sentence that follows the prompt block in the appendix.
+                    "post_hoc_speaker_substitutions": substitutions,
                 },
                 "emotional_dialogues": {
                     "appendix_label": "Emotional dialogues prompt",
@@ -267,8 +343,13 @@ def build_payloads(tex: str) -> dict[str, dict]:
                 "emotional_stories_prompt": ANCHOR_STORY_PROMPT,
                 "neutral_dialogues_prompt": ANCHOR_NEUTRAL_PROMPT,
                 "emotional_dialogues_prompt": ANCHOR_EMOTIONAL_DIALOGUE_PROMPT,
+                "post_hoc_speaker_conversion": ANCHOR_SPEAKER_CONVERSION,
             },
-            "counts": {"emotion_words": len(words), "topics": len(topics)},
+            "counts": {
+                "emotion_words": len(words),
+                "topics": len(topics),
+                "post_hoc_speaker_substitutions": len(substitutions),
+            },
             "recipe_numbers_from_prose": {
                 "_note": (
                     "Quoted from main.tex body text, section 'Finding emotion vectors'. These are "
@@ -284,6 +365,12 @@ def build_payloads(tex: str) -> dict[str, dict]:
                 "confound_removal": (
                     "project out the top PCs of activations on neutral dialogues, enough to "
                     "explain 50% of the variance"
+                ),
+                "confound_removal_variance_target": 0.5,
+                "confound_removal_caveat": (
+                    "main.tex footnote 3: the projection 'denoised some of the token-to-token "
+                    "fluctuations in our emotion probe results, but our qualitative findings "
+                    "still hold using the raw unprojected vectors'"
                 ),
                 "headline_layer": "about two-thirds of the way through the model",
                 "story_length": "roughly one paragraph",

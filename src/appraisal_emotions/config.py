@@ -120,6 +120,16 @@ class EmotionVectorsConfig(ConfigModel):
     # stories_per_emotion must stay a multiple of this so both arms carry the same sample size.
     sofroniew_stories_per_call: int = 2
     sofroniew_data_dir: Path = Path("data/sofroniew2026")
+    # The paper's confound-removal step: fit the top PCs of activations on emotionally neutral
+    # transcripts (enough for `neutral_variance_target` of the variance) and project them out of
+    # the centred vectors before G0. Default OFF — the paper's own footnote calls it a denoiser
+    # and reports its qualitative findings holding without it, so it is a separate arm rather
+    # than a silent change to the instrument E1-E3 already read.
+    # Needs `sofroniew_data_dir`: the neutral-dialogue prompt is the paper's, loaded from there.
+    neutral_projection: bool = False
+    neutral_dialogues: int = 40
+    neutral_dialogues_per_call: int = 4
+    neutral_variance_target: float = 0.5
     min_token: int = 50
     max_tokens: int = 320
     temperature: float = 1.0
@@ -131,11 +141,25 @@ class EmotionVectorsConfig(ConfigModel):
     first_contact_n: int = 10
     first_contact_max_drop_rate: float = 0.5
 
-    @field_validator("stories_per_emotion", "max_tokens", "fallback_blocks", "first_contact_n")
+    @field_validator(
+        "stories_per_emotion",
+        "max_tokens",
+        "fallback_blocks",
+        "first_contact_n",
+        "neutral_dialogues",
+        "neutral_dialogues_per_call",
+    )
     @classmethod
     def positive_counts(cls, value: int) -> int:
         if value < 1:
             raise ValueError("must be >= 1")
+        return value
+
+    @field_validator("neutral_variance_target")
+    @classmethod
+    def variance_target_in_unit_interval(cls, value: float) -> float:
+        if not 0.0 < value <= 1.0:
+            raise ValueError("neutral_variance_target must lie in (0, 1]")
         return value
 
     @field_validator("min_token")

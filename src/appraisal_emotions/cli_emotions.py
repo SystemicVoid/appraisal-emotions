@@ -64,6 +64,7 @@ def emotion_paths(cfg: StudyConfig) -> dict[str, Path]:
     return {
         "vectors": root / "emotion_vectors.json",
         "stories": root / "stories.json",
+        "neutral_dialogues": root / "neutral_dialogues.json",
         "first_contact": root / "first_contact_sample.json",
         "projections": root / "story_projections.json",
         "projections_quarantine": root / "story_projections_gate_failed.json",
@@ -81,6 +82,18 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
         f"first-contact {meta.first_contact_drop_rate:.2f} over n={meta.first_contact_n} "
         f"(filter freeze: {meta.filter_freeze_status})"
     )
+    if meta.neutral_projection is not None:
+        proj = meta.neutral_projection
+        best_before = max(
+            (abs(row.spearman_rho) for row in meta.g0_table_before_projection), default=0.0
+        )
+        console.print(
+            f"  neutral projection: {proj.n_kept}/{proj.n_requested} transcripts, "
+            f"{proj.total_components} components over {len(proj.blocks)} blocks "
+            f"(<= {proj.max_components_in_a_block} per block) at "
+            f"{proj.variance_target:.0%} of variance"
+        )
+        console.print(f"    G0 |rho| before projection {best_before:.3f}")
     console.print(
         f"  G0: |rho|={meta.g0_abs_rho:.3f} vs threshold {meta.g0_threshold} at block "
         f"{meta.selected_block}/{meta.n_blocks} (p={meta.g0_spearman_p:.4f})"
@@ -117,7 +130,7 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
     paths = emotion_paths(cfg)
     backend = create_backend(spec)
     try:
-        artifact, stories = extract_emotion_vectors(
+        artifact, stories, neutral = extract_emotion_vectors(
             cast(StoryCaptureBackend, backend),
             words,
             spec=spec,
@@ -125,6 +138,10 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
             story_recipe=ev.story_recipe,
             sofroniew_stories_per_call=ev.sofroniew_stories_per_call,
             sofroniew_data_dir=ev.sofroniew_data_dir,
+            neutral_projection=ev.neutral_projection,
+            neutral_dialogues=ev.neutral_dialogues,
+            neutral_dialogues_per_call=ev.neutral_dialogues_per_call,
+            neutral_variance_target=ev.neutral_variance_target,
             seed=ev.seed,
             min_token=ev.min_token,
             max_tokens=ev.max_tokens,
@@ -146,6 +163,11 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
 
     write_json(paths["stories"], story_log_records(stories))
     write_json(paths["first_contact"], story_log_records(stories[: ev.first_contact_n]))
+    if neutral:
+        # Its own file, not appended to stories.json: P1 re-feeds that log as emotion stories, and
+        # a neutral transcript is not a story of any emotion. Written regardless of the fit, so
+        # the corpus behind a projection can be READ.
+        write_json(paths["neutral_dialogues"], story_log_records(neutral))
     write_emotion_vectors(artifact, paths["vectors"])
     _print_e0(artifact, paths["vectors"])
 

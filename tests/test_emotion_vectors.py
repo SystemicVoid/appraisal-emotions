@@ -102,7 +102,7 @@ def test_first_contact_checkpoint_refuses_an_over_dropping_filter(words):
 
 
 def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, words, tmp_path):
-    artifact, stories = extracted
+    artifact, stories, _neutral = extracted
     meta = artifact.metadata
     n_labels = len(words.labels) + 1  # + style_control
 
@@ -141,7 +141,7 @@ def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, word
 
 
 def test_artifact_read_refuses_a_tampered_payload(extracted, tmp_path):
-    artifact, _stories = extracted
+    artifact, _stories, _neutral = extracted
     path = tmp_path / "tampered.json"
     _metadata_path, vectors_path = write_emotion_vectors(artifact, path)
     tampered = np.array(artifact.vectors)

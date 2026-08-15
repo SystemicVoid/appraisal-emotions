@@ -17,7 +17,12 @@ loaded for comparison and provenance; the arm's *extraction* runs on the project
 because the paper's 171 words do not contain the vocabulary E1/E2 are about — see
 ``docs/design/sofroniew-recipe.md``.
 
-Three faithfulness points that are decisions, not accidents, and are recorded as such:
+It also carries the paper's *neutral dialogue* corpus — the emotionally-neutral Human/Assistant
+transcripts whose principal components the paper projects out of the emotion vectors. Those are
+not stimuli for any emotion; :mod:`appraisal_emotions.analysis.neutral_projection` says what is
+done with them.
+
+Four faithfulness points that are decisions, not accidents, and are recorded as such:
 
 1. **Batched generation.** The paper's prompt asks for ``{n_stories}`` stories in ONE completion
    separated by ``<NEW STORY>``, and instructs cross-story diversity ("not use the same turns of
@@ -36,12 +41,20 @@ Three faithfulness points that are decisions, not accidents, and are recorded as
    control prompt is built from the loaded paper prompt by replacing its three emotion-bearing
    lines, each replacement asserted to have hit (:func:`build_style_control_prompt`), so the
    control and the stories differ only where they must.
+4. **The neutral corpus reuses the story topics.** The paper's appendix says the same 100 topics
+   "seed the generation of our stories and dialogues datasets", so the confound subspace it
+   removes is fit on the same topic material the stories were written from. At our scale that has
+   to be arranged rather than inherited: :func:`build_neutral_dialogue_grid` draws from the SAME
+   seeded shuffle
+   :func:`build_sofroniew_story_grid` draws from, so the neutral corpus spans topics the stories
+   saw instead of a disjoint sample of the 100.
 """
 
 from __future__ import annotations
 
 import json
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,11 +63,16 @@ from appraisal_emotions.stimuli.emotion_stories import STYLE_CONTROL_LABEL, Stor
 
 __all__ = [
     "DEFAULT_SOFRONIEW_DATA_DIR",
+    "DIALOGUE_SEPARATOR",
+    "NEUTRAL_DIALOGUE_LABEL",
     "SOFRONIEW_STORIES_CONTRACT_VERSION",
     "STORY_SEPARATOR",
     "SofroniewRecipe",
+    "apply_speaker_substitutions",
+    "build_neutral_dialogue_grid",
     "build_sofroniew_story_grid",
     "build_style_control_prompt",
+    "neutral_completion_splitter",
     "read_sofroniew_recipe",
     "split_completion",
 ]
@@ -65,6 +83,13 @@ DEFAULT_SOFRONIEW_DATA_DIR = Path("data/sofroniew2026")
 
 # The separator the paper's prompt instructs the model to emit between stories.
 STORY_SEPARATOR = "<NEW STORY>"
+# ...and between neutral dialogues.
+DIALOGUE_SEPARATOR = "<NEW DIALOGUE>"
+
+# The label carried by neutral-dialogue transcripts through the shared generation path. It is NOT
+# an emotion and never becomes a basis row: the transcripts exist only to fit the confound
+# subspace that gets projected out (``analysis.neutral_projection``).
+NEUTRAL_DIALOGUE_LABEL = "neutral_dialogue"
 
 # The three lines of the paper prompt that name the emotion, and what the P5c control puts in
 # their place. These replacements are OUR text — they reproduce nothing held in a file, so no
@@ -99,6 +124,12 @@ class SofroniewRecipe:
     """
 
     story_prompt_template: str
+    neutral_dialogue_prompt_template: str
+    # The paper's post-hoc speaker rename, extracted from its prose (Person: -> Human:,
+    # AI: -> Assistant:). Loaded, never typed here: it decides what tokens the neutral
+    # transcripts actually carry, and the model's Human/Assistant formatting is exactly the
+    # confound direction the projection is meant to remove.
+    speaker_substitutions: tuple[tuple[str, str], ...]
     topics: tuple[str, ...]
     paper_emotion_words: tuple[str, ...]
     arxiv_id: str
@@ -123,6 +154,9 @@ class SofroniewRecipe:
             "source_sha256": dict(self.source_sha256),
             "n_topics": len(self.topics),
             "n_paper_emotion_words": len(self.paper_emotion_words),
+            "speaker_substitutions": [
+                {"from": src, "to": dst} for src, dst in self.speaker_substitutions
+            ],
         }
 
 
@@ -150,6 +184,31 @@ def read_sofroniew_recipe(data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR) -> Sofron
             "have nothing to split on"
         )
 
+    neutral = payloads["prompts.json"]["prompts"]["neutral_dialogues"]
+    neutral_template = str(neutral["text"])
+    for slot in ("{n_stories}", "{topic}"):
+        if slot not in neutral_template:
+            raise ValueError(
+                f"the loaded neutral-dialogue prompt has no {slot} slot; re-run the fetch script"
+            )
+    if DIALOGUE_SEPARATOR not in neutral_template:
+        raise ValueError(
+            f"the loaded neutral-dialogue prompt never mentions {DIALOGUE_SEPARATOR!r}; the "
+            "transcript splitter would have nothing to split on"
+        )
+    substitutions = tuple(
+        (str(pair["from"]), str(pair["to"])) for pair in neutral["post_hoc_speaker_substitutions"]
+    )
+    if not substitutions:
+        raise ValueError("the loaded neutral-dialogue prompt carries no speaker substitutions")
+    for source, _target in substitutions:
+        # Load-vs-load consistency, not literal-vs-literal: the rename was parsed from one place
+        # in the paper and the prompt from another, so a drifted parse shows up here.
+        if source not in neutral_template:
+            raise ValueError(
+                f"speaker substitution {source!r} does not occur in the neutral-dialogue prompt"
+            )
+
     topics = tuple(str(topic) for topic in payloads["topics_100.json"]["topics"])
     words = tuple(str(word) for word in payloads["emotion_words_171.json"]["words"])
     if not topics or not words:
@@ -158,6 +217,8 @@ def read_sofroniew_recipe(data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR) -> Sofron
     source = payloads["provenance.json"]["source"]
     return SofroniewRecipe(
         story_prompt_template=template,
+        neutral_dialogue_prompt_template=neutral_template,
+        speaker_substitutions=substitutions,
         topics=topics,
         paper_emotion_words=words,
         arxiv_id=str(source["arxiv_id"]),
@@ -207,6 +268,42 @@ def split_completion(text: str) -> tuple[str, ...]:
 
     pieces = [piece.strip() for piece in text.split(STORY_SEPARATOR)]
     return tuple(piece for piece in pieces if piece)
+
+
+def apply_speaker_substitutions(text: str, substitutions: tuple[tuple[str, str], ...]) -> str:
+    """The paper's post-hoc rename of the generated transcript's speaker tags.
+
+    Order matters only if one substitution's output is another's input; the paper's two pairs
+    (``Person:`` -> ``Human:``, ``AI:`` -> ``Assistant:``) do not overlap, and this asserts that
+    rather than assuming it, because a chained rewrite would silently produce a third string.
+    """
+
+    for index, (source, target) in enumerate(substitutions):
+        for later_source, _ in substitutions[index + 1 :]:
+            if later_source in target:
+                raise ValueError(
+                    f"speaker substitution {source!r}->{target!r} writes text that a later "
+                    f"substitution ({later_source!r}) would rewrite again; the rewrite would chain"
+                )
+        text = text.replace(source, target)
+    return text
+
+
+def neutral_completion_splitter(
+    substitutions: tuple[tuple[str, str], ...],
+) -> Callable[[str], tuple[str, ...]]:
+    """Split one batched neutral completion into transcripts, then rename its speakers.
+
+    Same BLIND-freeze status and same deliberate literalness as :func:`split_completion` — this is
+    the dialogue-side twin of it, with the paper's post-hoc rename folded in so no transcript can
+    reach the capture with the prompt's ``Person:``/``AI:`` tags still on it.
+    """
+
+    def split(text: str) -> tuple[str, ...]:
+        pieces = [piece.strip() for piece in text.split(DIALOGUE_SEPARATOR)]
+        return tuple(apply_speaker_substitutions(piece, substitutions) for piece in pieces if piece)
+
+    return split
 
 
 def _shared_topics(*, topics: tuple[str, ...], topics_per_label: int, seed: int) -> list[str]:
@@ -273,3 +370,54 @@ def build_sofroniew_story_grid(
                 )
             )
     return tuple(requests)
+
+
+def build_neutral_dialogue_grid(
+    *,
+    recipe: SofroniewRecipe,
+    n_transcripts: int,
+    dialogues_per_call: int,
+    seed: int,
+) -> tuple[StoryRequest, ...]:
+    """The confound corpus: ``n_transcripts`` emotionally neutral Human/Assistant transcripts.
+
+    These are NOT stimuli for any emotion. Their activations fit the subspace the paper projects
+    out of the emotion vectors before using them ("model activations on a set of emotionally
+    neutral transcripts ... enough to explain 50% of the variance"), so what matters about them is
+    coverage of the ordinary-conversation directions, not balance across emotions.
+
+    Topics come from the SAME seeded shuffle of the paper's 100 that the story grid draws from, so
+    when the two counts coincide the neutral corpus spans exactly the topics the stories did. The
+    paper gets this for free -- its appendix seeds both datasets from the same 100 topics -- while
+    at our scale it has to be arranged, or the projection would remove directions belonging to
+    topics no story ever saw.
+
+    ``n_transcripts`` is a request target, not a guarantee: it fixes how many CALLS are issued
+    (``n_transcripts // dialogues_per_call``), and how many transcripts come back depends on
+    whether the model emits the separators it was asked for. The realised count is what the
+    artifact records.
+    """
+
+    if n_transcripts < 1:
+        raise ValueError("n_transcripts must be >= 1")
+    if dialogues_per_call < 1:
+        raise ValueError("dialogues_per_call must be >= 1")
+    if n_transcripts % dialogues_per_call:
+        raise ValueError(
+            f"n_transcripts={n_transcripts} is not a multiple of "
+            f"dialogues_per_call={dialogues_per_call}"
+        )
+
+    n_calls = n_transcripts // dialogues_per_call
+    topics = _shared_topics(topics=recipe.topics, topics_per_label=n_calls, seed=seed)
+    return tuple(
+        StoryRequest(
+            emotion=NEUTRAL_DIALOGUE_LABEL,
+            topic=topic,
+            prompt=recipe.neutral_dialogue_prompt_template.format(
+                n_stories=dialogues_per_call, topic=topic
+            ),
+            story_index=call_index * dialogues_per_call,
+        )
+        for call_index, topic in enumerate(topics)
+    )
