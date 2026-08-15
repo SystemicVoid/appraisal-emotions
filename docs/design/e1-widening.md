@@ -536,6 +536,17 @@ This branch changes **data only**: `data/emotion_words.json` and the regenerated
 subset and manifest. No harness code is touched, and the widened set is **not runnable** until the
 following land.
 
+> **Status (wiring pass, 2026-08-15).** Items 1, 3, 4, 5, 6 and 7 have landed on this branch, plus
+> `configs/emotion_vectors_wide{,_smoke}.yaml` and the `extract-emotions-wide{,-smoke}` and
+> `map-geometry-wide` recipes; `uv run pytest` now fails only the two pre-existing
+> `test_golden_parity.py` cases. **Still open:** item 2 (design `experiment.md` §5's count line and
+> per-family tables, left to that document's owner) and item 8's `stories_per_emotion` edit — which
+> is deliberately NOT applied to `configs/emotion_vectors_base.yaml`, because E1's published
+> 0.018572 has to stay reproducible from the config that produced it; the widened run gets its own
+> config and its own run directory instead. Item 9 stays not-recommended. The paragraph below
+> describes the state of the branch *before* that pass and is kept as the record of what the
+> widening broke.
+
 Measured, not predicted: `uv run pytest tests/` on this branch fails **8** tests attributable to
 the widening (plus the 2 pre-existing `tests/test_golden_parity.py` failures, identical before and
 after this change — the host-dependent OpenBLAS digests already recorded in

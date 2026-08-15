@@ -1,0 +1,55 @@
+# Rung E0 WIDENED arm, CONTRACT SMOKE (fake backend; NO scientific claim).
+#
+# Same purpose as configs/emotion_vectors_smoke.yaml — exercise the whole E0 path without a GPU —
+# but through the widened arm, so what the arm adds is what is under test: the widened word set
+# reaching the story grid, the capture and the G0 gate, and `residualize_on: [valence, arousal]`
+# reaching the downstream valence-residual readout with the arousal column actually in the design.
+#
+# The fake backend's hidden states are a deterministic hash of the text and its "stories" are
+# seeded templates, so the G0 number and every E1 statistic downstream are MEANINGLESS and must
+# never be read as evidence. Run this before renting the GPU: it proves the arm is wired.
+#
+#   just extract-emotions-wide-smoke
+#
+# Tiny numbers throughout, matching the base smoke rather than the real wide arm: 2 stories per
+# word, a 20-token capture window, a 160-byte generation cap (the fake tokenizer is byte-level),
+# and `fallback_blocks: 4` — the same 4 blocks the reveal smoke uses, which is what lets this
+# artifact and the smoke directions artifact be compared by map-geometry.
+
+run:
+  id: emotion_vectors_wide_smoke
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-wide-smoke/v1
+  known_gaps:
+    - "FAKE backend contract smoke: template stories and hash-derived hidden states exercise the
+      path; the G0 verdict and every E1 number downstream of it are meaningless and MUST NOT be
+      read as evidence."
+    - "The arousal column here comes from whatever norms CSV the smoke is pointed at; with no
+      --norms the readout falls back to the binary project labels and partials nothing extra.
+      tests/test_emotion_mapping.py covers the arousal design directly."
+  decision_affected:
+    - none (smoke)
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: fake-functional
+
+emotion_vectors:
+  seed: 7
+  words_file: data/emotion_words.json
+  stories_per_emotion: 2
+  story_recipe: project
+  min_token: 20
+  max_tokens: 160
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 4
+  first_contact_n: 10
+  # The fake generator names the quoted target in ~1 story in 6 by construction, so a smoke
+  # first-contact rate near 0.17 is the expected shape; 0.6 leaves room without disarming it.
+  first_contact_max_drop_rate: 0.6
+  residualize_on: [valence, arousal]

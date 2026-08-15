@@ -31,15 +31,19 @@ from appraisal_emotions.analysis.story_projections import (
     read_story_projections,
 )
 from appraisal_emotions.cli import app
+from appraisal_emotions.config import load_config
 from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RPE_SMOKE = REPO_ROOT / "configs" / "reveal_rpe_smoke.yaml"
 EMOTION_SMOKE = REPO_ROOT / "configs" / "emotion_vectors_smoke.yaml"
-# Globbed, not listed: a new Sofroniew smoke arm inherits the E0 -> P1 chain by existing, which is
-# what stops the next arm from shipping with no test that ever loaded it.
-SOFRONIEW_SMOKE_CONFIGS = sorted(
-    path.name for path in (REPO_ROOT / "configs").glob("emotion_vectors_sofroniew*_smoke.yaml")
+# Globbed, not listed: a new E0 smoke arm inherits the E0 -> P1 chain by existing, which is what
+# stops the next arm from shipping with no test that ever loaded it. The glob was `sofroniew*`
+# until the widened arm shipped and was, of course, not covered by it; every arm config is named
+# `emotion_vectors_<arm>_smoke.yaml`, and the un-armed `emotion_vectors_smoke.yaml` is excluded by
+# the pattern because the module fixture already runs it.
+ARM_SMOKE_CONFIGS = sorted(
+    path.name for path in (REPO_ROOT / "configs").glob("emotion_vectors_*_smoke.yaml")
 )
 WORDS = REPO_ROOT / "data" / "emotion_words.json"
 
@@ -89,9 +93,9 @@ def chain(tmp_path_factory) -> _Chain:
     )
 
 
-@pytest.mark.parametrize("config_name", SOFRONIEW_SMOKE_CONFIGS)
-def test_the_sofroniew_arms_run_e0_then_p1_through_the_cli(tmp_path, chain, config_name):
-    """E0 -> P1 on both shipped Sofroniew smoke configs, through the real command surface.
+@pytest.mark.parametrize("config_name", ARM_SMOKE_CONFIGS)
+def test_the_shipped_arms_run_e0_then_p1_through_the_cli(tmp_path, chain, config_name):
+    """E0 -> P1 on every shipped arm smoke config, through the real command surface.
 
     No test loaded or ran ANY of these configs before, and the gap was not theoretical: the
     projected arm's E0 wrote an artifact its own P1 structurally rejected (max relative deviation
@@ -287,8 +291,91 @@ def test_e1_map_geometry_shows_every_word_and_the_recorded_expectations(chain):
         }
     # The confirmatory/exploratory caste is gone from the artifact, not merely from the prose.
     assert "confirmatory" not in e1_out.read_text(encoding="utf-8").lower()
-    assert "all 84 words by valence residual" in result.output
+    assert f"all {len(words.labels)} words by valence residual" in result.output
     assert "recorded expectations" in result.output
+
+
+def test_the_readout_columns_come_from_the_config_and_default_to_valence_alone(chain, tmp_path):
+    """Which nuisances get partialled out is the RUN's decision, recorded in its config.
+
+    Two things are under test and only one of them is the new feature. With no ``--config`` the
+    command must still produce E1's certified valence-only estimand — the published 0.018572 has
+    to stay reproducible from this code — and with the widened arm's config it must carry arousal
+    into the design. The chosen columns are written into the report, so a reader of the artifact
+    never has to reconstruct which estimand it is.
+    """
+
+    runner = CliRunner()
+    common = [
+        "--directions",
+        str(chain.rpe_dir / "reveal_directions.json"),
+        "--emotions",
+        str(chain.emotion_dir / "emotion_vectors.json"),
+        "--words",
+        str(WORDS),
+        "--seed",
+        "7",
+        "--permutations",
+        "50",
+        "--null-draws",
+        "20",
+    ]
+    default_out = tmp_path / "default.json"
+    result = runner.invoke(app, ["map-geometry", *common, "--out", str(default_out)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(default_out.read_text(encoding="utf-8"))["residualize_on"] == ["valence"]
+
+    wide_out = tmp_path / "wide.json"
+    result = runner.invoke(
+        app,
+        [
+            "map-geometry",
+            *common,
+            "--out",
+            str(wide_out),
+            "--config",
+            str(REPO_ROOT / "configs" / "emotion_vectors_wide_smoke.yaml"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(wide_out.read_text(encoding="utf-8"))["residualize_on"] == [
+        "valence",
+        "arousal",
+    ]
+
+
+def test_only_the_widened_arm_partials_out_arousal():
+    """The certified path's default must not move when a new arm ships.
+
+    Every other shipped E0 config feeds analyses whose published numbers were computed on
+    ``[1, valence]``; a config that quietly gained a second nuisance column would change what those
+    numbers ESTIMATE without changing anything a reader can see. So the split is asserted over the
+    shipped set rather than over a list this test keeps, and a new arm has to declare itself here.
+    """
+
+    residualize = {
+        path.name: load_config(path).emotion_vectors.residualize_on
+        for path in sorted((REPO_ROOT / "configs").glob("emotion_vectors_*.yaml"))
+    }
+    assert residualize, "no shipped emotion_vectors config was loaded"
+    widened = {name for name, columns in residualize.items() if "arousal" in columns}
+    assert widened == {"emotion_vectors_wide.yaml", "emotion_vectors_wide_smoke.yaml"}, residualize
+    assert all(columns[0] == "valence" for columns in residualize.values())
+
+
+def test_a_readout_that_does_not_partial_valence_is_refused(tmp_path):
+    """Valence first and always: every readout here is a valence-RESIDUAL readout, and the column
+    order is the design matrix's, so arousal alone is not a variant of this analysis at all."""
+
+    source = REPO_ROOT / "configs" / "emotion_vectors_wide_smoke.yaml"
+    payload = yaml.safe_load(source.read_text(encoding="utf-8"))
+    payload["emotion_vectors"]["residualize_on"] = ["arousal"]
+    path = tmp_path / "arousal_only.yaml"
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="config validation failed") as failure:
+        load_config(path)
+    # `load_config` re-raises with the config's path; the reason is on the cause it chains to.
+    assert "must start with 'valence'" in str(failure.value.__cause__)
 
 
 def test_e2_and_e3_read_the_same_artifacts_and_cap_their_claims(chain):
