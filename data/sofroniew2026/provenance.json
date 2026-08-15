@@ -1,0 +1,38 @@
+{
+  "source": {
+    "arxiv_id": "2604.07729",
+    "arxiv_version": "v1",
+    "eprint_url": "https://arxiv.org/e-print/2604.07729",
+    "main_tex_sha256": "d67cc42f341e95e8925dce9181e29d7e5cf1e5771c941f92657919bf86f095f6"
+  },
+  "pinned_main_tex_sha256": "d67cc42f341e95e8925dce9181e29d7e5cf1e5771c941f92657919bf86f095f6",
+  "extracted_by": "scripts/fetch_sofroniew_recipe.py",
+  "anchors": {
+    "emotion_words": "\\subsection{Full list of emotions}",
+    "topics": "\\subsection{Dataset generation}",
+    "emotional_stories_prompt": "\\textbf{Emotional stories prompt. }",
+    "neutral_dialogues_prompt": "\\textbf{Neutral dialogues prompt. }",
+    "emotional_dialogues_prompt": "\\textbf{Emotional dialogues prompt. }",
+    "post_hoc_speaker_conversion": "Post-hoc, we converted "
+  },
+  "counts": {
+    "emotion_words": 171,
+    "topics": 100,
+    "post_hoc_speaker_substitutions": 2
+  },
+  "recipe_numbers_from_prose": {
+    "_note": "Quoted from main.tex body text, section 'Finding emotion vectors'. These are the paper's own numbers, not ours; docs/design/sofroniew-recipe.md records where our run departs from them and why.",
+    "stories_per_topic_per_emotion": 12,
+    "topics": 100,
+    "stories_per_emotion": 1200,
+    "capture_first_token": 50,
+    "capture_reduction": "mean over story tokens from token 50 onward, per layer",
+    "centering": "subtract the mean activation across emotions",
+    "confound_removal": "project out the top PCs of activations on neutral dialogues, enough to explain 50% of the variance",
+    "confound_removal_variance_target": 0.5,
+    "confound_removal_caveat": "main.tex footnote 3: the projection 'denoised some of the token-to-token fluctuations in our emotion probe results, but our qualitative findings still hold using the raw unprojected vectors'",
+    "headline_layer": "about two-thirds of the way through the model",
+    "story_length": "roughly one paragraph",
+    "generating_model": "Claude Sonnet 4.5"
+  }
+}

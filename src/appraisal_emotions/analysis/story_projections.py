@@ -23,6 +23,12 @@ recorded in the metadata; a re-capture that read the wrong window, ordered the s
 differently, or landed on a different model breaks it by orders of magnitude, so the artifact
 cannot be built from a capture that is not the same capture.
 
+On a **paper-faithful (projected) basis** the identity needs one more step, and it survives it:
+E0 subtracted a per-block confound basis from its word vectors, so this re-capture subtracts the
+same basis — carried in the emotion-vectors payload — from each per-story state before projecting.
+``project_out`` is linear, so the per-story rows still average to E0's published word vectors, and
+the gate is still an identity rather than an estimate.
+
 **Why the within-word Gram is stored too.** Projections and norms span every *story-level* linear
 readout, but not the *word-level* one: a leave-one-story-out or split-half word cosine needs
 ``e_j^(half) . x_ij``, an inner product between a subset mean and a single story, which no
@@ -52,6 +58,7 @@ from appraisal_emotions.analysis.emotion_vectors import (
     GeneratedStory,
     valence_oriented_pc_axes,
 )
+from appraisal_emotions.analysis.neutral_projection import project_out
 from appraisal_emotions.analysis.reveal_rpe import DIRECTION_FAMILIES, RevealRpeDirections
 from appraisal_emotions.core.schema import ModelSpec, StrictModel
 from appraisal_emotions.core.util import ensure_parent, read_json, states_sha256, write_json
@@ -110,6 +117,10 @@ class StoryProjectionsMetadata(StrictModel):
     # directions and word vectors define the projection targets and the centring.
     emotion_vectors_sha256: str
     emotion_vectors_selected_block: int
+    # Digest of the confound basis this capture subtracted from its own per-story states, or None
+    # on an unprojected basis. The projections live in whichever space the E0 vectors live in, so
+    # which one that was has to be readable from this file rather than inferred from the config.
+    neutral_basis_sha256: str | None = None
     directions_sha256: str
     directions_selected_block: int
     words_file_sha256: str
@@ -352,6 +363,18 @@ def extract_story_projections(
     grand_mean = label_means.mean(axis=0)
     centred = states - grand_mean
 
+    # E0's confound removal, applied per story. project_out is linear, so
+    #
+    #     mean_i project(x_ij - g) = project(mean_i (x_ij - g)) = project(e_j^raw) = e_j
+    #
+    # and the faithfulness identity below holds against a PROJECTED basis exactly as it does
+    # against an unprojected one. Skipping it would make P1 compare unprojected story means to
+    # projected word vectors, which is a guaranteed gate failure on a paper-faithful arm rather
+    # than a detection of anything (the deviation reads ~3.5 on the smoke arm). The basis travels
+    # in the emotion-vectors payload; a run that recorded a projection without it cannot be read.
+    if emotion.neutral_basis is not None:
+        centred = project_out(centred, emotion.neutral_basis)
+
     unit_directions = np.stack(
         [direction_matrix(emotion, directions, block) for block in range(emotion.metadata.n_blocks)]
     )
@@ -390,6 +413,11 @@ def extract_story_projections(
         min_token=min_token,
         emotion_vectors_sha256=emotion.metadata.vectors_sha256,
         emotion_vectors_selected_block=emotion.metadata.selected_block,
+        neutral_basis_sha256=(
+            None
+            if emotion.metadata.neutral_projection is None
+            else emotion.metadata.neutral_projection.components_sha256
+        ),
         directions_sha256=directions.metadata.directions_sha256,
         directions_selected_block=directions.metadata.selected_block,
         words_file_sha256=words_file_sha256,

@@ -8,10 +8,11 @@ experiences an emotion, and the residual stream averaged over those stories (tok
 grand mean subtracted) is the emotion-concept vector. Two clauses are load-bearing and both are
 carried by :data:`STORY_PROMPT_TEMPLATE`:
 
-- **"without naming the emotion"** — the lexical control the arXiv:2606.26987 open-model
-  replication adds to the recipe (``docs/literature.md`` records that the attribution between
-  that replication and the original Sofroniew prompt is *provisional*; we adopt the clause either
-  way because it is the vector-side lexical-leakage control the design's §6 threats table names).
+- **"without naming the emotion"** — the vector-side lexical-leakage control the design's §6
+  threats table names. It comes from the **original** Sofroniew prompt, whose own wording is
+  "IMPORTANT: You must NEVER use the word '{emotion}' or any direct synonyms of it in the
+  stories" (primary-verified 2026-08-14; the earlier provisional attribution to the
+  arXiv:2606.26987 replication is withdrawn — ``docs/design/sofroniew-recipe.md``).
   The clause is only a request — compliance is measured, not assumed, and
   ``analysis.emotion_vectors`` drops the stories that name the target anyway.
 - **valence-neutral topics** — the story setting must not itself carry affect, or the "emotion"

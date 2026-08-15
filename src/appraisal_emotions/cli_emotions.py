@@ -38,8 +38,9 @@ from appraisal_emotions.analysis.emotion_mapping import (
     map_geometry,
 )
 from appraisal_emotions.analysis.emotion_vectors import (
+    E0Refusal,
     EmotionVectors,
-    FirstContactFailure,
+    GeneratedStory,
     extract_emotion_vectors,
     read_emotion_vectors,
     read_story_log,
@@ -75,10 +76,40 @@ def emotion_paths(cfg: StudyConfig) -> dict[str, Path]:
     return {
         "vectors": root / "emotion_vectors.json",
         "stories": root / "stories.json",
+        "neutral_dialogues": root / "neutral_dialogues.json",
         "first_contact": root / "first_contact_sample.json",
+        "neutral_first_contact": root / "neutral_first_contact_sample.json",
         "projections": root / "story_projections.json",
         "projections_quarantine": root / "story_projections_gate_failed.json",
     }
+
+
+def _write_corpora(
+    paths: dict[str, Path],
+    stories: tuple[GeneratedStory, ...],
+    neutral: tuple[GeneratedStory, ...],
+    *,
+    n: int,
+) -> list[Path]:
+    """Write every generated corpus and its early-N sample; return what was written.
+
+    The SAME four files on the success path and on every refusal path, because the operator's
+    question is identical either way ("what did the model actually produce?") and a refusal is
+    when they most need the answer. The neutral corpus keeps its own file rather than being
+    appended to the story log: P1 re-feeds that log as emotion stories, and a neutral transcript
+    is not a story of any emotion.
+    """
+
+    written: list[Path] = []
+    if stories:
+        write_json(paths["stories"], story_log_records(stories))
+        write_json(paths["first_contact"], story_log_records(stories[:n]))
+        written += [paths["stories"], paths["first_contact"]]
+    if neutral:
+        write_json(paths["neutral_dialogues"], story_log_records(neutral))
+        write_json(paths["neutral_first_contact"], story_log_records(neutral[:n]))
+        written += [paths["neutral_dialogues"], paths["neutral_first_contact"]]
+    return written
 
 
 def _print_e0(artifact: EmotionVectors, path: Path) -> None:
@@ -92,6 +123,42 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
         f"first-contact {meta.first_contact_drop_rate:.2f} over n={meta.first_contact_n} "
         f"(filter freeze: {meta.filter_freeze_status})"
     )
+    # Realised against configured, printed rather than left for a reader of the JSON: a drop rate
+    # of 0.00 says nothing about whether the splitter returned the sample that was asked for.
+    console.print(
+        f"  stories per label: {meta.stories_per_emotion} configured, "
+        f"{min(meta.generated_by_label.values())}-{max(meta.generated_by_label.values())} "
+        f"generated, {min(meta.kept_by_label.values())}-{max(meta.kept_by_label.values())} kept"
+    )
+    if meta.neutral_projection is not None:
+        proj = meta.neutral_projection
+        best_before = max(
+            (abs(row.spearman_rho) for row in meta.g0_table_before_projection), default=0.0
+        )
+        best_random = max(
+            (abs(row.spearman_rho) for row in meta.g0_table_random_projection), default=0.0
+        )
+        console.print(
+            f"  neutral projection: {proj.total_components} components over "
+            f"{len(proj.blocks)} blocks (<= {proj.max_components_in_a_block} per block) at "
+            f"{proj.variance_target:.0%} of variance"
+        )
+        # Three numbers, because a corpus can fall short at two different places: the splitter
+        # returning fewer pieces than were asked for, and the filter dropping what did come back.
+        console.print(
+            f"    corpus: {proj.n_transcripts_configured} configured over "
+            f"{proj.n_calls_requested} calls, {proj.n_pieces_obtained} obtained, "
+            f"{proj.n_kept} kept (floor {proj.min_kept}); drop rate {proj.drop_rate:.3f} "
+            f"(ceiling {proj.max_drop_rate:.2f}); first-contact "
+            f"{proj.first_contact_drop_rate:.2f} over n={proj.first_contact_n}"
+        )
+        # Three numbers, not two: a random frame of the same width is what says whether the move
+        # from `before` to the gate line above belongs to the neutral subspace or to removing k
+        # directions at all.
+        console.print(
+            f"    G0 |rho| before projection {best_before:.3f}; "
+            f"random {proj.max_components_in_a_block}-frame control {best_random:.3f}"
+        )
     console.print(
         f"  G0: |rho|={meta.g0_abs_rho:.3f} vs threshold {meta.g0_threshold} at block "
         f"{meta.selected_block}/{meta.n_blocks} (p={meta.g0_spearman_p:.4f})"
@@ -204,11 +271,20 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
     paths = emotion_paths(cfg)
     backend = create_backend(spec)
     try:
-        artifact, stories = extract_emotion_vectors(
+        artifact, stories, neutral = extract_emotion_vectors(
             cast(StoryCaptureBackend, backend),
             words,
             spec=spec,
             stories_per_emotion=ev.stories_per_emotion,
+            story_recipe=ev.story_recipe,
+            sofroniew_stories_per_call=ev.sofroniew_stories_per_call,
+            sofroniew_data_dir=ev.sofroniew_data_dir,
+            neutral_projection=ev.neutral_projection,
+            neutral_dialogues=ev.neutral_dialogues,
+            neutral_dialogues_per_call=ev.neutral_dialogues_per_call,
+            neutral_variance_target=ev.neutral_variance_target,
+            neutral_min_kept=ev.neutral_min_kept,
+            neutral_max_drop_rate=ev.neutral_max_drop_rate,
             seed=ev.seed,
             min_token=ev.min_token,
             max_tokens=ev.max_tokens,
@@ -218,18 +294,20 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
             first_contact_n=ev.first_contact_n,
             first_contact_max_drop_rate=ev.first_contact_max_drop_rate,
         )
-    except FirstContactFailure as failure:
-        # The BLIND filter's compensation: write the sample a human must READ, record the cap,
-        # and stop before the capture pass rather than scoring a basis built from the survivors.
-        write_json(paths["first_contact"], story_log_records(failure.sample))
+    except E0Refusal as failure:
+        # QUARANTINE, not discard. All three refusals fire after generation and before the
+        # verdict, so the generations are already paid for and they are the only evidence for why
+        # the run refused — and two of the messages send the operator to go read a sample. Write
+        # the corpora first, then exit non-zero: same shape as the P1 gate handler below.
+        written = _write_corpora(paths, failure.stories, failure.neutral, n=ev.first_contact_n)
         console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
-        console.print(f"  first-contact sample written to {paths['first_contact']}")
+        for path in written:
+            console.print(f"  quarantined: {path}")
         raise typer.Exit(code=1) from failure
     finally:
         free_backend(backend)
 
-    write_json(paths["stories"], story_log_records(stories))
-    write_json(paths["first_contact"], story_log_records(stories[: ev.first_contact_n]))
+    _write_corpora(paths, stories, neutral, n=ev.first_contact_n)
     write_emotion_vectors(artifact, paths["vectors"])
     _print_e0(artifact, paths["vectors"])
 

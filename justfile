@@ -63,6 +63,43 @@ extract-emotions-smoke:
 extract-emotions:
     {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_base.yaml
 
+# E0 PAPER-PROMPT ARM, CONTRACT SMOKE (fake backend; numbers MEANINGLESS). Exercises the parts
+# the arm adds: loading data/sofroniew2026/, rendering Sofroniew et al. 2026's own appendix
+# prompt, batching stories per completion, splitting on <NEW STORY>, and feeding the pieces to
+# the existing filter and drop audit. Run this before renting the GPU.
+extract-emotions-sofroniew-smoke:
+    {{parallel_test_env}} uv run appraisal-emotions extract-emotions --config configs/emotion_vectors_sofroniew_smoke.yaml
+
+# E0 PAPER-PROMPT ARM, REAL: the same basis re-extracted under the paper's own story prompt, with
+# word set, seed, capture window, centring and G0 held identical — the prompt is the only
+# manipulated variable (docs/design/sofroniew-recipe.md). Answers "is E0 a property of
+# emotion-concept geometry or of your prompt?" with data instead of argument. ~510 batched
+# generations, comparable to the base E0 slot. The <NEW STORY> splitter is frozen BLIND: read
+# runs/emotion_vectors_sofroniew/emotions/first_contact_sample.json before trusting anything
+# downstream. GPU runs gate behind explicit human approval.
+extract-emotions-sofroniew:
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_sofroniew.yaml
+
+# E0 PAPER-FAITHFUL ARM, CONTRACT SMOKE (fake backend; numbers MEANINGLESS). Adds the paper's
+# confound removal on top of the prompt arm: the neutral-dialogue corpus, the <NEW DIALOGUE>
+# split, the Person/AI -> Human/Assistant rename, and the per-block PCs projected out before G0.
+extract-emotions-sofroniew-projected-smoke:
+    {{parallel_test_env}} uv run appraisal-emotions extract-emotions --config configs/emotion_vectors_sofroniew_projected_smoke.yaml
+
+# E0 PAPER-FAITHFUL ARM, REAL: the paper's prompt AND the paper's neutral-dialogue PC projection
+# ("enough to explain 50% of the variance"). Third arm of a one-variable-at-a-time ladder — base,
+# prompt, prompt+projection — because the paper's own footnote calls the projection a denoiser its
+# qualitative findings hold without. The artifact records G0 on both sides of the projection, so
+# what the step did to the gate is in the file. GPU runs gate behind explicit human approval.
+extract-emotions-sofroniew-projected:
+    {{offline_env}} {{parallel_test_env}} uv run --extra hf appraisal-emotions extract-emotions --config configs/emotion_vectors_sofroniew_projected.yaml
+
+# Re-extract the Sofroniew et al. 2026 recipe from the arXiv LaTeX source into data/sofroniew2026/.
+# `--check` writes nothing and fails if the committed files drift from the paper (e.g. a v2 with a
+# corrected appendix), which is what keeps the arm honest about what it is reproducing.
+fetch-sofroniew-recipe *args:
+    uv run python scripts/fetch_sofroniew_recipe.py {{args}}
+
 # P1 CONTRACT SMOKE: the story-projection re-capture on the fake backend. Numbers meaningless;
 # what it exercises is the faithfulness gate and the artifact binding.
 extract-story-projections-smoke rpe=smoke_rpe_dir:

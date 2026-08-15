@@ -1,0 +1,65 @@
+# Rung E0 PAPER-FAITHFUL ARM, CONTRACT SMOKE (fake backend; NO scientific claim).
+#
+# Exercises the parts configs/emotion_vectors_sofroniew_projected.yaml adds on top of the prompt
+# arm: rendering the paper's neutral-dialogue prompt, splitting on <NEW DIALOGUE>, applying the
+# post-hoc speaker rename, capturing the neutral corpus, fitting the per-block PCs and projecting
+# them out before G0.
+#
+# The fake backend's hidden states are a hash of the text, so the number of components, the G0
+# number before and after the projection, and everything downstream are MEANINGLESS. Run this
+# before renting the GPU: it proves the step is wired, not that the step found anything.
+#
+#   just extract-emotions configs/emotion_vectors_sofroniew_projected_smoke.yaml
+#
+# The fake backend emits no <NEW STORY> and no <NEW DIALOGUE>, so every completion yields exactly
+# one piece. Both `_per_call` settings below are 1 to MATCH that: the run refuses a label that
+# comes back with fewer stories than configured, and the smoke must exercise that check passing
+# rather than be exempted from it. tests/test_neutral_projection.py covers the splitters and the
+# fit directly, and tests/test_sofroniew_stories.py covers a multi-piece split.
+
+run:
+  id: emotion_vectors_sofroniew_projected_smoke
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-sofroniew-projected-smoke/v1
+  known_gaps:
+    - "FAKE backend contract smoke: template generations and hash-derived hidden states exercise
+      the path; the component counts, the G0 verdict on either side of the projection, and every
+      E1/E2 number downstream of them are meaningless and MUST NOT be read as evidence."
+    - "The fake backend never emits <NEW DIALOGUE>, so this smoke does not exercise a multi-piece
+      dialogue split."
+  decision_affected:
+    - none (smoke)
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: fake-functional
+
+emotion_vectors:
+  seed: 7
+  words_file: data/emotion_words.json
+  stories_per_emotion: 2
+  story_recipe: sofroniew
+  sofroniew_stories_per_call: 1
+  sofroniew_data_dir: data/sofroniew2026
+  neutral_projection: true
+  # 2 calls, which is the 2 topics `stories_per_emotion / sofroniew_stories_per_call` gives the
+  # stories here — the grid refuses a neutral corpus wider than the topics the stories saw.
+  neutral_dialogues: 2
+  neutral_dialogues_per_call: 1
+  neutral_variance_target: 0.5
+  # The structural minimum, not the real arm's floor: the fake backend emits one transcript per
+  # call and this grid can only issue 2 calls, so 2 is all a smoke can produce. The value that
+  # matters is in configs/emotion_vectors_sofroniew_projected.yaml, and it is 8.
+  neutral_min_kept: 2
+  neutral_max_drop_rate: 0.5
+  min_token: 20
+  max_tokens: 160
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 4
+  first_contact_n: 10
+  first_contact_max_drop_rate: 0.6
