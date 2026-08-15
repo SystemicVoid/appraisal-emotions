@@ -30,6 +30,7 @@ from appraisal_emotions.analysis.emotion_mapping import (
 from appraisal_emotions.analysis.emotion_vectors import (
     EmotionVectors,
     FirstContactFailure,
+    StoryYieldShortfall,
     extract_emotion_vectors,
     read_emotion_vectors,
     read_story_log,
@@ -81,6 +82,13 @@ def _print_e0(artifact: EmotionVectors, path: Path) -> None:
         f"  drop rate {meta.drop_rate:.3f} {meta.drop_counts_by_reason}; "
         f"first-contact {meta.first_contact_drop_rate:.2f} over n={meta.first_contact_n} "
         f"(filter freeze: {meta.filter_freeze_status})"
+    )
+    # Realised against configured, printed rather than left for a reader of the JSON: a drop rate
+    # of 0.00 says nothing about whether the splitter returned the sample that was asked for.
+    console.print(
+        f"  stories per label: {meta.stories_per_emotion} configured, "
+        f"{min(meta.generated_by_label.values())}-{max(meta.generated_by_label.values())} "
+        f"generated, {min(meta.kept_by_label.values())}-{max(meta.kept_by_label.values())} kept"
     )
     if meta.neutral_projection is not None:
         proj = meta.neutral_projection
@@ -157,6 +165,12 @@ def extract_emotions(config: ConfigOption = Path("configs/emotion_vectors_smoke.
         write_json(paths["first_contact"], story_log_records(failure.sample))
         console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
         console.print(f"  first-contact sample written to {paths['first_contact']}")
+        raise typer.Exit(code=1) from failure
+    except StoryYieldShortfall as failure:
+        # The other half of the BLIND freeze: the filter can only audit pieces that exist, so a
+        # splitter returning fewer than the prompt asked for is invisible to it. Refuse before the
+        # capture pass rather than score a basis at an unrecorded fraction of its sample size.
+        console.print(f"[red]E0 harness_inadequate[/red]: {failure}")
         raise typer.Exit(code=1) from failure
     finally:
         free_backend(backend)

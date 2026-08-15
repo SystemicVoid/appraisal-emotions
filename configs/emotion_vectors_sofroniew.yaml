@@ -27,9 +27,12 @@
 # trades calls for longer completions at roughly constant output tokens.
 #
 # The <NEW STORY> splitter is frozen BLIND — no completion from this model under this prompt has
-# been read. The first-contact checkpoint is its compensation: a completion the splitter cannot
-# cut yields one over-long piece, which the length/lexical filter surfaces in the first-contact
-# sample before full spend.
+# been read. Two checks compensate, and they catch different things. The first-contact checkpoint
+# reads the run's own first 10 generations against the frozen filter. The yield check compares the
+# stories each label actually came back with against `stories_per_emotion`: a completion the
+# splitter cannot cut yields ONE piece where 2 were asked for, which no length or lexical filter
+# can see — that piece is a perfectly well-formed story — and the run refuses before the capture
+# pass rather than scoring a basis at half its designed sample size with a 0.00 drop rate.
 #
 # GPU runs and model downloads gate behind explicit human approval (`just extract-emotions`).
 

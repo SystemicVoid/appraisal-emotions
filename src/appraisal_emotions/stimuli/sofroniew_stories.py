@@ -256,9 +256,12 @@ def split_completion(text: str) -> tuple[str, ...]:
 
     Frozen BLIND: no story from the run's model has been read, because generation needs the GPU
     the arm is being prepared for (``docs/agents/rails.md`` clause "Observation before
-    imagination" licenses a blind freeze only with a first-contact checkpoint — the E0 config
-    carries one, and a completion this function cannot split yields a single over-long piece that
-    the existing length/lexical filter surfaces in that checkpoint rather than swallowing).
+    imagination" licenses a blind freeze only against an early-N checkpoint, and the E0 config
+    carries one). The checkpoint that catches THIS function failing is the yield check in
+    :func:`~appraisal_emotions.analysis.emotion_vectors.extract_emotion_vectors`, not the length
+    or lexical filter: a completion this function cannot split yields one piece that is a
+    perfectly well-formed story of ordinary length, so no per-piece filter can see it. What is
+    observable is that the label came back with fewer stories than were asked for.
 
     Deliberately literal: split on the separator the prompt asked for, drop empties, keep
     everything else as written. The model may or may not emit a leading separator, and may append

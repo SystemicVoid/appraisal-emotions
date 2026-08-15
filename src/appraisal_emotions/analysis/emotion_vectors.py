@@ -29,11 +29,15 @@ inherits that cap (design §4 E0 diagnosticity clause).
 **Freeze status of the story filter: BLIND** (``docs/agents/rails.md``, "observation before
 imagination"). No story from this model has been read — GPU runs gate behind human approval and
 none has been authorized — so the drop rule is frozen against outputs it has not seen. The
-licensed compensation is the first-contact checkpoint below: the run reads its own first
-``first_contact_n`` generations against the frozen rule and routes to ``harness_inadequate``
-BEFORE full spend if the drop rate exceeds ``first_contact_max_drop_rate``. The sample is written
-out for a human to read. Replace this paragraph with a real reality-sample frequency table once
-one exists.
+licensed compensation is TWO early-N checks, both before the capture pass, because they catch
+different failures. The first-contact checkpoint reads the run's own first ``first_contact_n``
+generations against the frozen rule and routes to ``harness_inadequate`` if the drop rate exceeds
+``first_contact_max_drop_rate``; the sample is written out for a human to read. The yield check
+(:class:`StoryYieldShortfall`) compares the stories each label actually came back with against
+``stories_per_emotion`` — the batched Sofroniew arm's completion splitter can return fewer pieces
+than the prompt asked for, and every piece it does return passes the length and lexical filters,
+so the drop audit reports 0.00 on a sample half its designed size. Replace this paragraph with a
+real reality-sample frequency table once one exists.
 
 Licence: the emotion basis is a measurement instrument. Nothing here licenses any claim about
 what the model feels; ``e_disappointed`` is the *concept vector for the word* "disappointed".
@@ -103,6 +107,7 @@ __all__ = [
     "FirstContactFailure",
     "G0BlockRow",
     "GeneratedStory",
+    "StoryYieldShortfall",
     "emotion_vectors_path",
     "extract_emotion_vectors",
     "fit_neutral_projection",
@@ -246,6 +251,44 @@ class FirstContactFailure(RuntimeError):
         self.drop_rate = drop_rate
         self.threshold = threshold
         self.sample = sample
+
+
+class StoryYieldShortfall(RuntimeError):
+    """A label came back with fewer stories than the recipe asked for.
+
+    This is the failure the BLIND ``<NEW STORY>`` freeze is actually exposed to, and it is not a
+    filter drop: a completion the splitter cannot cut yields ONE piece where ``stories_per_call``
+    were requested, so the run proceeds on a fraction of the configured sample with a drop rate of
+    0.00 and nothing in the artifact contradicting ``stories_per_emotion``. Reproduced on the
+    shipped projected smoke config: 2 stories per label configured, 1 realised, "85/85 stories
+    kept ... drop rate 0.000" printed.
+
+    Raised before the capture pass, so the refusal costs the generations already spent and not the
+    forwards. The counts ride along for the operator's report.
+    """
+
+    def __init__(self, *, requested: int, realized: dict[str, int]):
+        short = {label: count for label, count in sorted(realized.items()) if count < requested}
+        super().__init__(
+            f"{len(short)} of {len(realized)} labels came back with fewer than the configured "
+            f"stories_per_emotion={requested} stories: {short}. The splitter returned fewer "
+            "pieces than the prompt asked for, so this run would score a basis at an unrecorded "
+            "fraction of its designed sample size while reporting a clean drop rate. Read the "
+            "first-contact sample, fix the prompt or the splitter (or lower "
+            "sofroniew_stories_per_call to what the model actually emits), then re-run."
+        )
+        self.requested = requested
+        self.realized = realized
+        self.short = short
+
+
+def _yield_check(stories: tuple[GeneratedStory, ...], *, requested: int) -> dict[str, int]:
+    """Realised stories per label vs the configured count — the one the drop audit cannot see."""
+
+    realized = dict(Counter(story.emotion for story in stories))
+    if any(count < requested for count in realized.values()):
+        raise StoryYieldShortfall(requested=requested, realized=realized)
+    return realized
 
 
 # Labels that are not emotion words, so the "did it name the target?" check does not apply: the
@@ -441,6 +484,11 @@ class EmotionVectorsMetadata(StrictModel):
     n_kept: int
     drop_rate: float
     drop_counts_by_reason: dict[str, int]
+    # Realised stories per label BEFORE the filter, against the configured `stories_per_emotion`
+    # above. The two are equal on a run whose splitter returned what the prompt asked for, and the
+    # run refuses when they are not (:class:`StoryYieldShortfall`) — so this pair is the record
+    # that the A/B compared at matched sample size, not just at matched configuration.
+    generated_by_label: dict[str, int]
     kept_by_label: dict[str, int]
     first_contact_n: int
     first_contact_drop_rate: float
@@ -847,6 +895,9 @@ def extract_emotion_vectors(
     contact_n, contact_rate = _first_contact_check(
         stories, n=first_contact_n, max_drop_rate=first_contact_max_drop_rate
     )
+    # Before the capture pass, and separate from the drop audit: the filter can only report on
+    # pieces that exist, so a splitter that returned half of them looks like a clean run to it.
+    generated_by_label = _yield_check(stories, requested=stories_per_emotion)
 
     kept = tuple(story for story in stories if story.kept)
     if not kept:
@@ -917,6 +968,7 @@ def extract_emotion_vectors(
         n_kept=len(kept),
         drop_rate=1.0 - len(kept) / len(stories),
         drop_counts_by_reason=dict(sorted(drop_counts.items())),
+        generated_by_label=dict(sorted(generated_by_label.items())),
         kept_by_label=dict(Counter(story.emotion for story in kept)),
         first_contact_n=contact_n,
         first_contact_drop_rate=contact_rate,

@@ -11,8 +11,11 @@
 #
 #   just extract-emotions configs/emotion_vectors_sofroniew_projected_smoke.yaml
 #
-# The fake backend emits no <NEW DIALOGUE>, so each call yields one transcript rather than four.
-# tests/test_neutral_projection.py covers the splitter and the fit directly.
+# The fake backend emits no <NEW STORY> and no <NEW DIALOGUE>, so every completion yields exactly
+# one piece. Both `_per_call` settings below are 1 to MATCH that: the run refuses a label that
+# comes back with fewer stories than configured, and the smoke must exercise that check passing
+# rather than be exempted from it. tests/test_neutral_projection.py covers the splitters and the
+# fit directly, and tests/test_sofroniew_stories.py covers a multi-piece split.
 
 run:
   id: emotion_vectors_sofroniew_projected_smoke
@@ -40,7 +43,7 @@ emotion_vectors:
   words_file: data/emotion_words.json
   stories_per_emotion: 2
   story_recipe: sofroniew
-  sofroniew_stories_per_call: 2
+  sofroniew_stories_per_call: 1
   sofroniew_data_dir: data/sofroniew2026
   neutral_projection: true
   neutral_dialogues: 12

@@ -169,6 +169,7 @@ def synthetic_emotion_artifact(
         n_kept=len(row_labels),
         drop_rate=0.0,
         drop_counts_by_reason={},
+        generated_by_label=dict.fromkeys(row_labels, 1),
         kept_by_label=dict.fromkeys(row_labels, 1),
         first_contact_n=0,
         first_contact_drop_rate=0.0,

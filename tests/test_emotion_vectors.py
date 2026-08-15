@@ -15,6 +15,7 @@ import pytest
 
 from appraisal_emotions.analysis.emotion_vectors import (
     FirstContactFailure,
+    StoryYieldShortfall,
     extract_emotion_vectors,
     generate_stories,
     naive_variants,
@@ -32,6 +33,7 @@ from appraisal_emotions.stimuli.emotion_stories import (
 )
 
 WORDS_PATH = Path(__file__).resolve().parents[1] / "data" / "emotion_words.json"
+SOFRONIEW_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "sofroniew2026"
 SPEC = ModelSpec(key="fake", backend="fake", model_id="fake")
 # The shipped smoke recipe (configs/emotion_vectors_smoke.yaml), so the deterministic fake
 # generations here are the same ones the smoke run reads.
@@ -101,6 +103,36 @@ def test_first_contact_checkpoint_refuses_an_over_dropping_filter(words):
     assert excinfo.value.sample, "the checkpoint must hand back the sample a human has to read"
 
 
+def test_the_yield_check_refuses_a_splitter_that_returns_fewer_stories_than_asked(words):
+    """The failure no per-piece filter can see: right pieces, too few of them.
+
+    Reproduced on the shipped projected smoke config, which asked for 2 stories per label at 2 per
+    call: the fake backend emits no <NEW STORY>, so each call returned one undivided completion
+    and the run scored a basis on 1 story per label while printing "85/85 stories kept ... drop
+    rate 0.000". Every piece was well-formed and in-window, so length and lexical filters were
+    silent by construction — the observable is the count.
+    """
+
+    backend = FakeBackend(SPEC)
+    with pytest.raises(StoryYieldShortfall) as excinfo:
+        extract_emotion_vectors(
+            backend,
+            words,
+            spec=SPEC,
+            fallback_blocks=4,
+            first_contact_max_drop_rate=0.6,
+            story_recipe="sofroniew",
+            # 2 per call against a backend that emits no separator: every call yields 1 piece.
+            sofroniew_stories_per_call=2,
+            sofroniew_data_dir=SOFRONIEW_DATA_DIR,
+            **{**SMOKE, "stories_per_emotion": 2},
+        )
+    failure = excinfo.value
+    assert failure.requested == 2
+    assert set(failure.short) == set(failure.realized), "every label fell short here"
+    assert all(count == 1 for count in failure.realized.values())
+
+
 def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, words, tmp_path):
     artifact, stories, _neutral = extracted
     meta = artifact.metadata
@@ -118,6 +150,9 @@ def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, word
     assert sum(meta.drop_counts_by_reason.values()) == meta.n_requested - meta.n_kept
     assert meta.drop_rate == pytest.approx(1.0 - meta.n_kept / meta.n_requested)
     assert set(meta.kept_by_label) == set(meta.vector_labels)
+    # Realised against configured, recorded per label: the pair the drop audit cannot express.
+    assert set(meta.generated_by_label) == set(meta.vector_labels)
+    assert all(count == meta.stories_per_emotion for count in meta.generated_by_label.values())
 
     # G0 table: one row per block, in block order, and the gate reads the max-|rho| row.
     assert [row.block for row in meta.g0_table] == list(range(meta.n_blocks))

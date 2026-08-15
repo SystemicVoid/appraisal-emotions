@@ -277,7 +277,9 @@ def test_the_projection_arm_records_g0_on_both_sides_of_the_projection():
         "spec": SPEC,
         "stories_per_emotion": 2,
         "story_recipe": "sofroniew",
-        "sofroniew_stories_per_call": 2,
+        # 1 per call: the fake backend emits no <NEW STORY>, so anything higher would fall short
+        # of stories_per_emotion and the run would refuse before it got to the projection.
+        "sofroniew_stories_per_call": 1,
         "sofroniew_data_dir": DATA_DIR,
         "seed": 7,
         "min_token": 20,
@@ -290,8 +292,8 @@ def test_the_projection_arm_records_g0_on_both_sides_of_the_projection():
         FakeBackend(SPEC),
         words,
         neutral_projection=True,
-        neutral_dialogues=8,
-        neutral_dialogues_per_call=2,
+        neutral_dialogues=2,
+        neutral_dialogues_per_call=1,
         neutral_variance_target=0.5,
         **common,
     )
@@ -300,7 +302,7 @@ def test_the_projection_arm_records_g0_on_both_sides_of_the_projection():
     assert plain.metadata.neutral_projection is None
     assert plain.metadata.g0_table_before_projection == ()
 
-    assert len(neutral) == 4  # 4 calls x 1 unsplit piece each, under the fake backend
+    assert len(neutral) == 2  # 2 calls x 1 unsplit piece each, under the fake backend
     record = projected.metadata.neutral_projection
     assert record is not None
     assert record.n_requested == len(neutral)
