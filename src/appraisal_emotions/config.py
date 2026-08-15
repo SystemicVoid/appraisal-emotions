@@ -22,9 +22,17 @@ never consumed, and the artifact-path overrides (outputs live under ``<output_ro
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from appraisal_emotions.core.schema import PILOT_PARTITIONS, ModelSpec, PilotPartition
 
@@ -110,6 +118,37 @@ class EmotionVectorsConfig(ConfigModel):
     seed: int = 7
     words_file: Path = Path("data/emotion_words.json")
     stories_per_emotion: int = 12
+    # Which E0 stimulus arm to run. ``project`` is the §5 recipe; ``sofroniew`` swaps in the
+    # paper's own appendix prompt and its 100 topics, holding word set, capture window, centring
+    # and G0 identical, so the two differ only in the prompt (docs/design/sofroniew-recipe.md).
+    story_recipe: Literal["project", "sofroniew"] = "project"
+    # ``sofroniew`` only: stories requested per completion. The paper asks for 12 per call over
+    # all 100 topics; a downscaled run trades calls against topic coverage, and
+    # stories_per_emotion must stay a multiple of this so both arms carry the same sample size.
+    sofroniew_stories_per_call: int = 2
+    sofroniew_data_dir: Path = Path("data/sofroniew2026")
+    # The paper's confound-removal step: fit the top PCs of activations on emotionally neutral
+    # transcripts (enough for `neutral_variance_target` of the variance) and project them out of
+    # the centred vectors before G0. Default OFF — the paper's own footnote calls it a denoiser
+    # and reports its qualitative findings holding without it, so it is a separate arm rather
+    # than a silent change to the instrument E1-E3 already read.
+    # Needs `sofroniew_data_dir`: the neutral-dialogue prompt is the paper's, loaded from there.
+    neutral_projection: bool = False
+    # A REQUEST target, and one bounded by the story grid: the neutral corpus draws its topics
+    # from the story grid's own list, so `neutral_dialogues // neutral_dialogues_per_call` calls
+    # may not exceed the story arm's topics per label (`build_neutral_dialogue_grid` refuses).
+    neutral_dialogues: int = 24
+    neutral_dialogues_per_call: int = 4
+    neutral_variance_target: float = 0.5
+    # Floors on the corpus that actually survives, and what they catch: a confound basis fit on a
+    # handful of transcripts, subtracted from every emotion vector BEFORE G0, where nothing
+    # downstream can separate its effect from the instrument's. `fit_neutral_basis` needs 2 to
+    # have any variance at all, and 2 was previously the whole adequacy gate — 22 of 24 dropped
+    # still fits a rank-1 basis. Sized against the real arm's 24-transcript request: a third of it
+    # surviving is the least that makes the 50%-of-variance rule a selection rather than a
+    # coin flip, and the drop ceiling mirrors the story side's first-contact ceiling.
+    neutral_min_kept: int = 8
+    neutral_max_drop_rate: float = 0.5
     min_token: int = 50
     max_tokens: int = 320
     temperature: float = 1.0
@@ -121,11 +160,41 @@ class EmotionVectorsConfig(ConfigModel):
     first_contact_n: int = 10
     first_contact_max_drop_rate: float = 0.5
 
-    @field_validator("stories_per_emotion", "max_tokens", "fallback_blocks", "first_contact_n")
+    @field_validator(
+        "stories_per_emotion",
+        "max_tokens",
+        "fallback_blocks",
+        "first_contact_n",
+        "neutral_dialogues",
+        "neutral_dialogues_per_call",
+    )
     @classmethod
     def positive_counts(cls, value: int) -> int:
         if value < 1:
             raise ValueError("must be >= 1")
+        return value
+
+    @field_validator("neutral_min_kept")
+    @classmethod
+    def basis_needs_variance(cls, value: int) -> int:
+        # Below 2 there is no variance to take principal components of, so a floor under 2 is not
+        # a weaker floor — it is no floor at all, and fit_neutral_basis would raise anyway.
+        if value < 2:
+            raise ValueError("neutral_min_kept must be >= 2")
+        return value
+
+    @field_validator("neutral_max_drop_rate")
+    @classmethod
+    def drop_rate_in_unit_interval(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("neutral_max_drop_rate must lie in [0, 1]")
+        return value
+
+    @field_validator("neutral_variance_target")
+    @classmethod
+    def variance_target_in_unit_interval(cls, value: float) -> float:
+        if not 0.0 < value <= 1.0:
+            raise ValueError("neutral_variance_target must lie in (0, 1]")
         return value
 
     @field_validator("min_token")
@@ -148,6 +217,40 @@ class EmotionVectorsConfig(ConfigModel):
         if not 0.0 <= value <= 1.0:
             raise ValueError("must lie in [0, 1]")
         return value
+
+    @model_validator(mode="after")
+    def arm_options_belong_to_their_arm(self) -> EmotionVectorsConfig:
+        """Refuse options the chosen arm will not read, rather than ignoring them.
+
+        Under ``story_recipe: project`` the sofroniew grid is never built and the neutral corpus
+        is never fitted, so every ``sofroniew_*`` and ``neutral_*`` key is inert. Accepting them
+        silently is how a config comes to *describe* a run nobody performed — the reader sees
+        ``neutral_projection: true`` in the committed YAML beside an artifact with no basis in it.
+        """
+
+        if self.story_recipe != "project":
+            return self
+        if self.neutral_projection:
+            # There is no designed project + projection arm: the neutral prompt, its speaker
+            # renames and its topics all come from the paper's recipe, so a confound basis fit
+            # that way and subtracted from §5-prompt vectors mixes two manipulations at once.
+            # Adding the arm means designing it in docs/design/sofroniew-recipe.md first.
+            raise ValueError(
+                "neutral_projection requires story_recipe: sofroniew — the neutral corpus is the "
+                "paper's prompt and the paper's topics, and projecting it out of §5-prompt "
+                "vectors is an arm nobody designed"
+            )
+        inert = sorted(
+            name
+            for name in self.model_fields_set
+            if name.startswith(("sofroniew_", "neutral_")) and name != "neutral_projection"
+        )
+        if inert:
+            raise ValueError(
+                f"story_recipe: project ignores {', '.join(inert)}. Drop the keys, or set "
+                "story_recipe: sofroniew if the paper's arm is what you meant to run."
+            )
+        return self
 
 
 class StudyConfig(ConfigModel):

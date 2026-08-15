@@ -1,0 +1,122 @@
+# Rung E0, FULLY PAPER-FAITHFUL ARM: the paper's prompt AND the paper's confound removal.
+#
+# `configs/emotion_vectors_sofroniew.yaml` swaps in Sofroniew et al. 2026's story prompt and
+# stops there, so the A/B against the base arm isolates ONE variable. This config adds the second
+# thing the paper does and our instrument does not:
+#
+#   "we obtained model activations on a set of emotionally neutral transcripts and computed the
+#    top principal components of the activations on this dataset (enough to explain 50% of the
+#    variance). We then projected out these components from our emotion vectors."
+#
+# The neutral dialogues are generated from the paper's own neutral-dialogue prompt, over a prefix
+# of the topic list the stories themselves were written over, with the paper's post-hoc
+# "Person:"/"AI:" -> "Human:"/"Assistant:" rename applied. All of that text is loaded from
+# data/sofroniew2026/, extracted from the arXiv LaTeX source; none of it is retyped here.
+#
+# WHY THIS IS A SEPARATE CONFIG AND NOT A CHANGE TO THE OTHER ONE. The paper's own footnote 3
+# says the projection "denoised some of the token-to-token fluctuations in our emotion probe
+# results, but our qualitative findings still hold using the raw unprojected vectors". It is a
+# denoiser, not a load-bearing step. Folding it into the prompt arm would make that arm differ
+# from the base arm in two ways at once, and neither difference would be readable. So: three
+# arms, one variable each step of the way.
+#
+#              base                    sofroniew               this
+#   prompt     ours                    the paper's             the paper's
+#   projection none                    none                    the paper's neutral-dialogue PCs
+#
+# WHAT IS STILL NOT FAITHFUL. Two things, both recorded in the artifact:
+#   1. Sample size. The paper: 100 topics x 12 stories per emotion = 1,200 stories per emotion.
+#      This arm: 6 topics x 2 = 12. A ~100x downscale. Same for the neutral corpus, which is
+#      further capped at 6 calls by the topic-sharing rule below.
+#   2. Pooling granularity. The paper says "activations on this dataset" without saying whether
+#      they pooled per token or per transcript. We take one mean per transcript over the same
+#      token-50-onward window the emotion vectors are built from — the matched reduction, and the
+#      only one our capture surface supports. See the module docstring of
+#      src/appraisal_emotions/analysis/neutral_projection.py; the choice is recorded in
+#      `neutral_projection.pooling` in the artifact.
+#
+# The artifact records the G0 table on BOTH sides of the projection
+# (`g0_table_before_projection`), so what the projection did to the sensitivity gate is a fact in
+# the file rather than something to infer by diffing two runs. It also records the gate under a
+# random orthonormal frame of the same per-block width (`g0_table_random_projection`): removing k
+# directions moves G0 whatever they are, so that third table is what licenses reading a before/
+# after shift as being about the NEUTRAL subspace. It costs no generation and no forwards.
+#
+# Cost on top of the prompt arm: 6 extra generations (24 transcripts, 4 per call) plus <=24
+# read-only forwards. Rounding error next to the 510 story generations.
+#
+# GPU runs and model downloads gate behind explicit human approval.
+
+run:
+  id: emotion_vectors_sofroniew_projected
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-sofroniew-projected/v1
+  known_gaps:
+    - "E0 is a MEASUREMENT INSTRUMENT, not a result: an emotion-concept basis plus its
+      sensitivity gate. No emotion word here is a state attribution."
+    - "~100x downscale on stimulus count against the paper (12 stories per emotion vs 1,200),
+      and a 24-transcript neutral corpus against the paper's unstated but far larger one. 24 is
+      the ceiling the topic-sharing rule sets: the neutral corpus draws from the 6 topics the
+      stories were written over, so at 4 dialogues per call it can issue 6 calls. With 24
+      transcripts the per-block covariance has rank <= 23, which bounds how many components the
+      50%-of-variance rule can ever select — and the run records how many of the 24 were actually
+      obtained and kept, since a call whose completion carries no <NEW DIALOGUE> yields one
+      transcript rather than four."
+    - "The paper does not state whether its neutral-transcript PCA pooled per token or per
+      transcript. This arm pools per transcript (mean from token 50 onward), the reduction
+      matched to how the emotion vectors themselves are built. A token-level fit would need a
+      per-token capture surface we do not have and would be dominated by position/formatting
+      directions; which one the paper meant is unresolved and recorded as such."
+    - "The paper's own footnote 3 reports the projection as a denoiser whose qualitative findings
+      hold WITHOUT it. This arm is therefore additive evidence, not a correction to the
+      unprojected arms."
+    - "The <NEW STORY> and <NEW DIALOGUE> splitters and the story filter are frozen BLIND against
+      unread model outputs; a first-contact checkpoint over EACH of the two generated corpora is
+      the licensed compensation, not a reality sample. The neutral corpus is written to
+      emotions/neutral_dialogues.json, and its early-N sample to
+      emotions/neutral_first_contact_sample.json, so both can be READ after the run."
+  decision_affected:
+    - docs/design/sofroniew-recipe.md
+    - docs/design/experiment.md
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: qwen_30b_primary
+
+emotion_vectors:
+  seed: 7
+  # Held identical to the other two arms — the word set is NOT the manipulated variable.
+  words_file: data/emotion_words.json
+  stories_per_emotion: 12
+  story_recipe: sofroniew
+  sofroniew_stories_per_call: 2
+  sofroniew_data_dir: data/sofroniew2026
+  # The step this config exists for.
+  neutral_projection: true
+  # 24 transcripts over 6 calls, because 6 is `stories_per_emotion / sofroniew_stories_per_call`
+  # — the number of topics the stories were written over. The neutral corpus draws its topics from
+  # that same list, so more calls than that would put the confound basis on premises no story ever
+  # saw, and the paper's topics carry affect. `build_neutral_dialogue_grid` refuses rather than
+  # widening silently.
+  neutral_dialogues: 24
+  neutral_dialogues_per_call: 4
+  # The paper's threshold, verbatim: "enough to explain 50% of the variance".
+  neutral_variance_target: 0.5
+  # Floors on what actually survives. `fit_neutral_basis` needs 2 transcripts to have any variance
+  # at all, and 2 was previously the whole gate: 22 of these 24 dropped would still fit a rank-1
+  # basis that gets subtracted from every emotion vector before G0, where nothing downstream can
+  # tell its effect from the instrument's. A third of the request surviving is the least that
+  # makes the 50%-of-variance rule a selection; the drop ceiling mirrors the story side's.
+  neutral_min_kept: 8
+  neutral_max_drop_rate: 0.5
+  min_token: 50
+  max_tokens: 700
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 48
+  first_contact_n: 10
+  first_contact_max_drop_rate: 0.5

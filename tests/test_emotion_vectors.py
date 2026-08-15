@@ -8,13 +8,17 @@ meaningless by construction (which is exactly why the smoke run reports ``harnes
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from appraisal_emotions.analysis.emotion_vectors import (
+    EMOTION_VECTORS_CONTRACT_VERSION,
+    EmotionVectorsMetadata,
     FirstContactFailure,
+    StoryYieldShortfall,
     extract_emotion_vectors,
     generate_stories,
     naive_variants,
@@ -31,7 +35,13 @@ from appraisal_emotions.stimuli.emotion_stories import (
     read_emotion_words,
 )
 
-WORDS_PATH = Path(__file__).resolve().parents[1] / "data" / "emotion_words.json"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+WORDS_PATH = REPO_ROOT / "data" / "emotion_words.json"
+# The certified E0 run, tracked in git and read by every downstream command.
+CERTIFIED_ARTIFACT = (
+    REPO_ROOT / "runs" / "emotion_vectors_base" / "emotions" / "emotion_vectors.json"
+)
+SOFRONIEW_DATA_DIR = REPO_ROOT / "data" / "sofroniew2026"
 SPEC = ModelSpec(key="fake", backend="fake", model_id="fake")
 # The shipped smoke recipe (configs/emotion_vectors_smoke.yaml), so the deterministic fake
 # generations here are the same ones the smoke run reads.
@@ -101,8 +111,38 @@ def test_first_contact_checkpoint_refuses_an_over_dropping_filter(words):
     assert excinfo.value.sample, "the checkpoint must hand back the sample a human has to read"
 
 
+def test_the_yield_check_refuses_a_splitter_that_returns_fewer_stories_than_asked(words):
+    """The failure no per-piece filter can see: right pieces, too few of them.
+
+    Reproduced on the shipped projected smoke config, which asked for 2 stories per label at 2 per
+    call: the fake backend emits no <NEW STORY>, so each call returned one undivided completion
+    and the run scored a basis on 1 story per label while printing "85/85 stories kept ... drop
+    rate 0.000". Every piece was well-formed and in-window, so length and lexical filters were
+    silent by construction — the observable is the count.
+    """
+
+    backend = FakeBackend(SPEC)
+    with pytest.raises(StoryYieldShortfall) as excinfo:
+        extract_emotion_vectors(
+            backend,
+            words,
+            spec=SPEC,
+            fallback_blocks=4,
+            first_contact_max_drop_rate=0.6,
+            story_recipe="sofroniew",
+            # 2 per call against a backend that emits no separator: every call yields 1 piece.
+            sofroniew_stories_per_call=2,
+            sofroniew_data_dir=SOFRONIEW_DATA_DIR,
+            **{**SMOKE, "stories_per_emotion": 2},
+        )
+    failure = excinfo.value
+    assert failure.requested == 2
+    assert set(failure.short) == set(failure.realized), "every label fell short here"
+    assert all(count == 1 for count in failure.realized.values())
+
+
 def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, words, tmp_path):
-    artifact, stories = extracted
+    artifact, stories, _neutral = extracted
     meta = artifact.metadata
     n_labels = len(words.labels) + 1  # + style_control
 
@@ -118,6 +158,9 @@ def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, word
     assert sum(meta.drop_counts_by_reason.values()) == meta.n_requested - meta.n_kept
     assert meta.drop_rate == pytest.approx(1.0 - meta.n_kept / meta.n_requested)
     assert set(meta.kept_by_label) == set(meta.vector_labels)
+    # Realised against configured, recorded per label: the pair the drop audit cannot express.
+    assert set(meta.generated_by_label) == set(meta.vector_labels)
+    assert all(count == meta.stories_per_emotion for count in meta.generated_by_label.values())
 
     # G0 table: one row per block, in block order, and the gate reads the max-|rho| row.
     assert [row.block for row in meta.g0_table] == list(range(meta.n_blocks))
@@ -141,7 +184,7 @@ def test_end_to_end_artifact_is_shape_consistent_and_round_trips(extracted, word
 
 
 def test_artifact_read_refuses_a_tampered_payload(extracted, tmp_path):
-    artifact, _stories = extracted
+    artifact, _stories, _neutral = extracted
     path = tmp_path / "tampered.json"
     _metadata_path, vectors_path = write_emotion_vectors(artifact, path)
     tampered = np.array(artifact.vectors)
@@ -149,6 +192,26 @@ def test_artifact_read_refuses_a_tampered_payload(extracted, tmp_path):
     np.savez(vectors_path, emotion_vectors=tampered)
     with pytest.raises(ValueError, match="hash does not match"):
         read_emotion_vectors(path)
+
+
+def test_the_committed_certified_artifact_still_validates():
+    """The certified base run must keep loading, or every downstream reader breaks at once.
+
+    ``runs/emotion_vectors_base/emotions/emotion_vectors.json`` is tracked JSON, present in a
+    clean checkout, and is what map-geometry, P1, E2b and E3 all read. Adding
+    ``generated_by_label`` without a default made ``model_validate`` reject it while the contract
+    still said ``emotion_vectors/v1`` — the artifact was fine, the model had silently moved under
+    it. This test is the CI form of that: a new required field, or a rename, fails here rather
+    than in four downstream commands at once. A deliberate incompatibility bumps the contract
+    version instead, and then this test's assertion on the version is what says so.
+    """
+
+    assert CERTIFIED_ARTIFACT.exists(), "the certified E0 artifact is tracked; it must be present"
+    payload = json.loads(CERTIFIED_ARTIFACT.read_text(encoding="utf-8"))
+    assert payload["artifact_contract_version"] == EMOTION_VECTORS_CONTRACT_VERSION
+    metadata = EmotionVectorsMetadata.model_validate(payload)
+    # Pre-dates the yield check, so it carries no yield record and must not be made to fake one.
+    assert metadata.generated_by_label == {}
 
 
 def test_pc1_orientation_follows_the_valence_labels():

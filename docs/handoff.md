@@ -112,9 +112,11 @@ is authorized.
    `scripts/e3_passthrough_decomposition.py` prices the counterfactual E3 never computed: the
    stream is additive and the readout is linear, so "the network did nothing with the patch" is a
    point prediction, `(substituted − recipient) · axis_at_readout_block`. That prediction accounts
-   for **80% of the published shift on PC1 and 97–105% on `elated − disappointed`**. The
-   random-direction floor could not have caught it (`|cos| ≈ 1/√5120 = 0.014`, so a random
-   component injects a delta ~44× smaller and scores ≈0 under passthrough and under genuine use
+   for **79–84% of the published shift on PC1 and 97–105% on `elated − disappointed`** (v_rpe arm
+   79.5%, full residual 84.0%; `e3_passthrough_decomposition.json`). The random-direction floor
+   could not have caught it (measured mean injected norms: 0.179 random vs 5.89 for the `v_rpe`
+   arm, ~33× smaller — earlier drafts said 44×; the artifact number is 33 — so it scores ≈0 under
+   passthrough and under genuine use
    alike), and the same-condition no-op arm's excess over passthrough is as large as the certified
    direction's. **Consequence, recorded:** E3's `functionally-used, pilot-suggestive` cap is
    superseded to *control failure with the claim open* — not a falsification, and E1/E2's
@@ -156,8 +158,10 @@ what it cost. The four that matter to whoever buys the session:
    cells, where a correct model MUST move. 60 forwards, under 1% of budget, and `verdict_cap` routes
    a failed reachability to `harness_inadequate` before it looks at anything else.
 3. **E3's random-direction floor was never norm-matched, and E4's inherited the bug.** The
-   substitution injects `(delta . r) r`, ~1/sqrt(d) of the certified arm's magnitude — at d=5120,
-   44x smaller. A floor that perturbs 44x less than the arm it floors reads near zero whether or
+   substitution injects `(delta . r) r`, ~`|delta|/sqrt(d)` in norm — measured in the E3 artifact
+   as 0.179 against the certified arm's 5.89, ~33x smaller (the frozen prereg's "44x" overstates
+   it; the argument's direction is unchanged). A floor that perturbs ~33x less than the arm it
+   floors reads near zero whether or
    not the effect is direction-specific, which is exactly how E3's floor became decoration.
    E4 injects the certified arm's own magnitude along a random direction; E3's `substituted_value`
    is left untouched so its published artifact stays reproducible.

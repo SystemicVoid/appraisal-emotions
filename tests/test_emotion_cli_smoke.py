@@ -2,7 +2,10 @@
 fake backend.
 
 Runs the six shipped commands in order through the real CLI, into a tmp run root, using the
-shipped smoke configs with only their output/registry/word paths redirected. Everything asserted
+shipped smoke configs with only their output/registry/word paths redirected. Every E0 smoke
+config gets the E0 -> P1 chain run over it, not just the base one: the two Sofroniew arms differ
+from the base arm in the parts that broke (batched generation, and a confound subspace subtracted
+from the published vectors), and a config no test loads is a config nothing checks. Everything asserted
 here is CONTRACT — artifacts exist, revalidate, and bind to each other by digest; the reports
 carry every word's residual, the recorded-expectation readouts, the patching arms, and the
 inherited gate cap. The fake backend's stories are seeded templates and its hidden states are a
@@ -33,6 +36,11 @@ from appraisal_emotions.stimuli.emotion_stories import read_emotion_words
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RPE_SMOKE = REPO_ROOT / "configs" / "reveal_rpe_smoke.yaml"
 EMOTION_SMOKE = REPO_ROOT / "configs" / "emotion_vectors_smoke.yaml"
+# Globbed, not listed: a new Sofroniew smoke arm inherits the E0 -> P1 chain by existing, which is
+# what stops the next arm from shipping with no test that ever loaded it.
+SOFRONIEW_SMOKE_CONFIGS = sorted(
+    path.name for path in (REPO_ROOT / "configs").glob("emotion_vectors_sofroniew*_smoke.yaml")
+)
 WORDS = REPO_ROOT / "data" / "emotion_words.json"
 
 
@@ -42,6 +50,12 @@ def _config_into(source: Path, tmp_path: Path, name: str) -> Path:
     payload["model"]["registry_path"] = str(REPO_ROOT / "configs" / "model_registry.yaml")
     if "emotion_vectors" in payload:
         payload["emotion_vectors"]["words_file"] = str(WORDS)
+        if "sofroniew_data_dir" in payload["emotion_vectors"]:
+            # Absolutized like the other inputs: the config's relative path resolves against the
+            # CWD, which is not the repo root for every way of invoking pytest.
+            payload["emotion_vectors"]["sofroniew_data_dir"] = str(
+                REPO_ROOT / payload["emotion_vectors"]["sofroniew_data_dir"]
+            )
     path = tmp_path / name
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return path
@@ -73,6 +87,101 @@ def chain(tmp_path_factory) -> _Chain:
         emotion_dir=tmp_path / "runs" / "emotion_vectors_smoke" / "emotions",
         emotion_config=emotion_config,
     )
+
+
+@pytest.mark.parametrize("config_name", SOFRONIEW_SMOKE_CONFIGS)
+def test_the_sofroniew_arms_run_e0_then_p1_through_the_cli(tmp_path, chain, config_name):
+    """E0 -> P1 on both shipped Sofroniew smoke configs, through the real command surface.
+
+    No test loaded or ran ANY of these configs before, and the gap was not theoretical: the
+    projected arm's E0 wrote an artifact its own P1 structurally rejected (max relative deviation
+    3.469 against a 0.01 threshold, exit 1, capture quarantined), and both configs asked the
+    neutral grid for more topics than their stories were written over. Both are one CLI invocation
+    away from visible. Parametrizing over the config names is what keeps a third arm from shipping
+    untested.
+
+    The identity assertion at the end is the one that catches the P1 defect specifically: a
+    projected basis whose per-story rows do not average back to it fails here by orders of
+    magnitude, whatever the gate threshold happens to be.
+    """
+
+    runner = CliRunner()
+    config = _config_into(REPO_ROOT / "configs" / config_name, tmp_path, config_name)
+    run_id = yaml.safe_load(config.read_text(encoding="utf-8"))["run"]["id"]
+    emotion_dir = tmp_path / "runs" / run_id / "emotions"
+
+    result = runner.invoke(app, ["extract-emotions", "--config", str(config)])
+    assert result.exit_code == 0, f"{result.output}\n{result.exception}"
+    emotion = read_emotion_vectors(emotion_dir / "emotion_vectors.json")
+    # Realised sample size equals the configured one — the check that reads 0.00 drop rate on a
+    # half-size sample cannot be satisfied by a clean drop audit alone.
+    assert all(
+        count == emotion.metadata.stories_per_emotion
+        for count in emotion.metadata.generated_by_label.values()
+    )
+
+    projected = emotion.metadata.neutral_projection is not None
+    assert projected == ("projected" in config_name)
+    if projected:
+        # The removed subspace is IN the artifact, so a reviewer can see which directions went.
+        assert emotion.neutral_basis is not None
+        assert (emotion_dir / "neutral_dialogues.json").is_file()
+        assert (emotion_dir / "neutral_first_contact_sample.json").is_file()
+
+    result = runner.invoke(
+        app,
+        [
+            "extract-story-projections",
+            "--config",
+            str(config),
+            "--directions",
+            str(chain.rpe_dir / "reveal_directions.json"),
+        ],
+    )
+    assert result.exit_code == 0, f"{result.output}\n{result.exception}"
+    assert not (emotion_dir / "story_projections_gate_failed.json").exists()
+
+    directions = read_reveal_rpe_directions(chain.rpe_dir / "reveal_directions.json")
+    projections = read_story_projections(emotion_dir / "story_projections.json")
+    assert projections.metadata.gate_verdict == "pass"
+    assert projections.metadata.emotion_vectors_sha256 == emotion.metadata.vectors_sha256
+    unit = np.stack(
+        [direction_matrix(emotion, directions, block) for block in range(emotion.metadata.n_blocks)]
+    )
+    for index, label in enumerate(emotion.metadata.vector_labels):
+        observed = projections.projections[projections.rows_for(label)].mean(axis=0)
+        expected = np.einsum("bh,bdh->bd", emotion.vectors[index], unit)
+        assert np.allclose(observed, expected, rtol=0.0, atol=1e-12), label
+
+
+def test_a_refused_e0_quarantines_the_corpora_it_already_paid_for(tmp_path):
+    """A refusal must not throw away the generations that produced it.
+
+    All three E0 refusals fire after generation and before the artifact is written. They used to
+    exit(1) before any write, discarding the whole story corpus — and the yield check's own
+    message told the operator to go read a first-contact sample that path never wrote. Here the
+    projected smoke config is pushed into a shortfall (2 stories per call from a backend that
+    emits one undivided completion), and the files it names must be on disk afterwards.
+    """
+
+    runner = CliRunner()
+    name = "emotion_vectors_sofroniew_projected_smoke.yaml"
+    config = _config_into(REPO_ROOT / "configs" / name, tmp_path, name)
+    payload = yaml.safe_load(config.read_text(encoding="utf-8"))
+    payload["emotion_vectors"]["sofroniew_stories_per_call"] = 2
+    config.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    emotion_dir = tmp_path / "runs" / payload["run"]["id"] / "emotions"
+
+    result = runner.invoke(app, ["extract-emotions", "--config", str(config)])
+    assert result.exit_code == 1, result.output
+    assert "harness_inadequate" in result.output
+    # The refusal's own advice, honoured.
+    assert (emotion_dir / "stories.json").is_file()
+    assert (emotion_dir / "first_contact_sample.json").is_file()
+    # ...and it stopped before scoring anything, so no basis was published.
+    assert not (emotion_dir / "emotion_vectors.json").exists()
+    log = json.loads((emotion_dir / "stories.json").read_text(encoding="utf-8"))
+    assert log, "the quarantined log must hold the generations, not be an empty placeholder"
 
 
 def test_e0_writes_its_artifacts_and_reports_the_gate_cap(chain):

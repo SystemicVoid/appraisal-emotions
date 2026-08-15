@@ -24,6 +24,16 @@ fix. Three cases, and only the middle one may transcribe:
   from the PDF" is never a step. An LLM reproducing text from its context is a paraphrase
   generator.
 
+  For a paper, **fetch the arXiv e-print LaTeX source (`arxiv.org/e-print/<id>`), not the PDF**.
+  `pdftotext` returns the *typeset* text, which is a rendering and not the thing: the Sofroniew
+  appendix prompt comes out of the PDF with soft-wrapped lines carrying a hanging indent that
+  looks like meaningful structure, and with every ASCII apostrophe replaced by a curly glyph from
+  the listing font. The LaTeX source has neither artifact. Where the source itself encodes a
+  substitution (there, `` ` `` for `'` — 599 backticks and zero apostrophes across 145 prompt
+  blocks), record the transform, keep the raw text beside the normalized text, and state the
+  evidence; a silent "cleanup" of the object of study is the same defect as a hand-copy.
+  Worked example: `scripts/fetch_sofroniew_recipe.py`, `docs/design/sofroniew-recipe.md`.
+
 Earned: the CAIS App. D.3 prompts were hand-copied into a battery builder and were wrong four
 ways — blank-line instead of single-newline separators (that is a *different* experiment),
 single- instead of double-quoted labels, no trailing newline (which is what makes the bare

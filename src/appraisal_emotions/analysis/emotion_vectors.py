@@ -12,7 +12,14 @@ carries the certified appraisal directions:
    template's activation) and average the residual stream over tokens from ``min_token`` (default
    50, the recipe's window) onward, at every block;
 4. emotion-concept vector ``e_j`` = that emotion's per-block story mean minus the grand mean over
-   the emotion words, at every block.
+   the emotion words, at every block;
+5. OPTIONALLY (``neutral_projection``, default off) the paper's confound-removal step: project
+   out the top PCs of activations on an emotionally neutral dialogue corpus, enough to explain
+   50% of their variance (``analysis.neutral_projection``). Off by default because the paper's own
+   footnote 3 reports it as a denoiser whose qualitative findings hold without it — so it is an
+   arm, and a run that uses it records the G0 table on both sides of it plus under a random
+   orthonormal frame of the same width, which is what separates "the neutral subspace mattered"
+   from "removing k directions mattered".
 
 **Gate G0** (the manipulation check that licenses every later null): PC1 of the per-block
 mean-centred ``{e_j}`` correlates with the §5 minted binary valence labels at
@@ -24,11 +31,15 @@ inherits that cap (design §4 E0 diagnosticity clause).
 **Freeze status of the story filter: BLIND** (``docs/agents/rails.md``, "observation before
 imagination"). No story from this model has been read — GPU runs gate behind human approval and
 none has been authorized — so the drop rule is frozen against outputs it has not seen. The
-licensed compensation is the first-contact checkpoint below: the run reads its own first
-``first_contact_n`` generations against the frozen rule and routes to ``harness_inadequate``
-BEFORE full spend if the drop rate exceeds ``first_contact_max_drop_rate``. The sample is written
-out for a human to read. Replace this paragraph with a real reality-sample frequency table once
-one exists.
+licensed compensation is TWO early-N checks, both before the capture pass, because they catch
+different failures. The first-contact checkpoint reads the run's own first ``first_contact_n``
+generations against the frozen rule and routes to ``harness_inadequate`` if the drop rate exceeds
+``first_contact_max_drop_rate``; the sample is written out for a human to read. The yield check
+(:class:`StoryYieldShortfall`) compares the stories each label actually came back with against
+``stories_per_emotion`` — the batched Sofroniew arm's completion splitter can return fewer pieces
+than the prompt asked for, and every piece it does return passes the length and lexical filters,
+so the drop audit reports 0.00 on a sample half its designed size. Replace this paragraph with a
+real reality-sample frequency table once one exists.
 
 Licence: the emotion basis is a measurement instrument. Nothing here licenses any claim about
 what the model feels; ``e_disappointed`` is the *concept vector for the word* "disappointed".
@@ -38,6 +49,8 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -49,6 +62,17 @@ from appraisal_emotions.activation.capture import (
     StoryCaptureBackend,
     capture_token_mean_states,
     decoder_layers,
+)
+from appraisal_emotions.analysis.neutral_projection import (
+    DEFAULT_NEUTRAL_VARIANCE_TARGET,
+    NeutralBasis,
+    NeutralProjectionRecord,
+    basis_arrays,
+    basis_from_arrays,
+    basis_sha256,
+    fit_neutral_basis,
+    project_out,
+    random_orthonormal_basis,
 )
 from appraisal_emotions.core.schema import ModelSpec, StrictModel
 from appraisal_emotions.core.util import (
@@ -68,18 +92,31 @@ from appraisal_emotions.stimuli.emotion_stories import (
     StoryRequest,
     build_story_grid,
 )
+from appraisal_emotions.stimuli.sofroniew_stories import (
+    DEFAULT_SOFRONIEW_DATA_DIR,
+    NEUTRAL_DIALOGUE_LABEL,
+    build_neutral_dialogue_grid,
+    build_sofroniew_story_grid,
+    neutral_completion_splitter,
+    read_sofroniew_recipe,
+    split_completion,
+)
 
 __all__ = [
     "DEFAULT_G0_THRESHOLD",
     "DEFAULT_MIN_TOKEN",
     "EMOTION_VECTORS_CONTRACT_VERSION",
+    "E0Refusal",
     "EmotionVectors",
     "EmotionVectorsMetadata",
     "FirstContactFailure",
     "G0BlockRow",
     "GeneratedStory",
+    "NeutralCorpusTooThin",
+    "StoryYieldShortfall",
     "emotion_vectors_path",
     "extract_emotion_vectors",
+    "fit_neutral_projection",
     "generate_stories",
     "naive_variants",
     "read_emotion_vectors",
@@ -204,32 +241,133 @@ def read_story_log(path: Path) -> tuple[GeneratedStory, ...]:
     )
 
 
-class FirstContactFailure(RuntimeError):
-    """The BLIND story filter dropped too much of its first-contact sample.
+class E0Refusal(RuntimeError):
+    """Base of the three pre-verdict refusals, carrying the corpora the run already paid for.
+
+    All three fire AFTER generation and BEFORE the artifact is written, so at the moment of the
+    refusal the expensive thing — the generated text — exists only in memory. Losing it means the
+    operator cannot read WHY the run refused without paying for the generations again, and two of
+    these refusals tell them to go read a sample. So the logs ride out on the exception:
+    :func:`extract_emotion_vectors` attaches the story log, :func:`fit_neutral_projection`
+    attaches the neutral one, and the CLI quarantines both before exiting.
+    """
+
+    stories: tuple[GeneratedStory, ...] = ()
+    neutral: tuple[GeneratedStory, ...] = ()
+
+
+class FirstContactFailure(E0Refusal):
+    """A BLIND-frozen filter dropped too much of its first-contact sample.
 
     Raised before full spend so the run records ``harness_inadequate`` rather than producing an
     emotion basis built from whatever survived a mis-frozen rule.
+
+    ``surface`` names which generated corpus tripped it. There are two, frozen against unread
+    output by two different splitters, and they fail independently: the emotion stories, and the
+    neutral-dialogue corpus whose principal components get subtracted from every emotion vector
+    before G0. A checkpoint on the first alone leaves the second unread.
     """
 
-    def __init__(self, *, drop_rate: float, threshold: float, sample: tuple[GeneratedStory, ...]):
+    def __init__(
+        self,
+        *,
+        drop_rate: float,
+        threshold: float,
+        sample: tuple[GeneratedStory, ...],
+        surface: str = "stories",
+    ):
         super().__init__(
-            f"first-contact checkpoint failed: {drop_rate:.2f} of the first {len(sample)} stories "
-            f"were dropped by the BLIND story filter (threshold {threshold:.2f}). Read the "
-            "written sample, fix the prompt or the filter, then re-run — do NOT score this basis."
+            f"first-contact checkpoint failed on the {surface}: {drop_rate:.2f} of the first "
+            f"{len(sample)} were dropped by the BLIND filter (threshold {threshold:.2f}). Read "
+            "the written sample, fix the prompt or the filter, then re-run — do NOT score this "
+            "basis."
         )
         self.drop_rate = drop_rate
         self.threshold = threshold
         self.sample = sample
+        self.surface = surface
+
+
+class StoryYieldShortfall(E0Refusal):
+    """A label came back with fewer stories than the recipe asked for.
+
+    This is the failure the BLIND ``<NEW STORY>`` freeze is actually exposed to, and it is not a
+    filter drop: a completion the splitter cannot cut yields ONE piece where ``stories_per_call``
+    were requested, so the run proceeds on a fraction of the configured sample with a drop rate of
+    0.00 and nothing in the artifact contradicting ``stories_per_emotion``. Reproduced on the
+    shipped projected smoke config: 2 stories per label configured, 1 realised, "85/85 stories
+    kept ... drop rate 0.000" printed.
+
+    Raised before the capture pass, so the refusal costs the generations already spent and not the
+    forwards. The counts ride along for the operator's report.
+    """
+
+    def __init__(self, *, requested: int, realized: dict[str, int]):
+        short = {label: count for label, count in sorted(realized.items()) if count < requested}
+        super().__init__(
+            f"{len(short)} of {len(realized)} labels came back with fewer than the configured "
+            f"stories_per_emotion={requested} stories: {short}. The splitter returned fewer "
+            "pieces than the prompt asked for, so this run would score a basis at an unrecorded "
+            "fraction of its designed sample size while reporting a clean drop rate. Read the "
+            "quarantined stories.json (or its first_contact_sample.json), fix the prompt or the "
+            "splitter — or lower sofroniew_stories_per_call to what the model actually emits — "
+            "then re-run."
+        )
+        self.requested = requested
+        self.realized = realized
+        self.short = short
+
+
+class NeutralCorpusTooThin(E0Refusal):
+    """The neutral corpus cleared ``>= 2`` but not the floors the arm is actually exposed to.
+
+    ``fit_neutral_basis`` needs two transcripts to have any variance at all, and that was the
+    whole adequacy gate: 22 of the real arm's 24 transcripts dropped still fits a rank-1 basis,
+    which is then subtracted from every emotion vector before G0. Two transcripts are enough to
+    compute something; they are not enough for it to be the confound subspace the paper means.
+    """
+
+
+@contextmanager
+def _attaching_story_log(stories: tuple[GeneratedStory, ...]) -> Iterator[None]:
+    """Let a refusal carry the story log out of the frame that holds it (see :class:`E0Refusal`)."""
+
+    try:
+        yield
+    except E0Refusal as failure:
+        failure.stories = stories
+        raise
+
+
+def _yield_check(stories: tuple[GeneratedStory, ...], *, requested: int) -> dict[str, int]:
+    """Realised stories per label vs the configured count — the one the drop audit cannot see."""
+
+    realized = dict(Counter(story.emotion for story in stories))
+    if any(count < requested for count in realized.values()):
+        raise StoryYieldShortfall(requested=requested, realized=realized)
+    return realized
+
+
+# Labels that are not emotion words, so the "did it name the target?" check does not apply: the
+# P5c style control was never told an emotion, and a neutral dialogue is a confound sample rather
+# than a stimulus for anything.
+_NON_EMOTION_LABELS = frozenset({STYLE_CONTROL_LABEL, NEUTRAL_DIALOGUE_LABEL})
 
 
 def _classify(text: str, request: StoryRequest, *, min_token: int, token_count: int) -> str | None:
     if not text.strip():
         return "empty"
-    if not request.is_style_control and names_target(text, request.emotion):
+    if request.emotion not in _NON_EMOTION_LABELS and names_target(text, request.emotion):
         return "names_target"
     if token_count <= min_token:
         return "too_short"
     return None
+
+
+def _single_story(text: str) -> tuple[str, ...]:
+    """The project recipe's split: one completion is one story."""
+
+    return (text,)
 
 
 def generate_stories(
@@ -239,8 +377,17 @@ def generate_stories(
     min_token: int,
     max_tokens: int,
     temperature: float,
+    split: Callable[[str], tuple[str, ...]] = _single_story,
 ) -> tuple[GeneratedStory, ...]:
-    """Generate and filter one story per request, in request order."""
+    """Generate and filter the stories each request asks for, in request order.
+
+    ``split`` turns one completion into the stories it carries. The project recipe asks for one
+    story per call and leaves this at :func:`_single_story`; the Sofroniew arm asks for several
+    per call and passes
+    :func:`~appraisal_emotions.stimuli.sofroniew_stories.split_completion`. A completion that
+    yields nothing becomes one empty story, so the request still appears in the drop audit rather
+    than vanishing from it.
+    """
 
     stories: list[GeneratedStory] = []
     for request in requests:
@@ -248,25 +395,29 @@ def generate_stories(
         result = backend.generate_with_metadata(
             rendered, max_tokens=max_tokens, temperature=temperature
         )
-        text = result.text.strip()
-        token_count = len(backend.token_ids(text)) if text else 0
-        stories.append(
-            GeneratedStory(
-                emotion=request.emotion,
-                topic=request.topic,
-                story_index=request.story_index,
-                text=text,
-                token_count=token_count,
-                drop_reason=_classify(text, request, min_token=min_token, token_count=token_count),
+        pieces = split(result.text.strip()) or ("",)
+        for offset, piece in enumerate(pieces):
+            text = piece.strip()
+            token_count = len(backend.token_ids(text)) if text else 0
+            stories.append(
+                GeneratedStory(
+                    emotion=request.emotion,
+                    topic=request.topic,
+                    story_index=request.story_index + offset,
+                    text=text,
+                    token_count=token_count,
+                    drop_reason=_classify(
+                        text, request, min_token=min_token, token_count=token_count
+                    ),
+                )
             )
-        )
     return tuple(stories)
 
 
 def _first_contact_check(
-    stories: tuple[GeneratedStory, ...], *, n: int, max_drop_rate: float
+    stories: tuple[GeneratedStory, ...], *, n: int, max_drop_rate: float, surface: str = "stories"
 ) -> tuple[int, float]:
-    """Read the run's own first ``n`` stories against the frozen filter; refuse if it over-drops."""
+    """Read the run's own first ``n`` pieces against the frozen filter; refuse if it over-drops."""
 
     sample = stories[:n]
     if not sample:
@@ -274,7 +425,7 @@ def _first_contact_check(
     drop_rate = sum(1 for story in sample if not story.kept) / len(sample)
     if drop_rate > max_drop_rate:
         raise FirstContactFailure(
-            drop_rate=drop_rate, threshold=max_drop_rate, sample=tuple(sample)
+            drop_rate=drop_rate, threshold=max_drop_rate, sample=tuple(sample), surface=surface
         )
     return len(sample), drop_rate
 
@@ -367,6 +518,16 @@ class EmotionVectorsMetadata(StrictModel):
     words_file: str
     words_file_sha256: str
     stimulus_hash: str
+    # Which E0 stimulus arm generated the stories: the §5 project recipe, or the Sofroniew et al.
+    # 2026 appendix prompt (docs/design/sofroniew-recipe.md). Everything else is held identical,
+    # so two bases differing only here are the prompt A/B.
+    story_recipe: str = "project"
+    recipe_manifest: dict[str, object] = {}
+    # The paper's confound-removal step (analysis.neutral_projection). ``None`` means it was not
+    # run, which is the default: footnote 3 of the paper calls the projection a denoiser and says
+    # its qualitative findings hold without it, so enabling it is a deliberate arm, not a silent
+    # change to the instrument E1-E3 already read.
+    neutral_projection: NeutralProjectionRecord | None = None
     stories_per_emotion: int
     min_token: int
     max_tokens: int
@@ -380,6 +541,17 @@ class EmotionVectorsMetadata(StrictModel):
     n_kept: int
     drop_rate: float
     drop_counts_by_reason: dict[str, int]
+    # Realised stories per label BEFORE the filter, against the configured `stories_per_emotion`
+    # above. The two are equal on a run whose splitter returned what the prompt asked for, and the
+    # run refuses when they are not (:class:`StoryYieldShortfall`) — so this pair is the record
+    # that the A/B compared at matched sample size, not just at matched configuration.
+    #
+    # DEFAULTED, and it must stay that way while the contract reads emotion_vectors/v1: the
+    # certified base run predates the yield check and legitimately has no yield record, so a
+    # required field here rejects the committed artifact every downstream reader loads. Any new
+    # field added to this model needs either a default or a contract bump; the regression test in
+    # tests/test_emotion_vectors.py validates the committed artifact file itself to catch it.
+    generated_by_label: dict[str, int] = {}
     kept_by_label: dict[str, int]
     first_contact_n: int
     first_contact_drop_rate: float
@@ -387,6 +559,16 @@ class EmotionVectorsMetadata(StrictModel):
     filter_freeze_status: Literal["BLIND", "reality-sampled"]
     g0_threshold: float
     g0_table: tuple[G0BlockRow, ...]
+    # The same table computed on the UNPROJECTED vectors, present only when the neutral projection
+    # ran. Recorded unconditionally in that case, in both directions: whether the projection
+    # helped the gate or hurt it is a fact about the run, not something to look up only when it
+    # flatters the arm (docs/agents/rails.md, symmetric-amendment).
+    g0_table_before_projection: tuple[G0BlockRow, ...] = ()
+    # The counterfactual for the pair above: the same vectors with a RANDOM orthonormal frame of
+    # the same per-block width removed. Removing k directions moves G0 whatever those directions
+    # are, so before/after alone cannot say the neutral subspace was the thing that mattered. Costs
+    # no generation and no forwards — a QR per block on vectors the run already has.
+    g0_table_random_projection: tuple[G0BlockRow, ...] = ()
     selected_block: int
     g0_abs_rho: float
     g0_spearman_rho: float
@@ -401,14 +583,23 @@ class EmotionVectorsMetadata(StrictModel):
 
 @dataclass(frozen=True)
 class EmotionVectors:
-    """Validated per-block emotion-concept vectors plus binding metadata (frozen read-only)."""
+    """Validated per-block emotion-concept vectors plus binding metadata (frozen read-only).
+
+    ``neutral_basis`` is the confound subspace this run subtracted, present exactly when
+    ``metadata.neutral_projection`` is. It rides with the artifact rather than being recoverable
+    only from a re-fit because two readers need it: a reviewer auditing WHICH directions were
+    removed, and P1, whose re-capture has to apply the same subtraction to its per-story states or
+    its faithfulness identity against these vectors cannot hold.
+    """
 
     metadata: EmotionVectorsMetadata
     vectors: np.ndarray  # (n_labels, n_blocks, hidden)
+    neutral_basis: NeutralBasis | None = None
 
     def __post_init__(self) -> None:
         array = np.array(self.vectors, copy=True)
         meta = self.metadata
+        self._validate_neutral_basis()
         if array.ndim != 3:
             raise ValueError("emotion vectors must be (n_labels, n_blocks, hidden)")
         labels, blocks, hidden = (int(dim) for dim in array.shape)
@@ -430,6 +621,28 @@ class EmotionVectors:
             raise ValueError("metadata.selected_block out of range for n_blocks")
         array.flags.writeable = False
         object.__setattr__(self, "vectors", array)
+
+    def _validate_neutral_basis(self) -> None:
+        """Present iff the run projected, shaped as its record says, and digest-bound to it."""
+
+        record = self.metadata.neutral_projection
+        if record is None:
+            if self.neutral_basis is not None:
+                raise ValueError(
+                    "a confound basis is attached but metadata.neutral_projection is None; the "
+                    "artifact would claim an unprojected basis while carrying a projection"
+                )
+            return
+        if self.neutral_basis is None:
+            raise ValueError(
+                "metadata.neutral_projection records a projection but no confound basis is "
+                "attached; the removed directions would be unauditable and P1 could not "
+                "reproduce them"
+            )
+        if self.neutral_basis.rows != record.blocks:
+            raise ValueError("the confound basis rows disagree with metadata.neutral_projection")
+        if basis_sha256(self.neutral_basis) != record.components_sha256:
+            raise ValueError("confound basis hash does not match metadata")
 
     @property
     def word_labels(self) -> tuple[str, ...]:
@@ -456,11 +669,18 @@ def emotion_vectors_path(metadata_path: Path) -> Path:
 
 
 def write_emotion_vectors(artifact: EmotionVectors, metadata_path: Path) -> tuple[Path, Path]:
-    """Write the metadata JSON and the sibling vectors npz; return both paths."""
+    """Write the metadata JSON and the sibling vectors npz; return both paths.
+
+    The npz carries the confound basis beside the vectors when the run projected, so the removed
+    directions travel with the thing they were removed from.
+    """
 
     vectors_path = emotion_vectors_path(metadata_path)
     ensure_parent(metadata_path)
-    np.savez(vectors_path, **{_VECTORS_ARRAY_NAME: np.asarray(artifact.vectors)})
+    payload = {_VECTORS_ARRAY_NAME: np.asarray(artifact.vectors)}
+    if artifact.neutral_basis is not None:
+        payload |= basis_arrays(artifact.neutral_basis)
+    np.savez(vectors_path, **payload)
     write_json(metadata_path, artifact.metadata)
     return metadata_path, vectors_path
 
@@ -471,7 +691,15 @@ def read_emotion_vectors(metadata_path: Path) -> EmotionVectors:
     metadata = EmotionVectorsMetadata.model_validate(read_json(metadata_path))
     with np.load(emotion_vectors_path(metadata_path), allow_pickle=False) as bundle:
         array = np.array(bundle[_VECTORS_ARRAY_NAME])
-    return EmotionVectors(metadata=metadata, vectors=array)
+        basis = (
+            None
+            if metadata.neutral_projection is None
+            else basis_from_arrays(
+                metadata.neutral_projection.blocks,
+                {name: np.array(bundle[name]) for name in bundle.files},
+            )
+        )
+    return EmotionVectors(metadata=metadata, vectors=array, neutral_basis=basis)
 
 
 # --------------------------------------------------------------------------------------
@@ -504,12 +732,242 @@ def _gate(table: tuple[G0BlockRow, ...], threshold: float) -> tuple[int, float, 
     )
 
 
+StoryRecipeName = Literal["project", "sofroniew"]
+
+
+@dataclass(frozen=True)
+class StimulusPlan:
+    """One recipe's generation grid, its completion splitter, and its provenance rows."""
+
+    recipe: str
+    requests: tuple[StoryRequest, ...]
+    split: Callable[[str], tuple[str, ...]]
+    stimulus_hash: str
+    stories_per_emotion: int
+    # Topics each label's stories were drawn over. The neutral corpus draws from the same seeded
+    # shuffle, so this is the number that bounds how many neutral calls can stay inside the topics
+    # the stories actually saw. Zero under the project recipe, which has no neutral arm.
+    topics_per_label: int
+    recipe_manifest: dict[str, object]
+
+
+def build_stimulus_plan(
+    labels: tuple[str, ...],
+    *,
+    story_recipe: StoryRecipeName,
+    stories_per_emotion: int,
+    seed: int,
+    sofroniew_stories_per_call: int = 2,
+    sofroniew_data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
+) -> StimulusPlan:
+    """Resolve the E0 stimulus arm.
+
+    ``project`` is the §5 recipe (three-sentence prompt, one paragraph per call, 25 neutral
+    settings). ``sofroniew`` is the paper's own appendix prompt over the paper's 100 topics,
+    batched ``sofroniew_stories_per_call`` stories per completion — the A/B whose whole point is
+    that everything downstream (word set, capture window, centring, G0) is held identical, so a
+    difference in the result is a difference the prompt made.
+
+    Under ``sofroniew``, ``stories_per_emotion`` still names the target stories per label; the
+    number of CALLS per label is ``stories_per_emotion // sofroniew_stories_per_call``, and it
+    must divide evenly or the two arms would not compare at matched sample size.
+    """
+
+    if story_recipe == "project":
+        return StimulusPlan(
+            recipe="project",
+            requests=build_story_grid(labels, stories_per_emotion=stories_per_emotion, seed=seed),
+            split=_single_story,
+            stimulus_hash=stable_hash(
+                [STORY_PROMPT_TEMPLATE, STYLE_CONTROL_PROMPT_TEMPLATE, list(STORY_TOPICS)]
+            ),
+            stories_per_emotion=stories_per_emotion,
+            topics_per_label=0,
+            recipe_manifest={"recipe": "project", "n_topics": len(STORY_TOPICS)},
+        )
+    if story_recipe != "sofroniew":
+        raise ValueError(f"unknown story_recipe {story_recipe!r}; expected project or sofroniew")
+
+    if sofroniew_stories_per_call < 1:
+        raise ValueError("sofroniew_stories_per_call must be >= 1")
+    if stories_per_emotion % sofroniew_stories_per_call:
+        raise ValueError(
+            f"stories_per_emotion={stories_per_emotion} is not a multiple of "
+            f"sofroniew_stories_per_call={sofroniew_stories_per_call}; the arms would compare at "
+            "different sample sizes"
+        )
+    recipe = read_sofroniew_recipe(sofroniew_data_dir)
+    topics_per_label = stories_per_emotion // sofroniew_stories_per_call
+    manifest = recipe.manifest()
+    manifest |= {
+        "recipe": "sofroniew",
+        "topics_per_label": topics_per_label,
+        "stories_per_call": sofroniew_stories_per_call,
+    }
+    return StimulusPlan(
+        recipe="sofroniew",
+        requests=build_sofroniew_story_grid(
+            labels,
+            recipe=recipe,
+            topics_per_label=topics_per_label,
+            stories_per_call=sofroniew_stories_per_call,
+            seed=seed,
+        ),
+        split=split_completion,
+        # Hashes the loaded paper text, not a copy of it: the arm's stimulus identity is the
+        # arXiv source it was extracted from plus how far it was downscaled.
+        stimulus_hash=stable_hash(
+            [
+                recipe.story_prompt_template,
+                recipe.style_control_prompt_template,
+                list(recipe.topics),
+                topics_per_label,
+                sofroniew_stories_per_call,
+            ]
+        ),
+        stories_per_emotion=stories_per_emotion,
+        topics_per_label=topics_per_label,
+        recipe_manifest=manifest,
+    )
+
+
+def fit_neutral_projection(
+    backend: StoryCaptureBackend,
+    *,
+    layers: tuple[int, ...],
+    n_transcripts: int,
+    dialogues_per_call: int,
+    variance_target: float,
+    seed: int,
+    min_token: int,
+    max_tokens: int,
+    temperature: float,
+    min_kept: int,
+    max_drop_rate: float,
+    first_contact_n: int,
+    first_contact_max_drop_rate: float,
+    story_topics_per_label: int,
+    data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
+) -> tuple[NeutralBasis, NeutralProjectionRecord, tuple[GeneratedStory, ...]]:
+    """Generate the neutral corpus, capture it, and fit the confound basis the paper projects out.
+
+    Returns the basis, the record for the artifact, and the transcripts themselves so the caller
+    can write them into the run's story log — an unread confound corpus is exactly the kind of
+    thing a first-contact checkpoint exists to catch, and it costs nothing to keep.
+
+    The lexical/length filter is the same one the stories go through, minus the "did it name the
+    target" clause (there is no target). The length clause matters here for the same reason it
+    does there: a transcript with no token past ``min_token`` contributes nothing but noise to the
+    covariance.
+
+    **Three refusals, each naming the failure it can catch.** The ``<NEW DIALOGUE>`` splitter is a
+    BLIND freeze on exactly the same footing as ``<NEW STORY>``, so it gets the same early-N
+    checkpoint the stories get — rails.md licenses a blind freeze only against one. Past that,
+    ``min_kept`` and ``max_drop_rate`` are floors on the corpus itself: what they catch is a
+    confound basis fit on a handful of survivors and then subtracted from every emotion vector
+    BEFORE G0, where nothing downstream can distinguish its effect from the instrument's. Their
+    defaults are sized to the real config's 24 transcripts (see ``config.EmotionVectorsConfig``).
+    """
+
+    recipe = read_sofroniew_recipe(data_dir)
+    requests = build_neutral_dialogue_grid(
+        recipe=recipe,
+        n_transcripts=n_transcripts,
+        dialogues_per_call=dialogues_per_call,
+        story_topics_per_label=story_topics_per_label,
+        seed=seed,
+    )
+    transcripts = generate_stories(
+        backend,
+        requests,
+        min_token=min_token,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        split=neutral_completion_splitter(recipe.speaker_substitutions),
+    )
+    # Every refusal below carries the transcripts out with it: the generations are already paid
+    # for, they are the evidence for WHY the corpus was refused, and two of these messages send
+    # the operator to go read them (see :class:`E0Refusal`).
+    try:
+        contact_n, contact_rate = _first_contact_check(
+            transcripts,
+            n=first_contact_n,
+            max_drop_rate=first_contact_max_drop_rate,
+            surface="neutral transcripts",
+        )
+        kept = tuple(transcript for transcript in transcripts if transcript.kept)
+        drop_rate = 1.0 - len(kept) / len(transcripts)
+        if drop_rate > max_drop_rate:
+            raise NeutralCorpusTooThin(
+                f"the filter dropped {drop_rate:.2f} of the {len(transcripts)} neutral "
+                f"transcripts that came back (ceiling {max_drop_rate:.2f}, reasons "
+                f"{dict(sorted(Counter(t.drop_reason for t in transcripts if t.drop_reason).items()))}"
+                "). The surviving corpus is not the one the config designed, so the subspace it "
+                "fits is not the one the arm meant to remove. Read the quarantined "
+                "neutral_dialogues.json."
+            )
+        if len(kept) < max(min_kept, 2):
+            raise NeutralCorpusTooThin(
+                f"only {len(kept)} neutral transcripts survived, below the floor of {min_kept} "
+                f"({len(transcripts)} pieces came back from {len(requests)} calls asking for "
+                f"{n_transcripts}). A basis fit on this few is subtracted from every emotion "
+                "vector before G0, and nothing downstream can tell its effect from the "
+                "instrument's. Read the quarantined neutral_dialogues.json, then raise "
+                "neutral_dialogues or max_tokens, or lower min_token."
+            )
+    except E0Refusal as failure:
+        failure.neutral = transcripts
+        raise
+    states = capture_token_mean_states(
+        backend, [transcript.text for transcript in kept], layers=layers, min_token=min_token
+    )
+    basis = fit_neutral_basis(states, variance_target=variance_target)
+    drop_counts = Counter(t.drop_reason for t in transcripts if t.drop_reason is not None)
+    record = NeutralProjectionRecord(
+        variance_target=variance_target,
+        pooling=f"mean over transcript tokens from token {min_token} onward, per block",
+        n_transcripts_configured=n_transcripts,
+        n_calls_requested=len(requests),
+        n_pieces_obtained=len(transcripts),
+        n_kept=len(kept),
+        drop_rate=drop_rate,
+        min_kept=min_kept,
+        max_drop_rate=max_drop_rate,
+        first_contact_n=contact_n,
+        first_contact_drop_rate=contact_rate,
+        drop_counts_by_reason=dict(sorted(drop_counts.items())),
+        dialogues_per_call=dialogues_per_call,
+        stimulus_hash=stable_hash(
+            [
+                recipe.neutral_dialogue_prompt_template,
+                [list(pair) for pair in recipe.speaker_substitutions],
+                [request.topic for request in requests],
+                dialogues_per_call,
+            ]
+        ),
+        blocks=basis.rows,
+        total_components=basis.total_components,
+        max_components_in_a_block=max(row.n_components for row in basis.rows),
+        components_sha256=basis_sha256(basis),
+    )
+    return basis, record, transcripts
+
+
 def extract_emotion_vectors(
     backend: StoryCaptureBackend,
     word_set: EmotionWordSet,
     *,
     spec: ModelSpec,
     stories_per_emotion: int,
+    story_recipe: StoryRecipeName = "project",
+    sofroniew_stories_per_call: int = 2,
+    sofroniew_data_dir: Path = DEFAULT_SOFRONIEW_DATA_DIR,
+    neutral_projection: bool = False,
+    neutral_dialogues: int = 24,
+    neutral_dialogues_per_call: int = 4,
+    neutral_variance_target: float = DEFAULT_NEUTRAL_VARIANCE_TARGET,
+    neutral_min_kept: int = 8,
+    neutral_max_drop_rate: float = 0.5,
     seed: int = EXTRACTION_SEED,
     min_token: int = DEFAULT_MIN_TOKEN,
     max_tokens: int = 320,
@@ -518,22 +976,51 @@ def extract_emotion_vectors(
     fallback_blocks: int = DEFAULT_FALLBACK_BLOCKS,
     first_contact_n: int = 10,
     first_contact_max_drop_rate: float = 0.5,
-) -> tuple[EmotionVectors, tuple[GeneratedStory, ...]]:
-    """Run E0 end to end: generate → filter → capture → centre → PCA → G0 gate.
+) -> tuple[EmotionVectors, tuple[GeneratedStory, ...], tuple[GeneratedStory, ...]]:
+    """Run E0 end to end: generate → filter → capture → centre → [project] → PCA → G0 gate.
 
     Returns the hash-bound artifact and every generated story (kept and dropped) so the caller
     can write the first-contact sample and the drop audit. Raises :class:`FirstContactFailure`
     before the capture pass when the BLIND filter over-drops its first-contact sample.
+
+    ``neutral_projection`` adds the paper's confound-removal step: generate ``neutral_dialogues``
+    emotionally neutral Human/Assistant transcripts from the paper's own prompt, fit the top PCs
+    explaining ``neutral_variance_target`` of their activation variance per block, and project
+    those out of the centred vectors before G0
+    (:mod:`appraisal_emotions.analysis.neutral_projection`). Default OFF: the paper's footnote 3
+    reports the projection as a denoiser whose qualitative findings hold without it, and turning
+    it on silently would change the instrument E1-E3 have already been read against.
+
+    The third return value is the neutral corpus (empty when the step is off). It is returned
+    SEPARATELY from the story log rather than appended to it, because the story log is P1's input
+    and a neutral transcript is not a story of any emotion — but it still gets written out, so the
+    corpus behind a projection is readable rather than a number in a metadata block.
     """
 
     labels = word_set.labels
-    requests = build_story_grid(labels, stories_per_emotion=stories_per_emotion, seed=seed)
+    plan = build_stimulus_plan(
+        labels,
+        story_recipe=story_recipe,
+        stories_per_emotion=stories_per_emotion,
+        seed=seed,
+        sofroniew_stories_per_call=sofroniew_stories_per_call,
+        sofroniew_data_dir=sofroniew_data_dir,
+    )
     stories = generate_stories(
-        backend, requests, min_token=min_token, max_tokens=max_tokens, temperature=temperature
+        backend,
+        plan.requests,
+        min_token=min_token,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        split=plan.split,
     )
-    contact_n, contact_rate = _first_contact_check(
-        stories, n=first_contact_n, max_drop_rate=first_contact_max_drop_rate
-    )
+    with _attaching_story_log(stories):
+        contact_n, contact_rate = _first_contact_check(
+            stories, n=first_contact_n, max_drop_rate=first_contact_max_drop_rate
+        )
+        # Before the capture pass, and separate from the drop audit: the filter can only report on
+        # pieces that exist, so a splitter that returned half of them looks like a clean run to it.
+        generated_by_label = _yield_check(stories, requested=stories_per_emotion)
 
     kept = tuple(story for story in stories if story.kept)
     if not kept:
@@ -551,6 +1038,46 @@ def extract_emotion_vectors(
     vectors = np.ascontiguousarray(means - grand_mean, dtype=np.float64)
 
     valence = np.asarray([word_set.valence_by_word[label] for label in labels], dtype=float)
+    neutral_transcripts: tuple[GeneratedStory, ...] = ()
+    projection_record: NeutralProjectionRecord | None = None
+    neutral_basis: NeutralBasis | None = None
+    table_before: tuple[G0BlockRow, ...] = ()
+    table_random: tuple[G0BlockRow, ...] = ()
+    if neutral_projection:
+        # After centring, before the gate: projection is linear, so word rows that summed to zero
+        # still do, and G0 has to score the vectors the run keeps.
+        table_before = _g0_table(vectors[: len(labels)], valence)
+        # The neutral refusals attach their own corpus; this adds the story log, so a run that
+        # dies here still writes out both of the things it spent generations on.
+        with _attaching_story_log(stories):
+            neutral_basis, projection_record, neutral_transcripts = fit_neutral_projection(
+                backend,
+                layers=layers,
+                n_transcripts=neutral_dialogues,
+                dialogues_per_call=neutral_dialogues_per_call,
+                variance_target=neutral_variance_target,
+                seed=seed,
+                min_token=min_token,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                min_kept=neutral_min_kept,
+                max_drop_rate=neutral_max_drop_rate,
+                first_contact_n=first_contact_n,
+                first_contact_max_drop_rate=first_contact_max_drop_rate,
+                story_topics_per_label=plan.topics_per_label,
+                data_dir=sofroniew_data_dir,
+            )
+        # The random-frame counterfactual, on the SAME pre-projection vectors, before they are
+        # overwritten. Seeded off the run seed so it is reproducible without being the run seed
+        # (which already drives the stimulus draw).
+        table_random = _g0_table(
+            project_out(vectors, random_orthonormal_basis(neutral_basis, seed=seed + 1))[
+                : len(labels)
+            ],
+            valence,
+        )
+        vectors = project_out(vectors, neutral_basis)
+
     table = _g0_table(vectors[: len(labels)], valence)
     selected_block, abs_rho, verdict, note = _gate(table, g0_threshold)
     best_row = table[selected_block]
@@ -566,9 +1093,10 @@ def extract_emotion_vectors(
         seed=seed,
         words_file=str(word_set.source_path),
         words_file_sha256=word_set.source_sha256,
-        stimulus_hash=stable_hash(
-            [STORY_PROMPT_TEMPLATE, STYLE_CONTROL_PROMPT_TEMPLATE, list(STORY_TOPICS)]
-        ),
+        stimulus_hash=plan.stimulus_hash,
+        story_recipe=plan.recipe,
+        recipe_manifest=plan.recipe_manifest,
+        neutral_projection=projection_record,
         stories_per_emotion=stories_per_emotion,
         min_token=min_token,
         max_tokens=max_tokens,
@@ -581,6 +1109,7 @@ def extract_emotion_vectors(
         n_kept=len(kept),
         drop_rate=1.0 - len(kept) / len(stories),
         drop_counts_by_reason=dict(sorted(drop_counts.items())),
+        generated_by_label=dict(sorted(generated_by_label.items())),
         kept_by_label=dict(Counter(story.emotion for story in kept)),
         first_contact_n=contact_n,
         first_contact_drop_rate=contact_rate,
@@ -588,6 +1117,8 @@ def extract_emotion_vectors(
         filter_freeze_status="BLIND",
         g0_threshold=g0_threshold,
         g0_table=table,
+        g0_table_before_projection=table_before,
+        g0_table_random_projection=table_random,
         selected_block=selected_block,
         g0_abs_rho=abs_rho,
         g0_spearman_rho=best_row.spearman_rho,
@@ -599,4 +1130,5 @@ def extract_emotion_vectors(
         vectors_dtype=str(vectors.dtype),
         vectors_sha256=states_sha256(vectors),
     )
-    return EmotionVectors(metadata=metadata, vectors=vectors), stories
+    artifact = EmotionVectors(metadata=metadata, vectors=vectors, neutral_basis=neutral_basis)
+    return artifact, stories, neutral_transcripts

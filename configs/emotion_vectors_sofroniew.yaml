@@ -1,0 +1,87 @@
+# Rung E0, PAPER-PROMPT ARM: the same emotion basis, extracted under Sofroniew et al. 2026's own
+# story-generation prompt instead of ours (design docs/design/sofroniew-recipe.md).
+#
+# This config is the B side of a one-variable A/B. Run it against
+# `configs/emotion_vectors_base.yaml` — same model registry key, same seed, same §5 word set,
+# same capture window (token 50+), same grand-mean centring, same G0 gate, same story count per
+# label. The ONLY difference is the stimulus recipe:
+#
+#              base (project)                      this (sofroniew)
+#   prompt     our three-sentence prompt           the paper's appendix prompt, loaded verbatim
+#   topics     25 valence-NEUTRAL settings         the paper's 100 affect-laden premises
+#   batching   1 story per completion              2 per completion, split on <NEW STORY>
+#
+# What it answers: "is the E0 result a property of emotion-concept geometry, or of your prompt?"
+# — the question a reviewer will ask, answered with data instead of argument. If G0 and the P1/P2
+# readouts land in the same place under both prompts, the recipe was not doing the work. If they
+# diverge, that divergence is the finding and both arms get reported.
+#
+# What it does NOT change: the word set. The paper's 171 words do not contain `disappointed`, nor
+# 7 of our other 8 outcome_neg words, so extracting on their list would delete the OCC
+# prospect-disconfirmation contrast E1/E2 exist to test. The word-set divergence is therefore
+# forced by the hypothesis, not a shortcut; docs/design/sofroniew-recipe.md shows the full
+# overlap table, and data/sofroniew2026/emotion_words_171.json carries their list for reference.
+#
+# Cost: 85 labels x 6 calls = 510 generations of ~2 paragraphs each, plus <=1,020 read-only
+# forwards for the capture. Comparable to the base arm's E0 slot (runbook §5), because batching
+# trades calls for longer completions at roughly constant output tokens.
+#
+# The <NEW STORY> splitter is frozen BLIND — no completion from this model under this prompt has
+# been read. Two checks compensate, and they catch different things. The first-contact checkpoint
+# reads the run's own first 10 generations against the frozen filter. The yield check compares the
+# stories each label actually came back with against `stories_per_emotion`: a completion the
+# splitter cannot cut yields ONE piece where 2 were asked for, which no length or lexical filter
+# can see — that piece is a perfectly well-formed story — and the run refuses before the capture
+# pass rather than scoring a basis at half its designed sample size with a 0.00 drop rate.
+#
+# GPU runs and model downloads gate behind explicit human approval (`just extract-emotions`).
+
+run:
+  id: emotion_vectors_sofroniew
+  output_root: runs
+  seed: 7
+
+provenance:
+  project_or_claim_family: appraisal-to-emotion-e0
+  prompt_or_workflow_version: emotion-vectors-sofroniew/v1
+  known_gaps:
+    - "E0 is a MEASUREMENT INSTRUMENT, not a result: an emotion-concept basis plus its
+      sensitivity gate. No emotion word here is a state attribution."
+    - "The paper runs 100 topics x 12 stories per topic per emotion (1,200 stories per emotion).
+      This arm runs 6 topics x 2 stories (12 per emotion), a ~100x downscale on the stimulus
+      count. It reproduces the paper's PROMPT, not the paper's sample size."
+    - "The paper projects out the top PCs of activations on a neutral-dialogue corpus (enough for
+      50% of variance) before using the vectors. This arm does NOT, deliberately: it keeps the
+      A/B against the base arm to one variable. The step is implemented and runs in
+      configs/emotion_vectors_sofroniew_projected.yaml, and the paper's own footnote reports its
+      qualitative findings holding without it."
+    - "The topic subset is drawn once and shared across every label, so topic cancels in the
+      grand-mean centring exactly as it does in the paper. A per-label topic draw would NOT be
+      safe here, because the paper's topics carry affect."
+    - "The <NEW STORY> splitter and the story filter are frozen BLIND against unread model
+      outputs; the first-contact checkpoint is the licensed compensation, not a reality sample."
+  decision_affected:
+    - docs/design/sofroniew-recipe.md
+    - docs/design/experiment.md
+
+model:
+  registry_path: configs/model_registry.yaml
+  key: qwen_30b_primary
+
+emotion_vectors:
+  seed: 7
+  # Held identical to the base arm — the word set is NOT the manipulated variable.
+  words_file: data/emotion_words.json
+  stories_per_emotion: 12
+  story_recipe: sofroniew
+  sofroniew_stories_per_call: 2
+  sofroniew_data_dir: data/sofroniew2026
+  # Sofroniew capture window: mean residual stream from token 50 onward. Held identical.
+  min_token: 50
+  # Raised from the base arm's 320: one completion now carries 2 paragraphs plus separators.
+  max_tokens: 700
+  temperature: 1.0
+  g0_threshold: 0.6
+  fallback_blocks: 48
+  first_contact_n: 10
+  first_contact_max_drop_rate: 0.5
