@@ -171,9 +171,16 @@ each, since batching trades calls for longer completions at roughly constant out
 
 **Frozen BLIND.** No completion from our model under this prompt has been read — generation needs
 the GPU this arm is being prepared for. The `<NEW STORY>` splitter and the story filter are
-therefore blind freezes, licensed only by the first-contact checkpoint the config carries: a
-completion the splitter cannot cut yields one over-long piece, which the length and lexical
-filters surface in the first-contact sample before full spend. **Read
+therefore blind freezes, and they need **two** compensations, because they fail in two different
+ways. The first-contact checkpoint reads the run's own first N generations against the frozen
+filter and refuses if it over-drops. That checkpoint cannot see the splitter's failure at all: a
+completion the splitter cannot cut yields ONE piece where `sofroniew_stories_per_call` were
+requested, and that piece is a well-formed story of ordinary length, so every per-piece filter
+stays silent and the run reports a clean 0.00 drop rate on a sample a fraction of its designed
+size. The only observable is the **count**, so the licence is the realized-vs-configured yield
+check (`StoryYieldShortfall`): stories realized per label against `stories_per_emotion`, compared
+before the capture pass, with both numbers recorded in the artifact (`generated_by_label` beside
+`kept_by_label`). A run that refuses on either check quarantines its corpora first. **Read
 `runs/emotion_vectors_sofroniew/emotions/first_contact_sample.json` before trusting anything
 downstream of it.** `configs/emotion_vectors_sofroniew_smoke.yaml` exercises the whole path on
 the fake backend first, at no GPU cost.
@@ -221,8 +228,8 @@ Five implementation decisions, each a decision rather than an accident:
 3. **A random frame of the same width, as the null.** Removing k directions shortens and rotates
    every vector whatever those k directions are, so a G0 shift between the two tables above is not
    by itself evidence about the *neutral subspace*. A projected run therefore also writes
-   `g0_table_random_projection`: the same pre-projection vectors with a Haar-random orthonormal
-   frame of the same per-block width removed. If the neutral projection and the random frame move
+   `g0_table_random_projection`: the same pre-projection vectors with a uniformly random
+   orthonormal frame of the same per-block width removed. If the neutral projection and the random frame move
    the gate by the same amount, the paper's step did something generic here and should be read
    that way. The control costs no generation and no forward passes — one QR per block on arrays
    the run already holds.

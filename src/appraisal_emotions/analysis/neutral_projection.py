@@ -274,8 +274,10 @@ def random_orthonormal_basis(basis: NeutralBasis, *, seed: int) -> NeutralBasis:
         if k == 0:
             components.append(np.zeros((0, hidden), dtype=np.float64))
             continue
-        # QR of a Gaussian (hidden, k) gives k orthonormal columns, Haar-distributed on the
-        # Stiefel manifold. Transposed to match the (k, hidden) row convention project_out uses.
+        # QR of a Gaussian (hidden, k) gives k orthonormal columns. numpy's QR does not fix the
+        # sign of R's diagonal, so the columns are Haar-distributed only up to those signs — which
+        # is immaterial here: project_out uses the SPAN, and flipping a column's sign leaves the
+        # projector identical. Transposed to the (k, hidden) row convention project_out expects.
         frame = np.linalg.qr(rng.standard_normal((hidden, k)))[0]
         components.append(np.ascontiguousarray(frame.T, dtype=np.float64))
     return NeutralBasis(components=tuple(components), rows=basis.rows)
