@@ -86,8 +86,11 @@ model has an emotion at the reveal token": `v_RPE` is at most an **emotion input
 ## Norms (fetched, never transcribed)
 
 **Warriner, Kuperman & Brysbaert 2013** — valence/arousal/dominance norms for 13,915 English
-lemmas (*Behavior Research Methods* 45(4)) — and the **NRC-VAD Lexicon v1.0** (Mohammad 2018,
-ACL), research-use-only and non-redistributable. Full citations, URLs and licence terms live in
+lemmas (*Behavior Research Methods* 45(4)) — and the **NRC-VAD Lexicon v2** (Mohammad 2025, arXiv:2503.23547),
+research-use-only and non-redistributable. Correction (2026-08-16): this entry previously cited
+v1.0 (Mohammad 2018, ACL); `data/norms/MANIFEST.json` confirms the widened run's full 111-word
+coverage was actually fetched from `NRC-VAD-Lexicon-v2.1`, so v2 is the citation that matches
+what is in the repo, not v1.0. Full citations, URLs and licence terms live in
 `scripts/fetch_norms.py`, which is the only thing here that touches the network; the fetched
 subset plus a manifest lands in `data/norms/`. These upgrade the design's minted binary valence
 labels to graded valence/arousal — **all-or-nothing across the word set, not word by word**. A
