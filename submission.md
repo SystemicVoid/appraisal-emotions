@@ -1,8 +1,4 @@
-# Appraisal Geometry: Reward Prediction Error and Emotion-Concept Representations in Qwen3.6-27B
-
-<!-- TITLE: placeholder — pick final title. Alternatives:
-     "Does an LLM's Emotion-Concept Readout Track Its Reward Prediction Error?"
-     "Reward Prediction Error as an Internal State Variable in an LLM" -->
+# An LLM's Emotion-Concept Readout Tracks Reward Prediction Error
 
 **Authors:** Hugo Nguyen (Independent), Artyom Chelbayev (Independent)
 *With Apart Research. Research conducted at the Digital Minds Research Sprint, August 2026.*
