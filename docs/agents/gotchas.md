@@ -354,3 +354,26 @@ runs: the folder-trust dialog and the bypass-permissions warning. `hasCompletedO
 `bypassPermissionsModeAccepted` did *not* clear the second, which still had to be answered with
 `tmux send-keys Down` then `Enter`. Check the pane after starting a headless agent — "the session
 exists" is not "the agent is running".
+
+### An unattended supervisor's login expires, and a marker-mode teardown waits for a corpse
+
+On 2026-08-16 the wide rental's supervisor agent ran for 6 h 22 m in tmux and then printed
+`Login expired · Please run /login`. Nothing else in the pane says the loop stopped — the last
+transcript line is an ordinary "Continuing." Half an hour later the run finished, the finisher
+published to `main` and the release, verified both against GitHub, and then blocked on
+`$HOME/allow_terminate` because its mode was `marker`. The marker is written by the supervisor, so
+a supervisor that dies after the finisher is armed leaves an H100 billing until the hard deadline —
+here that would have been six idle hours on a machine whose work was already delivered and verified.
+
+Two lessons, and the second is the one that generalises:
+
+* Check liveness by what the agent *produces*, not by `tmux ls`. The session, the pane, and the
+  `pipe-pane` log all survive the expiry; only the output stops.
+* `marker` mode makes teardown depend on a process that is strictly less reliable than the finisher
+  itself. Prefer `auto` — the finisher's own gate (`queue_done` AND verify-clean AND no failed
+  stages, all read back from GitHub) is a stronger precondition than "some agent noticed and
+  touched a file", and it cannot expire. Reserve `marker` for a rental that genuinely owes an
+  artifact no unattended check can produce, and give that rental a short deadline, not a long one.
+
+`environmental` for the expiry itself (credential lifetime is not ours to set); the mode default is
+not, and is worth changing in the runbook.
