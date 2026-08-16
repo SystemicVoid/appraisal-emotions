@@ -9,7 +9,7 @@ Reward prediction error (RPE) theory holds that organisms evaluate rewards relat
 In the sense that a large language model (LLM) is a digital mind it may carry analogies to biological minds in how it computes well-being and how that computation influences its subsequent behaviour. Along this line of reasoning in this paper we set out to test the following hypotheses:
 
 - emotion-concept readout at the outcome token tracks the model's reward-prediction error
-- recently computed RPE influences a model's follow-up
+- recently computed RPE influences a model's subsequent actions
 
 As LLMs increasingly take actions in the world through agentic systems, understanding the underlying mechanisms of those actions can yield insights into pre-existing biases and give ways of counteracting them.
 
@@ -35,6 +35,8 @@ Our work builds on currently unpublished peer-reviewed research by Hugo Nguyen i
 Our code is publicly available here: https://github.com/SystemicVoid/appraisal-emotions
 
 ## Pages 3–5 — Main results
+
+
 
 - Only genuinely new outcomes, prior research to be explained in the introduction
 - Answers to the 3 hypotheses + discussion
