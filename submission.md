@@ -55,19 +55,19 @@ Finally, nothing in our research was aimed at, implies or supports phenomenal ex
 
 ## References
 
-Berg. (2026). “Why Learning Requires Feeling.” *AAAI Spring Symposium Series, 8*(1), 227–233. https://doi.org/10.1609/aaaiss.v8i1.42547
-
-Isen, A. M., & Patrick, R. (1983). “The Effect of Positive Feelings on Risk Taking: When the Chips Are Down.” *Organizational Behavior and Human Performance, 31*(2), 194–202. https://doi.org/10.1016/0030-5073(83)90120-4
-
-Mohammad, S. M. (2025). “NRC VAD Lexicon v2: Norms for Valence, Arousal, and Dominance for over 55k English Terms.” arXiv:2503.23547.
+Schultz, W., Dayan, P., & Montague, P. R. (1997). “A Neural Substrate of Prediction and Reward.” *Science, 275*(5306), 1593–1599. https://doi.org/10.1126/science.275.5306.1593
 
 Rutledge, R. B., Skandali, N., Dayan, P., & Dolan, R. J. (2014). “A Computational and Neural Model of Momentary Subjective Well-Being.” *Proceedings of the National Academy of Sciences, 111*(33), 12252–12257. https://doi.org/10.1073/pnas.1407535111
 
-Schultz, W., Dayan, P., & Montague, P. R. (1997). “A Neural Substrate of Prediction and Reward.” *Science, 275*(5306), 1593–1599. https://doi.org/10.1126/science.275.5306.1593
-
 Sofroniew et al. (2026). “Emotion Concepts and their Function in a Large Language Model.” *arXiv:2604.07729.*
 
+Mohammad, S. M. (2025). “NRC VAD Lexicon v2: Norms for Valence, Arousal, and Dominance for over 55k English Terms.” arXiv:2503.23547.
+
 Thaler, R. H., & Johnson, E. J. (1990). “Gambling with the House Money and Trying to Break Even: The Effects of Prior Outcomes on Risky Choice.” *Management Science, 36*(6), 643–660. https://doi.org/10.1287/mnsc.36.6.643
+
+Isen, A. M., & Patrick, R. (1983). “The Effect of Positive Feelings on Risk Taking: When the Chips Are Down.” *Organizational Behavior and Human Performance, 31*(2), 194–202. https://doi.org/10.1016/0030-5073(83)90120-4
+
+Berg. (2026). “Why Learning Requires Feeling.” *AAAI Spring Symposium Series, 8*(1), 227–233. https://doi.org/10.1609/aaaiss.v8i1.42547
 
 ## Appendix
 
