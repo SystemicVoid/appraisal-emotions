@@ -309,3 +309,48 @@ check the provider's status page before assuming anything local is wrong.
 The billing lesson is separate and sharper: an instance that cannot be reached still bills. Any
 gap between "I launched it" and "I confirmed a stage is running on it" is money, so confirm the
 first stage has actually started before leaving a rental unattended.
+
+### The firewall also blocks rental-to-rental SSH, and it settles asymmetrically
+
+The Lambda firewall governs the public IPs, and rentals in different regions reach each other over
+those same public IPs. So two instances on the same account, with the same key, cannot SSH to each
+other: the rule list allows the control host's `/32` and nothing else. Symptom is again a bare
+`Connection timed out`, which by now is the least informative error in this project.
+
+Fix is to PUT the rule list back with each rental's own address added (again: the endpoint replaces
+the set). What is *not* obvious is that the result does not have to be symmetric. On 2026-08-16,
+after adding all three, `A -> B` connected within a minute and `A -> C` was still timing out
+half an hour later, while `C -> A` connected immediately. Rather than wait on propagation, invert
+the transfer: a push that will not connect is often a pull that will.
+
+This matters more than it sounds. Shipping a 5.1 GB input set from a travelling laptop failed twice
+at `code 255`; between two rentals the same copy ran at 56 MB/s and finished in ninety seconds. If
+one rental already holds an input that another needs, the operator's link should not be in the path
+at all.
+
+### `pkill -f` matches the SSH command line that is installing the thing you are pkilling
+
+`ssh host "pkill -f 'bash .*finisher.sh'; setsid nohup bash ~/finisher.sh &"` never reaches the
+second half. The remote `bash -c` runs with the whole command string as its argv, that string
+contains `finisher.sh`, and `-f` matches against the full command line — so the pattern matches its
+own shell and kills it. It fails silently: the file lands, the process does not start, and the
+installer looks like it worked.
+
+Use a lock in the script (`exec 9>~/.lock; flock -n 9 || exit 0`) instead of hunting pids from
+outside. One caveat when restarting: the dead script's `sleep` child inherits the lock fd and holds
+it for up to the sleep interval, so a relaunch should retry for a minute rather than treat the
+"already running" message as final — and certainly rather than force the lock, since two copies of a
+script that can terminate the machine is worse than none.
+
+### Claude Code in tmux needs a real tty, and pre-seeding its prompts is not optional unattended
+
+`tmux new-session -d "claude ... | tee log"` starts, stays alive, and renders nothing:
+`capture-pane` comes back empty because the pipe took stdout away from the TUI. Log with
+`tmux pipe-pane -o -t <session> 'cat >> file'`, which taps the pane without replacing its terminal.
+
+Then, on a machine nobody can attach to, two interactive prompts still block the agent before it
+runs: the folder-trust dialog and the bypass-permissions warning. `hasCompletedOnboarding` and
+`projects.<path>.hasTrustDialogAccepted` in `~/.claude.json` clear the first; as of v2.1.233
+`bypassPermissionsModeAccepted` did *not* clear the second, which still had to be answered with
+`tmux send-keys Down` then `Enter`. Check the pane after starting a headless agent — "the session
+exists" is not "the agent is running".
