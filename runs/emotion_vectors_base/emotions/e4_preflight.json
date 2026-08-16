@@ -1,0 +1,136 @@
+{
+  "answer_form": "leading_space",
+  "blocking": [],
+  "checks": {
+    "answer_form_token_counts": {
+      "bare": {
+        "KER": 1,
+        "PON": 1,
+        "TUR": 1,
+        "VEL": 1
+      },
+      "leading_space": {
+        "KER": 1,
+        "PON": 1,
+        "TUR": 1,
+        "VEL": 1
+      }
+    },
+    "answer_pool": {
+      "affect_flagged": [],
+      "collided": [],
+      "multi_token": [],
+      "note": "4 answer symbols single-token in both forms, affect-neutral, disjoint from the battery's.",
+      "passed": true,
+      "valid": [
+        "KER",
+        "PON",
+        "TUR",
+        "VEL"
+      ]
+    },
+    "chat_tail": "<|im_end|>\n<|im_start|>user\n\ue000USER\ue000<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "extension": {
+      "appended_chars": 250,
+      "ok": true,
+      "patch_position": 57,
+      "pinned_is_byte_prefix": true
+    },
+    "number_token_counts": {
+      "-30": 3,
+      "-70": 3,
+      "0": 2,
+      "10": 3,
+      "3": 2,
+      "30": 3,
+      "40": 3,
+      "70": 3
+    },
+    "numbers_are_single_tokens": false
+  },
+  "model": "qwen_30b_primary",
+  "reality_sample": {
+    "max_new_tokens": 8,
+    "n_trials": 10,
+    "note": "Shapes only. Which option the model prefers is NOT computed here and must not be: the sample calibrates the readout's surface, and looking at the outcome would spend the freeze's honesty for nothing.",
+    "on_option_rate": 1.0,
+    "recommended_answer_form": "leading_space",
+    "shape_counts": {
+      "leading_space": 10
+    },
+    "trials": [
+      {
+        "continuation": " KER",
+        "first_token_is_an_option": true,
+        "rendering": "KER|PON|target_first",
+        "reveal": "rp_91b00c7a2a27fc3d",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "KER|PON|other_first",
+        "reveal": "rp_9d48e2dae6b1a0be",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "PON|KER|target_first",
+        "reveal": "rp_3105e45f3576f49d",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "PON|KER|other_first",
+        "reveal": "rp_574f92354f8aa7bd",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " KER",
+        "first_token_is_an_option": true,
+        "rendering": "KER|PON|target_first",
+        "reveal": "rp_b160ef8970cfb545",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "KER|PON|other_first",
+        "reveal": "rp_969b1220440e1f5f",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "PON|KER|target_first",
+        "reveal": "rp_5ac51d8fa3ab179f",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " KER",
+        "first_token_is_an_option": true,
+        "rendering": "PON|KER|other_first",
+        "reveal": "rp_717294800f38d867",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "KER|PON|target_first",
+        "reveal": "rp_b3cae199da5b1da6",
+        "starts_with_space": true
+      },
+      {
+        "continuation": " PON",
+        "first_token_is_an_option": true,
+        "rendering": "KER|PON|other_first",
+        "reveal": "rp_43c26c297ee496db",
+        "starts_with_space": true
+      }
+    ]
+  },
+  "tokenizer_only": false,
+  "verdict": "PREFLIGHT CLEAN: the answer pool is legal and the extension holds on this tokenizer. The reality sample sets --answer-form leading_space."
+}
