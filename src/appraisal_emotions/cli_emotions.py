@@ -219,6 +219,14 @@ def behavioral_transfer_command(
             help="Off-cell pairs for the positive control that makes every null readable.",
         ),
     ] = DEFAULT_REACHABILITY_PAIRS,
+    spend_arms_anyway: Annotated[
+        bool,
+        typer.Option(
+            "--spend-arms-anyway",
+            help="Spend the patched arms even after a gate fails. Buys the descriptive arm table "
+            "and nothing else: the verdict still reports harness_inadequate.",
+        ),
+    ] = False,
 ) -> None:
     """Rung E4: does the patched expectation state change what the model DOES (e4-prereg)?
 
@@ -258,6 +266,7 @@ def behavioral_transfer_command(
             n_permutations=permutations,
             n_reachability_pairs=reachability_pairs,
             answer_form=cast(AnswerForm, answer_form),
+            spend_arms_anyway=spend_arms_anyway,
         )
     finally:
         free_backend(backend)

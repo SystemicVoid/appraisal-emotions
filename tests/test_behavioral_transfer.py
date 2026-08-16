@@ -824,6 +824,59 @@ def test_the_report_records_which_wiring_semantics_this_stack_has(tmp_path, reve
     assert report.wiring_check.split(":")[0] in {"POST-HOOK", "PRE-HOOK", "UNEXPECTED"}
 
 
+def test_spending_the_arms_past_a_failed_gate_buys_numbers_but_not_a_verdict(
+    tmp_path, reveals, battery
+):
+    """The override exists so an operator can have the descriptive table. It must not launder it.
+
+    A flat backend fails the gates, so the default run spends nothing. Asking for the arms anyway
+    fills the table and changes NOTHING about what the run licensed: ``verdict_cap`` reads the same
+    booleans in the same order and still says harness_inadequate. If this test ever goes green on a
+    non-``harness_inadequate`` verdict, the flag has become a way to buy a claim with money.
+    """
+
+    paths = _artifacts(tmp_path, reveals, battery)
+    common = {
+        "backend": PlantedBackend(alpha=0.0, noise=0.05),
+        "max_pairs": 12,
+        "max_per_cell": 1,
+        "n_random_draws": 2,
+        "n_permutations": 200,
+        "answer_candidates": POOL,
+    }
+
+    withheld = behavioral_transfer(
+        paths["states"], paths["battery"], paths["dirs"], paths["emo"], **common
+    )
+    assert not withheld.gate.passed or not withheld.reachability.passed, (
+        "the fixture must fail a gate for this test to be testing anything"
+    )
+    assert withheld.arms == ()
+    assert withheld.arms_spent_under_failed_gate is None
+    assert withheld.verdict_cap.startswith("harness_inadequate")
+
+    spent = behavioral_transfer(
+        paths["states"],
+        paths["battery"],
+        paths["dirs"],
+        paths["emo"],
+        spend_arms_anyway=True,
+        **common,
+    )
+    assert spent.arms, "the flag's whole job is to fill the arm table"
+    assert spent.verdict_cap.startswith("harness_inadequate")
+    assert spent.verdict_cap == withheld.verdict_cap, (
+        "the override must not reach the routing: same gates in, same verdict out"
+    )
+    assert "DESCRIPTIVE ONLY" in spent.arms_spent_under_failed_gate
+    summary = format_behavioral_transfer_summary(spent)
+    # "E3 transfer" appears only in the arm table's header; "mean shift" also appears up in the
+    # reachability line, which is not the table this warning is guarding.
+    assert summary.index("DESCRIPTIVE ONLY") < summary.index("E3 transfer"), (
+        "the warning has to come before the table a reader would otherwise stop at"
+    )
+
+
 # --------------------------------------------------------------------------------------
 # The preflight script — the one thing that runs BEFORE the weights are worth renting
 # --------------------------------------------------------------------------------------

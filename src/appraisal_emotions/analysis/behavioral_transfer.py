@@ -398,6 +398,12 @@ class BehavioralTransferReport(StrictModel):
     ceiling_note: str
     cross_position_note: str
     identification_limit: str
+    # Set only when the operator asked for the arm table after a gate had already failed. Its
+    # presence is the reader's warning that every number in ``arms`` and ``corruption`` below was
+    # bought under a failed gate and is DESCRIPTIVE: ``verdict_cap`` still routes on the gates and
+    # still says harness_inadequate, and no reading of the table escapes that.
+    # Defaulted, so the artifacts written before the flag existed still load unchanged.
+    arms_spent_under_failed_gate: str | None = None
     verdict_cap: str
 
 
@@ -759,15 +765,21 @@ def behavioral_arms(
     axes_by_block: Mapping[int, Mapping[str, np.ndarray]] | None = None,
     n_random_draws: int = DEFAULT_RANDOM_DRAWS,
     answer_form: AnswerForm = DEFAULT_ANSWER_FORM,
+    allow_failed_gate: bool = False,
 ) -> tuple[ArmTransfer, ...]:
     """The patched choice arms, normalised by B0's own measured per-pair natural gap.
 
     Refuses to run unless the gate passed: spending patched forwards against an unmeasured
     denominator is the exact failure E4 exists to repair, so it is a runtime error rather than a
     convention a caller in a hurry can skip.
+
+    ``allow_failed_gate`` is the one way past it, and it is deliberately not a default. It exists
+    for the operator who has read the failed gate and wants the descriptive table regardless; the
+    caller that sets it is also the caller that stamps ``arms_spent_under_failed_gate`` onto the
+    report, so the numbers cannot travel without the sentence that says what they are worth.
     """
 
-    if not gate.passed:
+    if not gate.passed and not allow_failed_gate:
         raise ValueError(
             "B0 did not pass; the patched leg must not be spent (e4-prereg §5 discard clause)"
         )
@@ -1455,6 +1467,7 @@ def behavioral_transfer(
     n_reachability_pairs: int = DEFAULT_REACHABILITY_PAIRS,
     answer_candidates: tuple[str, ...] = ANSWER_SYMBOL_CANDIDATES,
     answer_form: AnswerForm = DEFAULT_ANSWER_FORM,
+    spend_arms_anyway: bool = False,
 ) -> BehavioralTransferReport:
     """E4 end to end: preflight, show the slot is reachable, gate on B0, then spend the arms.
 
@@ -1568,7 +1581,13 @@ def behavioral_transfer(
     # nothing crosses positions on this surface at all, so a flat arm table would be a fact about
     # the instrument. Spending 4,560 patched forwards to fill in a table the verdict will not look
     # at is the pure form of the dual (CLAUDE.md): harness cost capped by run cost.
-    spend_arms = gate.passed and reachability.passed
+    # ``spend_arms_anyway`` buys the arm NUMBERS and nothing else. ``verdict_cap`` below still reads
+    # the gates, in the same order, from the same booleans — a run that spends under a failed gate
+    # still routes to harness_inadequate, and the override cannot reach the routing to change that.
+    # What it is for: the operator who wants the descriptive table anyway, having been told it is
+    # descriptive. Sized to be affordable — the forwards are the whole cost, and they are known.
+    gates_passed = gate.passed and reachability.passed
+    spend_arms = gates_passed or spend_arms_anyway
     unspent = (
         "not run: B0 did not pass, so no patched forward was spent (e4-prereg §5)"
         if not gate.passed
@@ -1594,6 +1613,7 @@ def behavioral_transfer(
             axes_by_block=axes_by_block,
             n_random_draws=n_random_draws,
             answer_form=answer_form,
+            allow_failed_gate=spend_arms_anyway,
         )
         corruption = corruption_controls(
             backend,
@@ -1643,6 +1663,16 @@ def behavioral_transfer(
         identification_limit=IDENTIFICATION_LIMIT,
         ceiling_readable=ceiling_readable,
         ceiling_note=ceiling_note,
+        arms_spent_under_failed_gate=(
+            None
+            if gates_passed or not spend_arms
+            else "The arms below were spent with --spend-arms-anyway after a gate had already "
+            f"failed (B0 passed={gate.passed}, reachability passed={reachability.passed}). They "
+            "are DESCRIPTIVE ONLY: the denominator or the cross-position path they would be read "
+            "against was never established, so no number here distinguishes 'the direction is not "
+            "used' from 'the design could not have seen it'. verdict_cap is unchanged by this "
+            "flag and still reports harness_inadequate."
+        ),
         verdict_cap=verdict_cap(
             gate_passed=gate.passed,
             corruption_clean=corruption_clean,
@@ -1864,6 +1894,10 @@ def format_behavioral_transfer_summary(report: BehavioralTransferReport) -> str:
         for level in gate.levels
     ]
     if report.arms:
+        # Printed ABOVE the table, not below it: a reader who stops at the numbers has to have
+        # already passed the sentence saying the numbers are descriptive.
+        if report.arms_spent_under_failed_gate:
+            lines += ["", f"DESCRIPTIVE ONLY: {report.arms_spent_under_failed_gate}"]
         lines += [
             "",
             f"{'arm':<22}{'n':>4}{'mean shift':>13}{'norm. shift':>13}{'E3 transfer':>13}{'p':>9}",
