@@ -51,7 +51,7 @@ Our findings indicate that RPE is represented in an LLM, that the model's emotio
 
 We would like to see further research using a re-powered cross-position intervention to establish whether the identified RPE representation is causally used in later action selection, as well as activation patching of emotion-concept vectors themselves to further explore what functional role these representations play within LLMs. Beyond that, as our work was completed on two models from the same model family, we would like to see reproduction across different model families and sizes for a representative look at the concept's transferability. We also believe our research may offer representational-level empirical support for the computational premise of Berg (2026), which is that emotion-concept representations are organized around goal-relative prediction error.
 
-Finally, nothing in our research implies or supports that LLMs understand or experience emotions akin to those of humans. Our results establish functional measurement-validity: an RPE-like appraisal computation is present and separable, independently constructed emotion-concept readouts systematically track it, and related task history co-varies with later behaviour. Whether these representations are causally used in action selection, or have any connection to phenomenal experience or welfare, remains an open empirical question.
+Finally, nothing in our research was aimed at, implies or supports phenomenal experience of emotion concepts by LLMs. Whether these representations have any connection to phenomenal experience or AI welfare, remains an open empirical question.
 
 ## References
 
