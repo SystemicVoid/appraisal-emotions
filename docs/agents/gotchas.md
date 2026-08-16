@@ -375,5 +375,17 @@ Two lessons, and the second is the one that generalises:
   touched a file", and it cannot expire. Reserve `marker` for a rental that genuinely owes an
   artifact no unattended check can produce, and give that rental a short deadline, not a long one.
 
+Later the same day the arms rental's supervisor expired too, after ~13 h, mid-watch and with the
+same single line. Two for two makes this a property of long unattended rentals, not an accident:
+any rental outliving a login will lose its supervisor before it finishes. The replacement was a
+~50-line bash watchdog started with `setsid nohup`, which has no session and no credential and so
+cannot expire. It guards exactly one thing — that `finisher.sh` is still running, restarting it with
+the lock-clears-in-a-minute retry rather than forcing the lock, and standing down once handoff is
+logged. Everything else (publish, upload, verify against GitHub, restore the firewall, terminate) is
+already the finisher's job and is deliberately not duplicated; two processes racing to deliver one
+run is worse than none watching. What the watchdog cannot do is judge — a genuinely novel failure
+still needs an agent. So the shape to reach for is: bash for liveness, an agent for judgement, and
+never a design where an expiring login is on the critical path.
+
 `environmental` for the expiry itself (credential lifetime is not ours to set); the mode default is
 not, and is worth changing in the runbook.
