@@ -89,13 +89,13 @@ model has an emotion at the reveal token": `v_RPE` is at most an **emotion input
 
 Source for the "house-money effect" cited in `docs/design/e4-prereg.md` §5's carryover prediction (positive-RPE → risk-seeking). Real-money experiments demonstrate increased risk-seeking following a prior monetary gain, and a distinct "break-even effect" — increased risk-seeking following a loss, when a bet offers a chance to break even. Verified against the published abstract and DOI (Semantic Scholar, corpus ID 154643975); full text not read, per this file's own verification-caveats discipline.
 
-*Used for:* the positive-RPE half of E4 §5's un-pre-registered directional carryover claim.
+*Used for:* house-money for the positive-outcome direction, break-even for the negative-outcome direction — together, the both-directions statement behind §5's no-sign pre-commitment.
 
 **Isen & Patrick 1983 — "The Effect of Positive Feelings on Risk Taking: When the Chips Are Down."** *Organizational Behavior and Human Performance* 31(2), 194–202. doi:10.1016/0030-5073(83)90120-4.
 
 Source for the "mood-maintenance" side of the same E4 §5 prediction. **Caveat, verified against the abstract only:** the actual result is an *interaction with stake level*, not a uniform mood-maintenance effect — subjects induced to feel elated bet *more* than controls on a low-risk bet but *less* than controls on a high-risk bet. Whether this paper itself names a "mood maintenance hypothesis," or whether that label was applied by later work summarizing this line of research, is not confirmed here — full text not read.
 
-*Used for:* the negative-RPE half of E4 §5's carryover claim — with the caveat above, this paper licenses a stake-level-dependent effect, not a clean mirror-image of the house-money effect.
+*Used for:* the competing prediction for the positive-RPE case — the reason §5 pre-commits no sign — with the caveat above, this paper licenses a stake-level-dependent effect, not a clean mirror-image of the house-money effect.
 
 
 ## Norms (fetched, never transcribed)
