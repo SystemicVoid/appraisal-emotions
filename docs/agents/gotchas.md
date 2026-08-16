@@ -276,3 +276,36 @@ way it is not a pre-rental gate. Run the preflight once, on-instance, in full mo
 its cost as part of the run. Found by reading the call order while drafting the single-rental
 run sheet (2026-08-15); the fix path is to move backend construction after the flag branch.
 Tracked in the repo issues.
+
+### A rented instance can go unreachable for two unrelated reasons that look identical
+
+Both present as `ssh: connect to host <ip> port 22: Connection timed out`, with the Lambda API
+still reporting the instance `active` and the firewall rules still listing an allowed `/32`. They
+need opposite responses, so distinguish them before doing anything expensive.
+
+**1. The provider's region is down.** On 2026-08-15 us-south-2 went unreachable mid-session
+(`status.lambda.ai`, "Instances Unreachable in us-south-2", severity critical) and stayed down for
+hours; the instance's API status eventually flipped `active` -> `unhealthy`. `environmental` — no
+repo change would have prevented it. What it cost was the E4 run whose report had been written to
+that instance's disk but not yet synced. What limits the damage is queueing work so every stage
+publishes its findings off the instance as it lands, rather than syncing once at teardown.
+
+**2. Your own public IP changed.** Residential IPs rotate, typically overnight. The firewall rule
+still exists and still says `/32` — just not *your* `/32` any more. Two rentals launched fine, then
+sat idle and billing for ten hours because the control host's address had moved and every SSH
+attempt timed out exactly like a regional outage.
+
+The one-line discriminator, worth running **first** every time SSH stops working:
+
+```
+curl -s https://api.ipify.org        # your address now
+curl -s -u "$KEY:" https://cloud.lambdalabs.com/api/v1/firewall-rules   # the addresses allowed
+```
+
+If they disagree, that is the whole problem: PUT the full rule list back with your current address
+added (the endpoint replaces the set, so omitting an existing rule deletes it). If they agree,
+check the provider's status page before assuming anything local is wrong.
+
+The billing lesson is separate and sharper: an instance that cannot be reached still bills. Any
+gap between "I launched it" and "I confirmed a stage is running on it" is money, so confirm the
+first stage has actually started before leaving a rental unattended.
