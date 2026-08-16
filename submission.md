@@ -9,7 +9,7 @@ Reward prediction error (RPE) theory holds that reward signals reflect the diffe
 Considering a large language model (LLM) as a digital mind presents ample avenues of human- and animal-inspired research, amongst which are the questions of well-being, its source, and influence on subsequent actions. In this paper we set out to test the following hypotheses:
 
 * emotion-concept readout at the outcome token tracks the model's reward-prediction error
-* recently computed RPE influences a model's subsequent actions
+* RPE representation computed at the outcome reveal is functionally used in the model's subsequent risk-taking choice
 
 As LLMs increasingly take actions in the world through agentic systems, understanding the underlying mechanisms of those actions can yield insights into pre-existing biases and give ways of counteracting them.
 
@@ -33,7 +33,7 @@ Our code is publicly available here: https://github.com/SystemicVoid/appraisal-e
 
 **Emotion-concept readout at the outcome token tracks the model's reward-prediction error.** We first verified that Qwen3.6-27B contains a stable, separable representation of signed RPE at the outcome reveal (AUROC 0.985). We then tested whether the model's independently constructed emotion-concept readout tracked this comparison rather than reward or expectation alone. Holding reward constant while varying expectation, and separately holding expectation constant while varying reward, shifted both the general emotion-concept valence axis and the pre-specified `elated − disappointed` axis in the directions predicted by `reward − expectation`. The two components were comparable in magnitude (ratios 1.11 and 1.26; all four permutation p = 1/10001), supporting the hypothesis that the model's emotion-concept readout tracks the computed RPE itself rather than either of its constituent variables independently. This `a ≈ −b` coefficient structure is the same functional signature through which Rutledge et al. (2014) identify the RPE contribution to momentary subjective well-being in humans.
 
-**Prior outcome/expectation information carries over into a model's subsequent actions, while causal use of RPE remains open.** On unpatched trials, after a positive-RPE reveal the model prefers the risky option on the subsequent gamble by **+0.19 logits** more than after a negative-RPE reveal (p ≈ 10^-4; 66% of 209 matched pairs positive). The direction is consistent with the house-money effect described by Thaler & Johnson (1990), in which favourable prior outcomes increase subsequent risk-taking. However, within this behavioural design expected value and signed RPE are not independently identified, so the result establishes that the prior outcome/expectation manipulation carries over into later choice rather than that signed RPE specifically causes the change. Our activation interventions likewise do not yet establish that the identified RPE representation is causally used to produce the subsequent choice.
+**RPE representation computed at the outcome reveal is carried into the model's subsequent risk-taking choice, while causal use of RPE remains open.** On unpatched trials, after a positive-RPE reveal the model prefers the risky option on the subsequent gamble by **+0.19 logits** more than after a negative-RPE reveal (p ≈ 10^-4; 66% of 209 matched pairs positive). The direction is consistent with the house-money effect described by Thaler & Johnson (1990), in which favourable prior outcomes increase subsequent risk-taking. However, within this behavioural design expected value and signed RPE are not independently identified, so the result establishes that the prior outcome/expectation manipulation carries over into later choice rather than that signed RPE specifically causes the change. Our activation interventions likewise do not yet establish that the identified RPE representation is causally used to produce the subsequent choice.
 
 ## Controls and robustness
 
@@ -47,17 +47,10 @@ We subsequently removed this direct identity path by patching at the first-round
 
 ## Interpretation and alternative explanations
 
-### Emotion-concept readout
+**Emotion-concept readout at the outcome token tracks the model's reward-prediction error.** We observe a stable signed RPE representation at the outcome reveal, while two independently constructed emotion-concept readouts move with reward and expectation in the approximately equal-and-opposite pattern predicted by `reward − expectation`. This supports a representational relationship between the model's RPE computation and its emotion-concept readout. It does not establish that the emotion-concept representation itself performs the RPE computation, that it is functionally used downstream, or that the model experiences the corresponding emotion.
 
-* What we observed: A stable signed RPE representation is present at the outcome reveal, and two independently constructed emotion-concept readouts move with reward and expectation in the approximately equal-and-opposite pattern predicted by `reward − expectation`.
-* What this supports: The model's emotion-concept readout tracks a computed appraisal quantity rather than simply the outcome, expectation, or emotional wording of the task.
-* What it does not establish: That the emotion-concept representation itself performs the RPE computation, that the representation is functionally used downstream, or that the model experiences the corresponding emotion.
+**RPE representation computed at the outcome reveal is functionally used in the model's subsequent risk-taking choice.** We observe that the model becomes more risk-seeking after positive than after negative prior outcomes, producing a +0.19-logit difference in subsequent risky-choice preference. This supports behavioural carry-over from the prior outcome/expectation manipulation, but does not establish that the identified signed-RPE representation is the causal mediator of the effect. Our intervention experiment remains insufficiently sensitive to determine this.
 
-### Subsequent action
-
-* What we observed: The model becomes more risk-seeking after positive than after negative prior outcomes, producing a +0.19-logit difference in subsequent risky-choice preference.
-* What this supports: Information associated with the prior outcome/expectation computation persists sufficiently to co-vary with a later decision.
-* What it does not establish: That the identified signed-RPE representation is the causal mediator of the behavioural effect. Our intervention experiment remains insufficiently sensitive to answer that question.
 
 ## Conclusion
 
