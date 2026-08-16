@@ -15,22 +15,23 @@ As LLMs increasingly take actions in the world through agentic systems, understa
 
 ## Method
 
-First, we set out to prove that RPE computations scale from a previously researched smaller Qwen/Qwen3-4B-Instruct-2507 model to the larger Qwen/Qwen3.6-27B, which is the base of subsequent experiments. The test battery consists of 1984 deliberately neutral scenarios describing a 50/50 gamble between two outcomes, followed by a reveal of which outcome actually occurred. The model's internal activations are recorded at the exact moment the outcome is revealed, to test whether a clean, separable RPE signal exists in its internal representations. Outcome labels are meaningless three-letter codes and point values are round numbers, with the framing sentence rotated across several neutral phrasings, so the design contains no emotional language that could confound the results.
+First, we set out to prove that RPE computations scale from a previously researched smaller Qwen/Qwen3-4B-Instruct-2507 model to the larger Qwen/Qwen3.6-27B, which is the base of subsequent experiments. The test battery consists of 1984 deliberately neutral scenarios describing a 50/50 gamble between two outcomes, followed by a reveal of which outcome actually occurred. The model's internal activations are recorded at the outcome token, to test whether a clean, separable RPE signal exists in its internal representations. Outcome labels are meaningless three-letter codes and point values are round numbers, with the framing sentence rotated across several neutral phrasings, so the design contains no emotional language that could confound the results.
 
-We then build an emotion map.
+Second, we construct an emotion-concept map. We use 111 emotion words organised into appraisal-structured families, including outcome-linked positive and negative concepts and matched non-outcome controls. For example, `disappointed` specifically implies an outcome that falls short of an expectation, whereas `sad` does not necessarily require such an expectation-outcome comparison. For each word, we generate 24 stories in which a character experiences a situation associated with that concept without naming the target emotion. We present these stories to the model and average their residual-stream activations to construct one emotion-concept vector per word, centred against the mean across all words. From these independently constructed vectors, we derive two readout axes used in our subsequent RPE experiment: the first principal component of the emotion-concept space, which we validate against human valence ratings, and the pre-specified elated − disappointed direction. Separately, when analysing the geometry of individual emotion concepts relative to RPE, we control for human-rated valence and arousal to test whether any alignment exceeds what can be explained by these general affective dimensions.
 
-We use Qwen/Qwen3.6-27B as our research model
+Third, we test whether the model's emotion-concept readout tracks reward prediction error rather than reward or expectation independently. We project reveal-token activations onto two emotion-concept axes: the first principal component of the emotion-concept space and the pre-specified elated − disappointed direction. We then exploited the matched structure of the reveal battery. In reward-matched cells, realised reward was held constant while stated expected value varied; in EV-matched pairs, expected value was held constant while realised reward varied. We modelled the readout as projection ≈ a·reward + b·EV. A reward-prediction-error readout predicts contributions of opposite sign and comparable magnitude (a ≈ −b), whereas a pure outcome tracker or pure expectation tracker predicts one of the two matched effects to disappear. Before analysis, we specified a factor-of-two tolerance for the relative coefficient magnitudes and evaluated effects using 10,000 permutations.
 
-- Scale the initial RPE research to a larger model to prove validity
-- Build and QA emotion map
-- why 84 words instead of the initial 171
-- remove "non-useful elements"
-- consider the "surprise"
-- compare against human annotated pleasantness data for QA
-- Observe RPE impact
-- change the RPE
 
-Our work builds on currently unpublished peer-reviewed research by Hugo Nguyen indicating Qwen/Qwen3-4B-Instruct-2507 performs RPE calculations according to "A Computational and Neural Model of Momentary Subjective Well-Being" (Rutledge, Skandali, Dayan & Dolan, 2014). Furthermore, we rely on the methodology from "Emotion Concepts and their Function in a Large Language Model" (Sofroniew et al., 2026) to construct an emotion map. Finally, we rely on "Gambling with the House Money and Trying to Break Even: The Effects of Prior Outcomes on Risky Choice" (Thaler & Johnson, 1990) and "The Effect of Positive Feelings on Risk Taking: When the Chips Are Down" (Isen & Patrick, 1983) to construct the experiment for impact of prior RPE computations on subsequent actions.
+
+Fourth
+
+
+
+Fifth
+
+
+
+Our work builds on currently unpublished peer-reviewed research by Hugo Nguyen indicating Qwen/Qwen3-4B-Instruct-2507 performs RPE calculations according to "A Computational and Neural Model of Momentary Subjective Well-Being" (Rutledge, Skandali, Dayan & Dolan, 2014). Furthermore, we rely on the methodology from "Emotion Concepts and their Function in a Large Language Model" (Sofroniew et al., 2026) to construct an emotion map. while constructing our own word list to better fit for testing how a model might appraise a situation. Finally, we rely on "Gambling with the House Money and Trying to Break Even: The Effects of Prior Outcomes on Risky Choice" (Thaler & Johnson, 1990) and "The Effect of Positive Feelings on Risk Taking: When the Chips Are Down" (Isen & Patrick, 1983) to construct the experiment for impact of prior RPE computations on subsequent actions.
 
 Our code is publicly available here: https://github.com/SystemicVoid/appraisal-emotions
 
