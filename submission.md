@@ -80,3 +80,143 @@ Schultz, W., Dayan, P., & Montague, P. R. (1997). “A Neural Substrate of Predi
 Sofroniew et al. (2026). “Emotion Concepts and their Function in a Large Language Model.” *arXiv:2604.07729.*
 
 Thaler, R. H., & Johnson, E. J. (1990). “Gambling with the House Money and Trying to Break Even: The Effects of Prior Outcomes on Risky Choice.” *Management Science, 36*(6), 643–660. https://doi.org/10.1287/mnsc.36.6.643
+
+## Appendix
+
+### A1. Model and RPE certification details
+
+Our primary model is **Qwen/Qwen3.6-27B** (revision `6a9e13bd`), comprising 64 transformer blocks with hidden size 5,120. Activations were recorded from the residual stream using bfloat16 precision and seed 7 throughout.
+
+The reveal battery contains **1,984 trials**, split into 1,488 estimation trials and 496 held-out selection trials. It includes **60 reward-matched cells**, in which realised reward is fixed while expected value varies, and **124 EV-matched pairs**, in which the same gamble produces opposite realised outcomes. All reward-bearing surfaces passed the affect-neutrality audit with **zero emotion-lexicon hits and zero class/valence leak-word hits**.
+
+At block 35, the signed-RPE direction passed all certification checks:
+
+| Test | Result |
+| --- | ---: |
+| Signed-RPE sign decoding | AUROC **0.985** |
+| Random-direction floor | AUROC **0.734** |
+| Reward-matched sign contest | **1.0**, p ≈ 0.001 |
+| EV-matched sign contest | **1.0**, p ≈ 0.001 |
+| Unsigned surprise (\|RPE\|) decoding | AUROC **0.820** |
+| Unsigned-surprise random floor | AUROC **0.607** |
+| Split-half stability | **0.925 ± 0.036** |
+| Number of split-half repetitions | **200** |
+
+The same certification procedure independently recovered the RPE representation in Qwen/Qwen3-4B-Instruct-2507, with split-half stability of **0.911**.
+
+### A2. Emotion-concept geometry
+
+For the widened geometry analysis, we constructed emotion-concept vectors for **111 words × 24 stories**, of which 2,684 of 2,688 generated stories passed the target-naming filter. The word set was organised into appraisal-structured families, including outcome-linked positive and negative concepts and matched non-outcome controls.
+
+To test whether alignment with RPE reflected appraisal structure rather than generic affective valence, we residualized word-level RPE alignment against human-rated valence and arousal.
+
+#### Positive and negative family contrasts
+
+The primary positive-pole comparison contrasted **11 outcome-linked positive words** against **17 non-outcome positive controls**.
+
+| Analysis | Outcome-positive excess alignment |
+| --- | ---: |
+| Valence + arousal residualization | **+0.0346**, p = 0.0177 |
+| Valence-only residualization | **+0.0375**, p = 0.011 |
+| Binary-valence sensitivity | **+0.0407** |
+| Label-shuffle p95 floor | **0.0310** |
+| Random-direction p95 floor | **0.0134** |
+
+The result therefore survives alternative treatments of affective valence in the expected direction. However, the experiment was designed as a checkpoint rather than a powered confirmatory test: planned power was 0.36 and the realised MDE80 was approximately **0.043**, larger than the observed +0.0346 effect.
+
+The corresponding **negative-pole contrast was flat at −0.0054 (p = 0.64)**, consistent with the pre-recorded expectation that the effect might be asymmetric between positive and negative outcome concepts.
+
+#### Fragility and family structure
+
+The positive contrast is distributed across the family rather than being produced by a single positive outcome word: **7 of 11 outcome-linked positive words** have residual alignment ≥ +0.033, and leave-one-out estimates span **0.0255–0.0406**.
+
+However, floor clearance is fragile. Removing the non-outcome control word `amused`, whose residual alignment is −0.127, causes the family contrast to fall below its own re-estimated floor. We therefore treat the permutation result as more informative than the narrow margin by which the observed effect clears the null floor.
+
+The style-control pseudo-word has a residual of **0.066**, approximately 1.9× the headline family contrast, providing an additional scale reference for interpreting the effect.
+
+#### Pre-specified word-level predictions
+
+Two pre-specified qualitative predictions did not behave as expected.
+
+First, expectation-confirmation words showed greater numeric-norm residual alignment than positive-surprise words. This difference is not statistically decisive (bootstrap P[difference ≤ 0] = 0.17) and reverses into the predicted ordering under the binary-valence sensitivity analysis in both independent runs. Inspection of the numeric norms identified word-sense problems: for example, `resigned` is normed at −0.52 in its acceptance/withdrawal sense, while `vindicated` receives a relatively neutral score of 0.23. Residualizing against these scores mechanically increases their apparent RPE-specific alignment.
+
+The generated stories introduced a second confound in the same comparison. None of the 24 `elated` stories depicted an explicitly unexpected positive outcome, whereas **20 of 24 `vindicated` stories** contained an explicit expectation-to-confirmation narrative. The target-naming filter therefore succeeded lexically while failing to equalize event structure between semantic families.
+
+Second, the predicted ordering between `disappointed` and `sad` reversed. This reversal is already present in the **raw cosine similarities in both independent runs**, so it cannot be explained by valence residualization alone. It replicates across independent story samples and is approximately eight times the estimated per-word noise standard deviation. `Underwhelmed`, which was pre-specified as a particularly strong negative outcome concept, instead appeared near the top of its family. We therefore treat these word-level predictions as mis-specified rather than underpowered.
+
+#### Reliability and depth
+
+Across the 84 emotion words shared between the base and widened runs, independently generated story samples produce highly similar word-level residuals (**r = 0.921**), corresponding to an estimated single-run reliability of approximately 0.92.
+
+The depth profile also replicated out of sample. An exploratory peak around block 50 in the base run was independently reproduced in the widened run, where the valence-only family contrast reached **0.0572 at block 48** and **0.0568 at block 50** (permutation p ≈ 0.005). Depth profiles correlate **r = 0.92** across the two runs, and the contrast is positive across all blocks 20–63. Future confirmatory work should therefore pre-specify the block-48–50 band rather than selecting depth on the test outcome itself.
+
+### A3. Expectation-control details
+
+The primary emotion-concept readout test uses two axes constructed independently of the gambling task: the first principal component of the emotion-concept space and the pre-specified `elated − disappointed` direction.
+
+The expectation-control model is:
+
+`projection ≈ a·reward + b·EV`
+
+A readout of `reward − EV` predicts `a ≈ −b`. Reward-matched cells estimate the expectation contribution while holding realised reward fixed; EV-matched pairs estimate the reward contribution while holding expected value fixed.
+
+| Condition | PC1 | `elated − disappointed` |
+| --- | ---: | ---: |
+| Reward-matched, 60 cells | **+0.0261** | **+0.0200** |
+| EV-matched, 124 pairs | **+0.0290** | **+0.0251** |
+| Ratio of matched effects | **1.11** | **1.26** |
+
+All four effects are at the 10,000-permutation significance floor (**p = 1/10001**). Both ratios fall within the pre-specified factor-of-two tolerance.
+
+A pure outcome tracker predicts the reward-matched effect to disappear, while a pure expectation tracker predicts the EV-matched effect to disappear. Both alternatives are inconsistent with the observed pattern.
+
+Within the EV-matched design, the realised outcome symbol differs between the two members of each pair. Outcome symbols were deliberately meaningless, balanced across rendering conditions and screened for valence, but this remains a limitation of the comparison.
+
+### A4. Intervention controls
+
+#### Same-position patching
+
+In the initial intervention, the RPE-related component was patched at the outcome token and the downstream emotion-concept readout measured at the same token position.
+
+The apparent transfer fraction was approximately 0.73 on both emotion-concept axes. However, because the residual stream is additive and the readout linear, a patched vector can mechanically remain present without being functionally used by the network.
+
+A zero-parameter passthrough calculation explained:
+
+* **79.5%** of the certified RPE-arm shift on PC1;
+* **84.0%** of the full-residual shift on PC1;
+* **97–105%** of the corresponding shifts on the `elated − disappointed` axis.
+
+The excess above passthrough for the certified RPE arm was +0.150 on PC1 and +0.019 on the pair axis, compared with +0.135 and +0.195 respectively for the same-condition no-op control. We therefore find no direction-specific excess that would establish functional use of the patched representation.
+
+#### Cross-position patching
+
+The subsequent intervention patches the first-round reveal token at block 35 and measures behaviour at the later second-round answer position, removing the direct same-position identity path.
+
+The widened run's reachability control passed: a full-residual write at the reveal token shifted answer-slot logits by **−0.196 logits (p = 3 × 10^-4)**. This establishes that information written at the reveal token can affect downstream computation at the later choice position.
+
+However, the behavioural sensitivity gate failed in both runs:
+
+| Run | MDE80 | Pre-specified maximum |
+| --- | ---: | ---: |
+| Base | **0.1365** | ≈ **0.095** |
+| Widened | **0.1301** | ≈ **0.095** |
+
+The patched-choice window is therefore classified as **harness inadequate**, and no patched behavioural estimate is interpretable as evidence for or against causal use of the RPE representation.
+
+### A5. Descriptive-only intervention results
+
+**The results in this subsection are descriptive only. The behavioural power gate had already failed before these arms were analysed, so they are not used as evidence for or against the causal hypothesis.**
+
+In the widened cross-position experiment:
+
+| Intervention | Change in choice margin |
+| --- | ---: |
+| Certified RPE-component patch | **−0.007 logits**, p = 0.81 |
+| Full-residual ceiling | **−0.010 logits**, p = 0.96 |
+| Magnitude-matched random-direction floor | **+0.031 transfer fraction** |
+
+The full-residual ceiling produced a transfer fraction of only **+0.002**, below the magnitude-matched random-direction floor, so the experiment did not demonstrate that its choice readout could resolve even the ceiling intervention.
+
+At the same time, the RPE-component patch altered the model's subsequent report of the first-round outcome, producing a mean absolute shift of **0.139**, approximately **0.73× the natural positive-versus-negative outcome gap**. Three of four arm × readout-window combinations exceeded the pre-specified corruption tolerance.
+
+The descriptive pattern is therefore compatible with an intervention that measurably changes downstream computation while producing little detectable change in the specific choice readout used here. Because the behavioural sensitivity gate failed, this should not be interpreted as evidence that the RPE representation is behaviourally irrelevant.
