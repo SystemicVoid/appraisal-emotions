@@ -1,8 +1,8 @@
-# Report framing memo — what the data licenses (2026-08-15)
+# Report framing memo — what the data licenses (2026-08-15; §5 and H2 updated 2026-08-16 after the E4 runs)
 
 Audience: whoever writes the final report. Every number below was re-read from the run
-artifacts on 2026-08-15 (paths given inline); where a prose summary disagrees with an
-artifact, the artifact wins and the disagreement is listed in §6. Vocabulary is bound by
+artifacts on 2026-08-15/16 (paths given inline); where a prose summary disagrees with an
+artifact, the artifact wins and the disagreement is listed in §7. Vocabulary is bound by
 `CONTEXT.md`; claim tiers by `docs/design/experiment.md` §7. All RPE here is **described-EV
 RPE** (`reward − stated EV`); say so once in the report, then "RPE" may stand alone.
 
@@ -34,23 +34,26 @@ Drafts to retire, and why:
   is about the **readout at the reveal token**, and the licensed verbs are *tracks*,
   *carries*, *reads* — not *influences*, *drives*, *uses*.
 
-### H2 — untested, pre-registered (E4)
+### H2 — tested 2026-08-16; the patched question is unreadable, but the run answered a
+### question the prereg did not promise to answer
 
 Proposed wording:
 
-> **Hypothesis, not yet tested: the RPE signal present at the outcome token is behaviourally
-> used** — patching the certified `v_RPE` component at the reveal token shifts the model's
-> choice on a subsequent gamble (a next-token logit margin at the answer slot, several
-> positions downstream, where a shift requires an attention head to have read the patched
-> value). Pre-registered and frozen in `docs/design/e4-prereg.md` before any run; **no
-> direction of effect is pre-committed** (the decision-affect literature supports carryover
-> both ways). A null with the B0 sensitivity gate and corruption controls passed is a real,
-> reportable answer: it forecloses reveal-token patching as a route to behavioural transfer
-> on this model/surface/recipe. A positive caps at `functionally-used, pilot-suggestive`.
+> **Whether the RPE signal at the outcome token is behaviourally *used* remains open: both
+> E4 runs record `harness_inadequate` for the choice window** (the B0 power gate failed
+> twice; §5.1), so no patched number is readable in either direction. **What the run did
+> establish, on unpatched forwards, is a prior-outcome carryover in the model's choice
+> behaviour, in the house-money direction** (§5.2) — after a positive-RPE reveal the model
+> prefers the risky option on the next gamble by +0.19 logits more than after a negative-RPE
+> reveal. The widened run's reachability control also passed: a value written at the reveal
+> token demonstrably crosses positions to the answer slot on this surface (§5.1).
 
-This wording of Artyom's second hypothesis ("recently computed RPE influences a model's
-gambling selection") is fine **as a hypothesis** — the report just has to say E4 is the test
-and, at time of writing, unrun.
+Artyom's second hypothesis ("recently computed RPE influences a model's gambling
+selection") therefore splits in two for the report: as a **causal** claim about the patched
+`v_RPE` component it is untested-in-effect (gate failure, not a null); as a
+**correlational** claim about behaviour it is supported at pilot-suggestive tier, with the
+verb *carries/predicts*, never *influences*. The pre-registration (`docs/design/e4-prereg.md`,
+frozen before any run) pre-committed no direction; the data picked house-money.
 
 ## 2. The evidence for H1 (E2 + E2b), verified
 
@@ -126,18 +129,111 @@ its valence axis remains open: our instrument's resolution was ~61% of what the 
 effect would need, and the identified fix is wider word families, not more stories."** Do
 not write any sentence implying the geometry question was answered in either direction.
 
-## 5. Phrase discipline (one line each)
+## 5. E4 — what the runs actually produced (2026-08-16)
+
+Artifacts, in `runs/emotion_vectors_base/emotions/`: `e4_preflight.json` (clean;
+answer pool {KER, PON, TUR, VEL}, `leading_space` form), `behavioral_transfer_report.json`
+(run of record, 120 pairs / 60 reward cells; stopped at 61 of 6,541 forwards by design),
+`behavioral_transfer_report_widened.json` (209 pairs, same 60 cells; arms spent under the
+operator flag `--spend-arms-anyway`). Model `qwen_30b_primary`, patch block 35, seed 7.
+
+### 5.1 The verdicts, honestly
+
+Both runs record **`harness_inadequate` for the choice window; the functional-use claim is
+open** — neither killed nor earned. The B0 sensitivity gate failed its *power* criterion
+twice: the unpatched natural gap is real (cell-clustered sign-flip p ≈ 1e-4, at the
+attainable floor) but MDE80 (0.1365 base → 0.1301 widened) never dropped below the
+pre-registered 0.5·|gap| bar (≈ 0.095). No kill clause fired against the model.
+
+The widened run's **reachability positive control passed** (mean shift −0.196, p = 3e-4,
+direction-symmetric across both push directions): a full-residual value written at the
+reveal token demonstrably moves the answer-slot logits several positions downstream. The
+base run's "UNREACHABLE" verdict was a false negative of its own control — the same effect
+at n = 30 (mean −0.154) landed at p = 0.084 (§5.4). Cite the widened run's control, and do
+not quote the base report's reachability verdict string (§7).
+
+### 5.2 The finding the gate rules bury: unpatched house-money carryover
+
+Proposed wording:
+
+> **On the round-2 choice, the unpatched model's risk appetite carries the sign of the
+> round-1 outcome: after a positive-RPE reveal, the model prefers the risky option by
+> +0.19 logits more than after a negative-RPE reveal** (≈ 5 pp of relative choice
+> probability near indifference; p ≈ 1e-4 cell-clustered; 66% of 209 pairs positive;
+> 10%-trimmed mean +0.17, so not tail-driven). The direction matches the **house-money
+> effect** (Thaler & Johnson 1990) rather than mood-maintenance — the pre-registration
+> deliberately committed to no sign, and the data picked one. Tier: behavioural
+> correlation, pilot-suggestive.
+
+Two caveats to state with it: (1) within a reward-matched cell EV and signed RPE are
+perfectly anti-correlated, so this shows "the prior outcome/expectation manipulation
+carries over," not "signed RPE specifically" — same identification limit as E3 (§3);
+(2) it is an unpatched between-context comparison, so the licensed verbs are *carries /
+predicts / co-varies*, never *drives* or *influences*.
+
+Baseline behaviour is reportable on its own: the model is **risk-averse** on this surface.
+Unpatched mean margins across the stake titration (gamble {40, 0}, EV 20): +0.19 at
+c = 10, −0.41 at c = 20, −1.21 at c = 30 — monotone, EV-consistent, with an interpolated
+certainty equivalent of ≈ 13 for the EV-20 gamble (a ~35% risk premium). B0 correctly
+selected c = 10 (nearest indifference).
+
+### 5.3 The descriptive arm table — quote only with its stamp
+
+The widened run's arms were spent *after* B0 had failed, under an explicit operator flag;
+the artifact stamps them **DESCRIPTIVE ONLY** and the verdict is unchanged by the flag.
+If the report uses them at all, it must carry that stamp. The shape: the certified
+`v_RPE`-component patch moved the choice margin by −0.007 (p = 0.81) and even the
+full-residual ceiling by −0.010 (p = 0.96); the ceiling's transfer fraction (+0.002) sits
+*below* the magnitude-matched random floor (+0.031), so `ceiling_readable = false` — the
+pair set could not have seen a rank-1 component even if one acted. Meanwhile the same
+patch moved the outcome-recall probe by 0.139 mean |shift| (0.73× the natural gap;
+3 of 4 corruption rows out of the 0.5 tolerance — the only clean row is
+`v_rpe_component/running_total` at 0.41).
+
+One-sentence descriptive shape, if wanted: *the patched component demonstrably alters
+downstream computation (it corrupts outcome recall) yet moves the choice by less than one
+readout quantization step — consistent with "carried, but not read by the choice" on this
+surface — but with B0 failed this is a description of the instrument's view, not a null
+result.*
+
+### 5.4 Instrument lessons (reportable, and they route the follow-up)
+
+- **Effect sizes must travel between runs, not pass/fail bits.** The reachability control
+  flipped UNREACHABLE → REACHABLE from n = 30 to n = 60 with an essentially unchanged
+  effect (−0.154 → −0.196); the base verdict string was a power artifact.
+- **B0's power is capped by cells, not pairs.** Widening 120 → 209 pairs moved MDE80 only
+  0.1365 → 0.1301, because the estimand is a mean over 60 cell means. At the current
+  sd/gap ratio the gate needs ≈ 113 cells; the fix is a wider reward-cell battery, not
+  more pairs per cell.
+- **The readout floor is one bf16 ULP = 1/64 logit.** Every stored margin/shift is an
+  exact multiple of 0.015625; the natural gap is ≈ 12 ULP, the arm means are sub-ULP. A
+  future patched leg needs either effects of several ULP or a finer-precision readout.
+- **Per-pair baseline choice margins were not stored**, so "did any choice actually flip
+  sign" and stake × patch interactions cannot be answered from these artifacts.
+
+## 6. Phrase discipline (one line each)
 
 - "emotion-concept vector," never bare "emotion vector"; concept labels, never state
   attributions ("the `disappointed` concept vector," never "the model is disappointed").
-- E2/E2b verbs: *tracks / carries / reads*. E4-only verbs (and only if it passes):
-  *used / drives / influences behaviour*.
+- E2/E2b verbs: *tracks / carries / reads*. The E4 house-money finding (§5.2): *carries /
+  predicts / co-varies*. *Used / drives / influences behaviour* remain unearned — E4's
+  functional-use question is open, not answered.
 - Every positive claim carries its tier: `present-and-separable, pilot-suggestive` (E2/E2b);
-  `functionally-used` is earnable by E4 alone.
+  behavioural correlation, pilot-suggestive (§5.2); `functionally-used` is earnable only by
+  a future E4 leg that passes its gates.
 - Ceiling, verbatim from the design doc: functional measurement-validity; no outcome
   licenses welfare, sentience, experience, or consciousness claims (Sofroniew bracket).
 
-## 6. Known-wrong numbers in secondary docs (artifact wins)
+## 7. Known-wrong or stale statements in secondary docs (artifact wins)
+
+- Any doc saying E4 is unrun is stale as of 2026-08-16: `docs/handoff.md` l. 125 ("no run
+  authorized") and this memo's own earlier H2 text — both now corrected.
+- The base `behavioral_transfer_report.json` reachability verdict string ("patching the
+  reveal token does not move the answer slot") is superseded by the widened run's PASSED
+  control (p = 3e-4); do not quote it.
+- The widened report's `corruption_note` names all four arm×window rows as violations, but
+  the per-row flags show `v_rpe_component/running_total` within tolerance (0.41 < 0.5).
+  Quote the per-row numbers, not the note's list.
 
 - "Random floor injects a delta ~44× smaller": the measured ratio is **~33×** (norms 0.179
   vs 5.89). The 44× survives in the frozen `e4-prereg.md` (ll. 46, 284–285) and in

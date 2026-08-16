@@ -122,7 +122,10 @@ is authorized.
    superseded to *control failure with the claim open* — not a falsification, and E1/E2's
    representational claims are untouched.
 
-3. **E4 designed and built (`docs/design/e4-prereg.md`, frozen; no run authorized).** The repair
+3. **E4 designed, built, and run 2026-08-16** (`docs/design/e4-prereg.md`, frozen pre-run;
+   results and licensed framing in `docs/design/report-framing.md` §5 — both runs recorded
+   `harness_inadequate` for the choice window, the widened run's reachability control passed,
+   and the unpatched natural gap is a real house-money-direction carryover). The repair
    is one idea: **there is no identity path between token positions.** The reveal prompt is
    extended into a three-message chat (reveal → the model's own measured completion → a decision
    probe) and the readout is a next-token logit margin at an answer slot several tokens later, so
