@@ -35,14 +35,12 @@ Our work builds on currently unpublished peer-reviewed research by Hugo Nguyen i
 
 Our code is publicly available here: https://github.com/SystemicVoid/appraisal-emotions
 
-## Main results
+## Key Findings
+Probably makes sense that what goes here is only related to the hypotheses from the intro. All other should probably go into an Appendix.
 
-We find that the emotion-concept readout tracks the RPE computation with {INSERT TECHNICAL DISCUSSION OF RESULTS}. 
+We first verified that Qwen3.6-27B contains a stable, separable representation of signed RPE at the outcome reveal (AUROC 0.985). We then tested whether the model’s independently constructed emotion-concept readout tracked this comparison rather than reward or expectation alone. Holding reward constant while varying expectation, and separately holding expectation constant while varying reward, shifted both the general emotion-concept valence axis and the pre-specified elated − disappointed axis in the directions predicted by reward − expectation. The two components were comparable in magnitude (ratios 1.11 and 1.26; all permutation p = 1/10001), supporting the hypothesis that the model’s emotion-concept readout tracks the computed RPE itself rather than either of its constituent variables independently.
 
-We also find that 
 
-- Only genuinely new outcomes, prior research to be explained in the introduction
-- Answers to the 3 hypotheses + discussion
 
 ## Controls / robustness
 
