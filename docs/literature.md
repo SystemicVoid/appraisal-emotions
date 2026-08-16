@@ -83,6 +83,21 @@ first two *by construction* and lacks the second two *by construction*. This is 
 keeps the honest claim shape at "emotion concepts inherit appraisal geometry" and forbids "the
 model has an emotion at the reveal token": `v_RPE` is at most an **emotion input**.
 
+## Load-bearing: E4's prior-outcome carryover premise
+
+**Thaler & Johnson 1990 — "Gambling with the House Money and Trying to Break Even: The Effects of Prior Outcomes on Risky Choice."** *Management Science* 36(6), 643–660. doi:10.1287/mnsc.36.6.643.
+
+Source for the "house-money effect" cited in `docs/design/e4-prereg.md` §5's carryover prediction (positive-RPE → risk-seeking). Real-money experiments demonstrate increased risk-seeking following a prior monetary gain, and a distinct "break-even effect" — increased risk-seeking following a loss, when a bet offers a chance to break even. Verified against the published abstract and DOI (Semantic Scholar, corpus ID 154643975); full text not read, per this file's own verification-caveats discipline.
+
+*Used for:* house-money for the positive-outcome direction, break-even for the negative-outcome direction — together, the both-directions statement behind §5's no-sign pre-commitment.
+
+**Isen & Patrick 1983 — "The Effect of Positive Feelings on Risk Taking: When the Chips Are Down."** *Organizational Behavior and Human Performance* 31(2), 194–202. doi:10.1016/0030-5073(83)90120-4.
+
+Source for the "mood-maintenance" side of the same E4 §5 prediction. **Caveat, verified against the abstract only:** the actual result is an *interaction with stake level*, not a uniform mood-maintenance effect — subjects induced to feel elated bet *more* than controls on a low-risk bet but *less* than controls on a high-risk bet. Whether this paper itself names a "mood maintenance hypothesis," or whether that label was applied by later work summarizing this line of research, is not confirmed here — full text not read.
+
+*Used for:* the competing prediction for the positive-RPE case — the reason §5 pre-commits no sign — with the caveat above, this paper licenses a stake-level-dependent effect, not a clean mirror-image of the house-money effect.
+
+
 ## Norms (fetched, never transcribed)
 
 **Warriner, Kuperman & Brysbaert 2013** — valence/arousal/dominance norms for 13,915 English
@@ -209,6 +224,7 @@ Full read-out of the recipe, and the table of where our E0 departs from it, is
   on. Not in the Sofroniew paper; the replication itself has not been read.
 - arXiv IDs and venue/year attributions for the adjacent-work list were not confirmed against
   listing pages.
+- **Thaler & Johnson 1990 and Isen & Patrick 1983** (E4's prior-outcome carryover premise) — identity, authorship, and abstracts were verified against Semantic Scholar records; full primary texts were not read, so the papers' internal terminology (e.g. whether Isen & Patrick use the phrase "mood maintenance hypothesis" themselves) is not confirmed.
 
 Per `AGENTS.md` Verification Quality: an unverified number from this file may not be restated as
 fact elsewhere in the repo.
