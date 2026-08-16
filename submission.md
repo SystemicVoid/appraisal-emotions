@@ -1,10 +1,10 @@
 # Submission
 
-## Page 1 — Abstract + question
+## Abstract + question
 
 Reward prediction error (RPE) theory holds that organisms evaluate rewards relative to prior expectations (Schultz, Dayan & Montague, 1997). In humans, reward prediction errors have also been shown to predict momentary subjective well-being, such that outcomes that exceed expectations are associated with greater happiness than equivalent outcomes that were already expected (Rutledge et al., 2014). We apply RPE theory to Qwen/Qwen3.6-27B and {INSERT ABBREVIATED DESCRIPTION OF METHOD HERE}. We find that {INSERT FINDINGS}.
 
-## Pages 1–2 — Introduction
+## Introduction
 
 In the sense that a large language model (LLM) is a digital mind it may carry analogies to biological minds in how it computes well-being and how that computation influences its subsequent behaviour. Along this line of reasoning in this paper we set out to test the following hypotheses:
 
@@ -13,7 +13,7 @@ In the sense that a large language model (LLM) is a digital mind it may carry an
 
 As LLMs increasingly take actions in the world through agentic systems, understanding the underlying mechanisms of those actions can yield insights into pre-existing biases and give ways of counteracting them.
 
-## Pages 2–3 — Method
+## Method
 
 First, we set out to prove that RPE computations scale from a previously researched smaller Qwen/Qwen3-4B-Instruct-2507 model to the larger Qwen/Qwen3.6-27B, which is the base of subsequent experiments. The test battery consists of 1984 deliberately neutral scenarios describing a 50/50 gamble between two outcomes, followed by a reveal of which outcome actually occurred. The model's internal activations are recorded at the exact moment the outcome is revealed, to test whether a clean, separable RPE signal exists in its internal representations. Outcome labels are meaningless three-letter codes and point values are round numbers, with the framing sentence rotated across several neutral phrasings, so the design contains no emotional language that could confound the results.
 
@@ -34,19 +34,18 @@ Our work builds on currently unpublished peer-reviewed research by Hugo Nguyen i
 
 Our code is publicly available here: https://github.com/SystemicVoid/appraisal-emotions
 
-## Pages 3–5 — Main results
-
+## Main results
 
 
 - Only genuinely new outcomes, prior research to be explained in the introduction
 - Answers to the 3 hypotheses + discussion
 
-## Pages 5–6 — Controls / robustness
+## Controls / robustness
 
 - This is where we talk about the probe that tests whether RPE really represents a worse/better vector // change the gamble (stage 4)
 - Should there maybe be another one 🤔
 
-## Page 6–7 — Interpretation + alternative explanations
+## Interpretation + alternative explanations
 
 Aligned against the hypotheses with the following structure:
 
@@ -54,22 +53,14 @@ Aligned against the hypotheses with the following structure:
 - **What this supports:** Pattern X appears sufficiently stable/context-resistant/etc. to satisfy our operational definition Y.
 - **What it does not establish:** That the model literally experiences desire, suffering, welfare, consciousness, etc.
 
-## Page 7 — Limitations
 
-- Single smallish model
-- what else
+## Conclusion
 
-## Page 8 — Conclusion
+Our findings indicate that RPE is a concept that is represented, stored, and drives action in an LLM. Our research shows that the two tested models Qwen/Qwen3-4B-Instruct-2507 and Qwen/Qwen3.6-27B both compute RPE as per Rutledge et al with {INSERT IMPRESSIVE RESULT HERE}. Furthermore, the model's emotion-concept readout tracks the RPE computation {INSERT IMPRESSIVE RESULT HERE}. Finally, we also find that an LLM's chosen action is causally influenced by the most recently experienced RPE {TO BE ADAPTED ACCORDINGLY}. As such particular attention should be paid to an LLM's recent RPE calculations within agentic systems.
 
-- Three paragraphs maximum.
-- Follow-on research
-- self-reporting as a way to QA results
-- possibly "surprise" if we decide to take it out
-- possibly patching in the emotion vector rather than the RPE
-- Our findings offer representational-level* empirical support for the computational premise of Berg (2026), that emotion-concept representations are organized around goal-relative prediction error.
+We would like to see further research on activation patching the emotion vector in addition to RPE, as further exploration of whether and what role functional emotions have within LLMs. Beyond that, as our work was completed on two rather small models, we would like to see reproduction of our research on different model families and sizes for a representative look at the concept's transferability. We also believe our research may offer representational-level empirical support for the computational premise of Berg (2026), which is that emotion-concept representations are organized around goal-relative prediction error.
 
-## Page 9 — Limitations and Dual-Use / Ethical Considerations appendix
+Finally nothing in our research should imply nor it supports that LLMs understand and experience emotions akin to those of humans. Regardless of this fact, considering emotion-concept readouts track RPE computation and RPE can causally influence an LLM's action, we strongly caution against direct manipulation of emotion-concepts, which may lead to distress and harm of the LLM.
 
-Include any risks of over-attributing or under-attributing moral status, and how you handled potentially distressing model outputs. For introspection and preference work, note whether your design establishes a ground-truth or causal link rather than relying on conversation alone.
 
-## Page 10 — References
+## References
