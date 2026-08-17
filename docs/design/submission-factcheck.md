@@ -1,0 +1,139 @@
+# Submission fact-check — every numeric claim traced to a run artifact
+
+Three independent verification passes over the complete-draft submission (PR 11, commit bd27159),
+2026-08-16. Verdicts: VERIFIED / MISMATCH / NOT FOUND. All MISMATCH and FLAG items are fixed in
+the paper-final revision of submission.md; NOT-FOUND items are re-attributed to prior work or re-sourced.
+
+# Fact-check: RPE-certification and expectation-control claims (PR 11 draft)
+
+Primary artifacts opened directly. `RPE` = `/home/eugenia/appraisal-emotions/runs/reveal_rpe_base/reveal_rpe/reveal_rpe_report.json`; `BAT` = `.../reveal_rpe_base/reveal_rpe/battery.json`; `STATES` = `.../reveal_rpe_base/reveal_rpe/reveal_states.json`; `EXP` = `/home/eugenia/appraisal-emotions/runs/emotion_vectors_base/emotions/expectation_control_report.json`; `EVEC-base/wide` = `runs/emotion_vectors_{base,wide}/emotions/emotion_vectors.json`.
+
+| # | Claim (draft) | Artifact + key | Value found | Verdict |
+|---|---|---|---|---|
+| 1a | Signed-RPE sign decoding AUROC 0.985 | RPE `signed_rpe_observed_auroc` | 0.9847806478064781 | VERIFIED |
+| 1b | Random-direction floor AUROC 0.734 | RPE `random_direction_floor_auroc` | 0.7338778187781876 | VERIFIED |
+| 2a | Reward-matched sign contest 1.0, p ≈ 0.001 | RPE `reward_matched_auroc`, `reward_matched_p` | 1.0; p = 0.000999000999 (= 1/1001) | VERIFIED |
+| 2b | EV-matched sign contest 1.0, p ≈ 0.001 | RPE `ev_matched_auroc`, `ev_matched_p` | 1.0; p = 0.000999000999 (= 1/1001) | VERIFIED |
+| 3a | Unsigned surprise decoding AUROC 0.820 | RPE `abs_rpe_magnitude_auroc` | 0.8202483721992853 | VERIFIED |
+| 3b | Unsigned-surprise random floor 0.607 | RPE `abs_rpe_magnitude_floor` | 0.6074038414464987 | VERIFIED |
+| 4a | Split-half stability 0.925 ± 0.036, 200 repetitions (27B) | RPE `stability_cosine`, `stability_cosine_std`, `stability_n_splits` | 0.9252724396; std 0.0355503759; 200 splits | VERIFIED |
+| 4b | Split-half 0.911 for Qwen3-4B-Instruct-2507 | No run artifact in repo. Appears only in prose: `docs/design/experiment.md:28`, `docs/design/methods-findings.md:28,177`, `docs/design/paper-narrative.md:54`. The only numeric 0.911 in a repo JSON (`data/symbol_calibration/qwen3_4b_instruct_2507/calibration_swapped.json`) is an unrelated `cross_frame_std` | Number comes from the prior (unpublished) 4B certification outside this repo; repo docs restate it as prior work | NOT FOUND IN REPO — no primary artifact here supports 0.911; it is inherited from prior work and cannot be verified against this repo |
+| 5a | 1,984 trials; 1,488 estimation / 496 selection | RPE `n_reveals`,`n_estimation`,`n_selection`; BAT `manifest.n_reveals`, `manifest.reveals_by_partition`; len(`BAT reveals`) | 1984; 1488; 496 (both artifacts agree) | VERIFIED |
+| 5b | 60 reward-matched cells | BAT `manifest.n_reward_matched_cells_both_signs`; RPE `reward_matched_n_cells` | 60; 60 | VERIFIED |
+| 5c | 124 EV-matched pairs | BAT `manifest.n_ev_matched_pairs_both_signs`; RPE `ev_matched_n_cells` | 124; 124 | VERIFIED |
+| 5d | Zero emotion-lexicon hits, zero leak-word hits | BAT `affect_audit_warnings` (audit lexicon = emotion words + evaluative anchor-class words, `src/appraisal_emotions/stimuli/emotion_lexicon.py`); plus `symbol_preflight.json` `affect_flagged` | `[]` (empty); `affect_flagged: []`, `passed: true` | VERIFIED — both hit categories flow through the one fail-closed audit, and it recorded zero warnings |
+| 6a | Model Qwen/Qwen3.6-27B revision 6a9e13bd | STATES `manifest.model_id`, `manifest.revision` | "Qwen/Qwen3.6-27B"; "6a9e13bd6fc8f0983b9b99948120bc37f49c13e9" | VERIFIED (draft quotes the 8-char prefix) |
+| 6b | 64 blocks, hidden 5120 | RPE `n_blocks`, `hidden_size`; STATES manifest | 64; 5120 | VERIFIED |
+| 6c | bf16, seed 7 | STATES `manifest.dtype`, `manifest.seed`; BAT `seed`; EXP `seed` | "bfloat16"; 7; 7; 7 | VERIFIED (note: captured states are stored float64; model precision was bf16) |
+| 6d | Selected block 35 | RPE `selected_block` | 35 | VERIFIED |
+| 7a | Reward-matched PC1 +0.0261 / pair-axis +0.0200 | EXP arms[reward_matched].axes[].`pooled_within_cell_slope` | 0.02606550985 (PC1); 0.01998423931 (elated−disappointed) | VERIFIED |
+| 7b | EV-matched PC1 +0.0290 / pair-axis +0.0251 | EXP arms[ev_matched].axes[].`pooled_within_cell_slope` | 0.02896876236 (PC1); 0.02507605450 (elated−disappointed) | VERIFIED |
+| 7c | Ratios 1.11 and 1.26 | Derived from EXP slopes (no ratio key in artifact) | PC1: 0.0289688/0.0260655 = 1.1114 → 1.11 ✓. Pair axis: 0.0250761/0.0199842 = **1.2548**, which rounds to **1.25**; 1.26 arises only from re-dividing the pre-rounded slopes (0.0251/0.0200 = 1.255 → 1.26) and is repeated from `docs/design/methods-findings.md:195` | MISMATCH (minor) — true pair-axis ratio 1.25 (1.2548); draft says 1.26. Substantively irrelevant against a factor-of-2 tolerance, but 1.25 is the full-precision value |
+| 7d | All four permutation p = 1/10001 | EXP all four `p_value` | 9.999000099990002e-05 = 1/10001 exactly, all four axes×arms | VERIFIED |
+| 7e | 10,000 permutations | EXP `n_permutations` | 10000 | VERIFIED |
+| 7f | Factor-of-two tolerance pre-specified | `docs/design/e2b-prereg.md:44-47` (commit 0c6948b, 2026-08-14 18:37) — "within a factor of ~2 of E2's (+0.0261 PC1, +0.0200 pair axis)"; EV-matched result landed in commit 3f64b61 at 18:47 | Tolerance frozen in the prereg before the EV-matched analysis was committed | VERIFIED with caveat — the tolerance is pre-specified only relative to the EV-matched (E2b) arm; the reward-matched slopes were already known and are quoted inside the prereg itself. "Before analysis" in the draft Method is accurate for the ratio test, not for the reward-matched arm |
+| 8 | Axes built from the 84-word base extraction, not the 111-word wide run | EXP `emotion_vectors_sha256` = 14161298f04009…; EVEC-base `vectors_sha256` = 14161298f04009… with `n_word_rows` = 84, `stories_per_emotion` = 12; EVEC-wide `vectors_sha256` = 8adcf0b53bba… with `n_word_rows` = 111, `stories_per_emotion` = 24 | Hash uniquely matches the base (84-word) run; wide run's hash differs | VERIFIED — the E1/E2 expectation-control readout used the 84-word base vectors |
+
+## Notes
+
+- Claim 2 p-values: the sign-contest permutation count in the RPE certification is 1,000 (p = 1/1001 = 0.000999), so "p ≈ 0.001" is the correct reading; it is not the same 1/10001 floor as the expectation control.
+- Claim 4b is the one substantive gap: nothing in `runs/` or `data/` certifies the 4B model. The draft's Conclusion ("our research shows that the two tested models … both carry a stable signed RPE representation") slightly overstates what this repo's artifacts support — the 4B leg is inherited from prior unpublished work (design doc §0 calls it the R-A′ certification precedent), and `docs/literature.md`-style secondary-number caution applies.
+- Claim 7c: recommend changing "1.26" to "1.25" (three places in the draft: Abstract, Key Findings, A3/Conclusion) or computing from full-precision slopes; `docs/design/methods-findings.md:405` itself warns the pair-axis ratio is 25.5%.
+- The expectation-control readout is taken at block 63 (`EXP block`/`emotion_selected_block` = 63), while the RPE certification is at block 35 — the draft's A1 "block 35" claim concerns only the RPE direction and is consistent.
+
+# Fact-check: behavioural carryover and intervention claims (pr11_submission.md)
+
+Artifacts opened directly (primary sources):
+- `/home/eugenia/appraisal-emotions/runs/emotion_vectors_base/emotions/behavioral_transfer_report.json` (E4 base)
+- `/home/eugenia/appraisal-emotions/runs/emotion_vectors_base/emotions/behavioral_transfer_report_widened.json` (E4 widened / e4-full)
+- `/home/eugenia/appraisal-emotions/runs/emotion_vectors_base/emotions/e3_passthrough_decomposition.json` (E3)
+- `/home/eugenia/appraisal-emotions/docs/design/e4-prereg.md` (pre-specified gates)
+
+| # | Claim (draft) | Artifact path + key | Value found | Verdict |
+|---|---|---|---|---|
+| 1a | Unpatched carryover +0.19 logits toward risky after positive vs negative first-round outcome | `behavioral_transfer_report_widened.json` → `gate.mean_natural_gap` (base run: 0.1918) | 0.18987 (widened) | VERIFIED |
+| 1b | p ≈ 10^-4 | same → `gate.p_value` / `gate.attainable_p` | 9.999e-05 = 1/10001 permutation floor (both runs) | VERIFIED |
+| 1c | 66% of 209 matched pairs positive | same → `gate.n_pairs`, `gate.per_pair_gap` | n_pairs = 209; 137/209 = 65.55% positive | VERIFIED (numbers are from the **widened** run; base run had 120 pairs, 69.2% positive) |
+| 2 | Second gamble: certain reward at three levels around risky option with EV 20 | `docs/design/e4-prereg.md` §4 ("round-2 gamble is fixed at {40, 0} (EV 20)... c ∈ {10, 20, 30}"); confirmed in both run JSONs → `gate.levels` (certain 10/20/30; level 10 selected) | risky {40,0} EV 20; certain ∈ {10,20,30} | VERIFIED |
+| 3a | E3 apparent transfer fraction ≈ 0.73 on both axes | `e3_passthrough_decomposition.json` → `rows[wiring_check=false, arm=v_rpe_component].observed_transfer_fraction` | PC1 0.7308; elated−disappointed 0.7327 | VERIFIED |
+| 3b | Passthrough explains 79.5% (certified PC1), 84.0% (full-residual PC1), 97–105% (pair axis) | same → `passthrough_share_of_observed` | v_rpe PC1 0.7948; full_residual PC1 0.8405; pair axis 0.9740 (v_rpe) and 1.0493 (full_residual) | VERIFIED |
+| 3c | Certified-arm excess above passthrough +0.150 (PC1), +0.019 (pair axis); no-op +0.135 and +0.195 | same → `excess_transfer_fraction` (arms `v_rpe_component`, `same_condition_donor`) | +0.1504 / +0.0191; no-op +0.1352 / +0.1947 | VERIFIED |
+| 4 | Reachability: full-residual write at reveal shifts answer-slot logits −0.196, p = 3e-4; which run? | `behavioral_transfer_report_widened.json` → `reachability` (mean_shift, p_value, passed) | −0.19583, p = 2.9997e-4, passed = true, n = 60 — **widened run**. Base run reachability FAILED (−0.154, p = 0.084, passed = false) | VERIFIED — draft A4 correctly attributes it to the widened run. Note: main-text §"Controls" para 4 says "A reachability control passed" without noting the base run's reachability control *failed*; A4 carries the run attribution, so numbers are right, but the base-run failure is never stated anywhere in the draft |
+| 5a | MDE80 base 0.1365, widened 0.1301 | base → `gate.mde80` = 0.13648; widened → `gate.mde80` = 0.13012 | 0.1365 / 0.1301 | VERIFIED |
+| 5b | Pre-specified maximum ≈ 0.095; gate failed in both runs | `e4-prereg.md` §5: gate = "clustered MDE80 ... below 0.5·\|mean g\|"; computed: base 0.5×0.19184 = 0.0959, widened 0.5×0.18987 = 0.0949; both JSONs → `gate.passed` = false | ≈0.095 in both; failed in both | VERIFIED (bar is a pre-specified *formula*, half the observed natural gap, not a fixed number — "≈ 0.095" is a fair rendering) |
+| 6a | Certified RPE patch −0.007 logits, p = 0.81 (widened, descriptive) | widened → `arms[v_rpe_component].mean_shift`, `.p_value` | −0.00736, p = 0.8053 | VERIFIED |
+| 6b | Full-residual −0.010 logits, p = 0.96 | widened → `arms[full_residual]` | −0.01046, p = 0.9578 | VERIFIED |
+| 6c | Random-direction floor +0.031 transfer fraction | widened → `arms[random_component].transfer_fraction` | +0.03140 | VERIFIED |
+| 6d | Full-residual transfer fraction +0.002, below that floor | widened → `arms[full_residual].transfer_fraction` and `ceiling_note` ("the full-residual ceiling (+0.002) does not clear the magnitude-matched random floor (+0.031)"); `ceiling_readable` = false | +0.00185 | VERIFIED |
+| 6e | Draft marks these arms descriptive-only | widened → `arms_spent_under_failed_gate` ("DESCRIPTIVE ONLY ... verdict_cap ... still reports harness_inadequate") | matches draft A5 framing | VERIFIED |
+| 7a | Corruption: mean absolute shift 0.139 ≈ 0.73× natural gap | widened → `corruption[arm=v_rpe_component, window=outcome_recall].mean_abs_shift`, `.relative_to_gap` | 0.13935; ratio 0.7340 | VERIFIED |
+| 7b | 3 of 4 arm × window combinations exceeded the pre-specified corruption tolerance | widened → `corruption[*].within_tolerance` = [F, F, F, T]; but `corruption_note` + `corruption_clean=false` flag **4 of 4** | 3/4 exceed the 0.5-of-gap ratio component; the run's own pre-specified criterion (prereg §11 ruling 7, fixed before data: ratio > 0.5 **or** window moved more than the arm moved the choice) flags all 4 combos (`corruption_note` names full_residual and v_rpe_component on both outcome_recall and running_total) | MISMATCH (true value: 4 of 4 under the run report's full pre-specified criterion; 3 of 4 only under the ratio-0.5 component alone). Draft understates the corruption finding |
+| 8a | Draft says +0.19 "establishes that the prior outcome/expectation manipulation carries over", not that RPE causally drives choice | widened → `identification_limit` ("E4 identifies 'the expectation manipulation transfers', NOT 'signed RPE rather than EV transfers'"); `verdict_cap` = "harness_inadequate ... functional-use claim stays OPEN" (both runs) | Key-Findings body text and Controls para 4 match the artifact's own limits | VERIFIED for the body text |
+| 8b | No number presented with more confidence than the run's verdict field | see 8a; also base `verdict_cap` (reachability FAILED) | Two over-reaches found: (i) the Key-Findings **heading** "RPE representation computed at the outcome reveal is carried into the model's subsequent risk-taking choice" and the Conclusion's "positive versus negative prior **RPE** was associated with a +0.19-logit shift" attribute the unpatched behavioural gap to the RPE representation/signed RPE, which `identification_limit` explicitly says this design cannot identify (EV and signed RPE are perfectly anti-correlated within reward-matched cells) — the body sentence gets this right, the heading and Conclusion wording do not; (ii) the base run's failed reachability control is never mentioned, only the widened pass | FLAG (heading/Conclusion wording stronger than `identification_limit`; body text is compliant) |
+
+## Notes
+
+- All headline E4 behavioural numbers in the draft (0.19, p≈1e-4, 209 pairs, 66%, MDE80 0.1301, reachability −0.196 / p=3e-4, arm table, floor +0.031, ceiling +0.002, corruption 0.139 / 0.73×) come from `behavioral_transfer_report_widened.json`, the e4-full artifact landed 2026-08-16; base-run counterparts (`behavioral_transfer_report.json`: 120 pairs, gap 0.1918, MDE80 0.1365, reachability failed) are consistent with the draft's per-run table in A4.
+- E3 numbers all come from block-63 (non-wiring-check) rows of `e3_passthrough_decomposition.json`; the block-35 rows are tautological patch-site readings and the draft correctly does not use them.
+- Only mismatch of substance: item 7b (3-of-4 vs 4-of-4 corruption combos). The draft's "pre-specified corruption tolerance" is ambiguous between the shipped ratio-0.5 gate (3/4 exceed) and the full pre-data criterion in prereg §11 ruling 7 (4/4 flagged, and `corruption_clean` = false). Prereg §6 originally froze the tolerance at 10% of baseline margin, under which all 4 also exceed. Recommend the draft either say "all four combinations were flagged by the run's corruption control" or specify which criterion yields 3 of 4.
+
+# Fact-check: widened emotion-geometry claims (draft "Controls and robustness" ¶2, Appendix A2)
+
+Artifacts: `WIDE` = /home/eugenia/appraisal-emotions/runs/emotion_vectors_wide/emotions/, `BASE` = /home/eugenia/appraisal-emotions/runs/emotion_vectors_base/emotions/. "Derived" = recomputed from artifact word-level data (`blocks[0].word_residuals` etc.), matched to the claimed value.
+
+| # | Claim | Artifact path + key | Value found | Verdict |
+|---|-------|---------------------|-------------|---------|
+| 1a | 111 words × 24 stories | WIDE/emotion_vectors.json `n_word_rows`, `stories_per_emotion`; map_geometry_report.json `norms_covered_words`; word_residuals length | 111 emotion words, 24 stories/word, 111 residual rows | VERIFIED (see 1b caveat) |
+| 1b | 2,684 of 2,688 stories kept | WIDE/emotion_vectors.json `n_requested`=2688, `n_kept`=2684, `drop_counts_by_reason`={names_target: 4}; stories.json length 2688 | 2684/2688 | VERIFIED — caveat: 2688 = **112** concepts × 24 (the 111 emotion words **plus the `style_control` pseudo-word**); 111×24 alone is 2664. Draft sentence "111 words × 24 stories, of which 2,684 of 2,688 generated stories passed" is internally off by the style-control word |
+| 2a | 11 outcome-linked positive vs 17 non-outcome positive controls | WIDE/map_geometry_report.json blocks[0].family_contrasts[positive] `n_outcome`/`n_control` | 11 / 17 | VERIFIED |
+| 2b | +0.0346, p = 0.0177 (valence+arousal residual) | same, `statistic`=0.034645, `p_value`=0.017698; `residualize_on`=[valence, arousal] | +0.0346, p 0.0177 | VERIFIED |
+| 2c | Valence-only +0.0375, p = 0.011 | WIDE/map_geometry_report_valence_only.json blocks[0].family_contrasts[positive] | 0.037549, p 0.010899 | VERIFIED |
+| 2d | Binary-valence +0.0407 | No dedicated wide binary artifact. Derived: OLS-residualizing blocks[0].word_residuals `cos_v_rpe` on the binary `valence` field gives contrast **0.040711**. (BASE has map_geometry_report_binary_sensitivity.json, but its headline blocks read +0.0293/+0.0209 — different run/word set) | 0.0407 (derived) | VERIFIED (derived from WIDE artifact; not stored as a report key) |
+| 2e | Label-shuffle p95 floor 0.0310; random-direction p95 floor 0.0134 | WIDE/map_geometry_report.json blocks[0] `label_shuffled_p95`=0.031008, `random_direction_p95`=0.013412, `clears_both_floors`=true | 0.0310 / 0.0134 | VERIFIED (these are the primary v+a report's floors; the valence-only report's own floors are 0.0309/0.0156) |
+| 3a | Planned power 0.36 | docs/design/e1-widening.md lines 147, 179, 221, 255 (pre-run design doc, not a run artifact) | primary ratio 1.92, power **0.36** | VERIFIED (design doc) |
+| 3b | Realised MDE80 ≈ 0.043 | Not stored as a key for the wide run. Derived from WIDE word_residuals: residual SD 0.0445 × 2.4865 × sqrt(1/11+1/17) = **0.0428** (positive-pool SD gives 0.0423). Memo statement at docs/design/methods-findings.md:253 | ≈0.043, exceeds observed 0.0346 | VERIFIED (derived; ~0.043 holds) |
+| 4 | Negative-pole contrast −0.0054, p = 0.64 | WIDE/map_geometry_report.json blocks[0].family_contrasts[negative] `statistic`=−0.005427, `p_value`=**0.635436** | −0.0054, p 0.64 | VERIFIED (p rounds 0.6354 → 0.64) |
+| 5a | 7 of 11 outcome-positive words residual ≥ +0.033 | WIDE word_residuals, family outcome_pos | exactly 7 (7th = `overjoyed` 0.03335, just above the line) | VERIFIED |
+| 5b | Leave-one-out span 0.0255–0.0406 | Derived: LOO over the 28 family words with residualization refit each drop reproduces **0.02551 (drop `amused`) – 0.04058 (drop `relieved`)**; matches memo docs/design/methods-findings.md:260 | 0.0255–0.0406 | VERIFIED (derived, exact) |
+| 5c | Dropping `amused` (residual −0.127) sinks contrast below re-estimated floor | `amused` residual = −0.126741; LOO contrast without it 0.0255 < shipped floor 0.0310 | −0.127; 0.0255 < floor | VERIFIED (the *re-estimated* floor value itself is memo-only, but the direction holds even against the shipped floor) |
+| 6 | Style-control pseudo-word residual 0.066 ≈ 1.9× headline | WIDE/map_geometry_report.json blocks[0].p5c[v_rpe] `residual`=0.066034; 0.066034/0.034645=**1.91** | 0.066, 1.9× | VERIFIED |
+| 7a | Confirm-vs-surprise bootstrap P(diff ≤ 0) = 0.17 | Not stored in artifacts; memo docs/design/methods-findings.md:283. Reproduced by word-level bootstrap on WIDE word_residuals (confirm n=5 mean 0.0382 vs outcome_pos n=11 mean 0.0216): P(diff≤0)=**0.169** | 0.17 (reproduced) | VERIFIED (derived; memo-recorded) |
+| 7b | Reverses to predicted ordering under binary-valence in BOTH runs | WIDE derived (binary residuals): outcome_pos 0.0313 > outcome_confirm 0.0279. BASE/map_geometry_report_binary_sensitivity.json: block 35 pos 0.0221 > confirm 0.0171; block 63 pos 0.0135 > confirm 0.0099 | reversed in both | VERIFIED |
+| 7c | `resigned` norm −0.52; `vindicated` norm 0.23 | /home/eugenia/appraisal-emotions/data/norms/vad_subset.csv (nrc_vad_v2) | resigned valence −0.52; vindicated 0.23 | VERIFIED |
+| 8 | 0/24 `elated` stories explicitly unexpected; 20/24 `vindicated` expectation→confirmation | **SOURCE=memo-audit** — no run artifact records the audit; counts appear only in docs/design/methods-findings.md:288–289 and docs/design/paper-narrative.md:127–128. Crude keyword scan of WIDE/stories.json is consistent (0 expectation-language hits in elated; the 2 elated stories containing "surprising" use it incidentally, not as an unexpected outcome; vindicated stories carry expectation language) | memo counts; directionally consistent | VERIFIED as memo-audit (draft should not imply an artifact-recorded count) |
+| 9a | disappointed/sad reversal present in RAW cosines, both runs | WIDE word_residuals `cos_v_rpe`: disappointed −0.1009 vs sad −0.1454; BASE block 35: −0.0781 vs −0.1079 (sad more RPE-negative in both) | reversal raw-level, both runs | VERIFIED |
+| 9b | ≈8× per-word noise SD | Derived: per-run noise SD from cross-run residual diffs over 84 shared words = 0.0119 (memo's "≈0.012"); wide residual reversal disappointed−sad = 0.0939 → **7.9×** | ~8× | VERIFIED (derived; memo-recorded at methods-findings.md:294, 301) |
+| 9c | `underwhelmed` near the top of its family | WIDE word_residuals, outcome_neg: underwhelmed residual +0.0465, 2nd highest of 15 (after `rueful` 0.0835) | 2nd/15 | VERIFIED |
+| 10 | Cross-run word-residual r = 0.921 over 84 shared words; single-run reliability ≈ 0.92 | Derived: Pearson r between BASE block-35 and WIDE block-35 residuals over the 84 shared words = **0.9211**; cross-run r is itself the single-run reliability estimate | 0.921 / ≈0.92 | VERIFIED (derived). Note: block-35 specific — at BASE block 63 the same correlation is 0.78 |
+| 11a | Valence-only contrast 0.0572 at block 48, 0.0568 at block 50 | WIDE/map_geometry_report_valence_only.json block_sweep: block 48 positive=0.057161; block 50 positive=0.056777 | 0.0572 / 0.0568 | VERIFIED |
+| 11b | Permutation p ≈ 0.005 on fresh floors at 48–50 | NOT in any artifact — block_sweep entries carry no p-values or floors; only memo-recorded (docs/design/methods-findings.md:305–306; paper-narrative.md:146) | memo only | NOT FOUND in artifacts (memo-sourced; cannot be recomputed from shipped word-level data, which exists only for block 35) |
+| 11c | Depth-profile correlation r = 0.92 across runs | Derived: BASE map_geometry_report block_sweep positive contrasts vs WIDE valence-only sweep (matched design), r = **0.9198** over 64 blocks | 0.92 | VERIFIED (derived; note vs the wide v+a sweep r is only 0.55 — the 0.92 is the matched valence-only comparison) |
+| 11d | Contrast positive across blocks 20–63 | WIDE valence-only block_sweep: non-positive only at blocks 3–7 and 12–14 | positive for all of 20–63 | VERIFIED |
+| 11e | G0 sensitivity 0.812 (wide, block 35); base G0 0.784 | WIDE/emotion_vectors.json `g0_spearman_rho`=0.81219, `gate_verdict`=pass; BASE/emotion_vectors.json `g0_spearman_rho`=0.78359, pass | 0.812 / 0.784 | VERIFIED |
+
+## Items the draft should touch
+
+1. **(1b)** "111 words × 24 stories, of which 2,684 of 2,688" — the 2,688 denominator includes the style-control pseudo-word (112 × 24). Either say "111 emotion words plus a style-control pseudo-word (112 × 24 = 2,688 stories, 2,684 kept)" or drop the denominator.
+2. **(8)** The elated/vindicated story counts are a memo-recorded qualitative audit (paper-narrative.md / methods-findings.md), not an artifact readout — fine to report, but it is not machine-recorded anywhere in runs/.
+3. **(11b)** The depth p ≈ 0.005 "on freshly computed floors" is likewise memo-only; no artifact stores per-block permutation p or fresh floors for blocks 48/50. Everything else in the depth paragraph is artifact-backed.
+4. Minor context, no change needed: the binary-valence +0.0407 and the LOO span are not stored report keys but reproduce exactly from the shipped word-level residual data; the 0.921 cross-run correlation and ≈0.043 MDE80 likewise reproduce from artifacts.
+
+## Sofroniew-recipe replication (§4 + A6), audited 2026-08-17
+
+Artifacts: `runs/emotion_vectors_sofroniew{,_projected}/emotions/` (`emotion_vectors.json`, `map_geometry_report.json`, `expectation_control_report.json`), committed at b1e0538. RAW = unprojected arm, PROJ = projected arm.
+
+| # | Claim in draft | Artifact source | Value | Verdict |
+| --- | --- | --- | --- | --- |
+| R1 | Gate 0.841 / 0.850 vs 0.60 threshold at block 32 | emotion_vectors.json `g0_abs_rho` = 0.840698 (RAW), 0.849754 (PROJ); `gate_verdict`=pass; `selected_block`=32 | 0.841 / 0.850 | VERIFIED |
+| R2 | E2 slope table: RAW +0.0150/+0.0102 (reward-matched), +0.0142/+0.0106 (EV-matched); PROJ +0.0157/+0.0130, +0.0145/+0.0111 | expectation_control_report.json `comparison_signature` slopes: 0.015011/0.010231, 0.014222/0.010589; 0.015670/0.012979, 0.014494/0.011104 | as drafted (4 dp) | VERIFIED |
+| R3 | All eight permutation p at the 1/10001 floor | `arms[].axes[].p_value` = 0.0001 in all 8 cells | 1/10001 | VERIFIED |
+| R4 | Positive-pole contrasts: RAW(32) +0.0195, p = 0.048; PROJ(32) +0.0229, p = 0.020; PROJ(35) +0.0266, p = 0.021 | map_geometry_report.json `blocks[].family_contrasts[positive]`: 0.01950/0.0476, 0.02294/0.0203, 0.02659/0.0209 | as drafted | VERIFIED |
+| R5 | Label-shuffle floors 0.0241 / 0.0230 / 0.0300; PROJ(32) misses by 0.0001 | `label_shuffled_p95` = 0.02407, 0.02305, 0.02998; 0.02305 − 0.02294 = 0.00011 | as drafted | VERIFIED |
+| R6 | Negative pole flat: −0.0013 (p 0.55), +0.0018 (p 0.43), +0.0039 (p 0.37); range −0.006 to +0.004 across all maps/blocks | `family_contrasts[negative]`: −0.00134/0.5532, 0.00177/0.4290, 0.00393/0.3719; RAW(35) −0.00568; wide −0.00543 | as drafted | VERIFIED |
+| R7 | Word-level RPE alignment rank-correlates with valence +0.776 to +0.805 | `blocks[].p1_spearman_rho`: 0.78271, 0.79255 (RAW), 0.77589, 0.80475 (PROJ) | as drafted | VERIFIED |
+| R8 | Confirmation-family mean residuals +0.043 (RAW) / +0.031 (PROJ) vs +0.012 / +0.018 outcome-positive | Derived from `word_residuals` (confirm means 0.04261 / 0.03065) and `family_contrasts.mean_residual_outcome` (0.01172 / 0.01795) | as drafted | VERIFIED (derived) |
+| R9 | RAW fails style scale check on unsigned-surprise (−0.064 vs 0.046 band); PROJ passes all three; signed-RPE passes on both | `blocks[0].p5c`: RAW v_absrpe residual −0.06389, p95 0.04554, passed=false; RAW v_rpe passed=true; PROJ all passed=true | as drafted | VERIFIED |
+| R10 | Projection shifts gate by +0.0013 at read block; maps differ 0.0078 before projection | PROJ `g0_table_before_projection` block 32 abs rho 0.84845 vs `g0_abs_rho` 0.84975 (Δ 0.00130); RAW 0.84070 (Δ 0.00775); random-frame control 0.84845 | +0.0013 / 0.0078 | VERIFIED |
+| R11 | About 18 kept stories per word; generator over-delivered vs configured 12 | results/sofroniew_arms_analysis.md corpus section (kept 14–21 per label, ≈19.3 recovered); not a single report key | ~18 | VERIFIED (analysis-derived) |
+| R12 | About 23% of kept stories end mid-sentence | results/sofroniew_arms_analysis.md: 469/2,026 (RAW), 464/2,038 (PROJ) | ~23% | VERIFIED (analysis-derived) |
+| R13 | Broad 0.81–0.85 gate plateau across second half of the stack | results/sofroniew_arms_analysis.md (means 0.828/0.836 over blocks 20–45), backed by the g0 tables in both emotion_vectors.json | as drafted | VERIFIED (analysis-derived) |
