@@ -6,22 +6,21 @@ haven't guessed team info, track selection, or the publish decision.
 ## Project Details
 
 **Project Title\***
-> [DRAFT — pick one or edit] Appraisal Geometry: Does Reward Prediction Error Shape Emotion-Concept Representations in Qwen3.6-27B?
+> An LLM's Emotion-Concept Readout Tracks Reward Prediction Error
 
 **Project Summary\***
 
 > Reward prediction error (RPE) is the difference between received and predicted reward, a computation first linked to dopaminergic activity in non-human primates (Schultz, Dayan & Montague, 1997). In humans, RPE also predicts momentary subjective well-being (Rutledge et al., 2014). We test whether a language model performs an analogous computation and whether independently constructed emotion-concept representations reflect it. In Qwen/Qwen3.6-27B, signed RPE is strongly separable in the residual stream on affect-neutral gambles (AUROC 0.985; random-direction floor 0.734). Two emotion-concept readouts track reward relative to expectation rather than either quantity alone, with matched reward and expectation effects of comparable magnitude (ratios 1.11 and 1.25; all permutation p = 1/10001). In a sequential gambling task, positive versus negative prior outcomes are associated with a +0.19-logit shift toward subsequent risk-taking (p ≈ 10^-4). Intervention experiments do not yet establish that the identified RPE representation causally mediates this behavioural effect.
 >
-> (145 words, verified. This is the paper's abstract — keep the two in sync if either changes.)
 
 **Upload your PDF report\***
 > [Export `submission.md` to PDF once the findings sections are filled in, then attach here]
 
 **Are you interested in publishing this project?\***
-> [TODO — Yes / No]
+> Yes
 
 **Pick one or more tracks\***
-> [TODO — need the track descriptions/names to choose; not captured anywhere in the repo]
+> Track 1, Track 2
 
 ## Optional Uploads
 
@@ -43,16 +42,16 @@ haven't guessed team info, track selection, or the publish decision.
 ## Team Details
 
 **Team Name\***
-> [TODO]
+> An LLM's Emotion-Concept Readout Tracks Reward Prediction Error
 
 **Location\***
-> [TODO — what city are you joining from?]
+> Berlin
 
 **Team Member Name\***
-> [TODO]
+> Artyom Chelbayev
 
 **Team Member Email\***
-> [DRAFT — a.chelbayev@gmail.com, confirm this is right]
+> a.chelbayev@gmail.com
 
 **Team Member Discord Username**
 > [optional]
