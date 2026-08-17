@@ -16,13 +16,6 @@ To test whether an independently constructed emotion-concept readout tracks a re
 * emotion-concept readout at the outcome token tracks the model's reward-prediction error;
 * RPE representation computed at the outcome reveal is functionally used in the model's subsequent risk-taking choice.
 
-Our main contributions are:
-
-1. We certify — pass a pre-specified battery of decoding, control-floor, and stability checks — a stable, separable representation of signed reward prediction error in the residual stream of Qwen3.6-27B on affect-neutral gambles (AUROC 0.985 against a 0.734 random-direction floor), extending a prior certification of the same computation in a 4B-parameter model.
-2. We show that emotion-concept readouts constructed entirely independently of the gambling task track the reward-versus-expectation *comparison* — the same coefficient signature through which Rutledge et al. (2014) identify the RPE contribution to human momentary well-being — rather than reward or expectation alone.
-3. We find a behavioural carry-over effect consistent with the house-money effect (Thaler & Johnson, 1990): positive prior outcomes shift the model toward riskier subsequent choices by +0.19 logits. Our interventions show this signal is carried through the residual stream without establishing that it is functionally used, including a passthrough decomposition that quantifies how same-position activation patching can mimic functional transfer.
-4. As a pilot-suggestive robustness result, we find that outcome-linked positive emotion concepts carry excess alignment with the RPE direction beyond what human-rated valence and arousal norms predict.
-
 ## 2. Related Work
 
 Schultz, Dayan & Montague (1997) established reward prediction error as the computational account of dopaminergic reward signalling. Rutledge et al. (2014) showed that in humans momentary subjective well-being tracks recent RPEs rather than reward levels: their computational model identifies the RPE contribution through matched reward and expectation coefficients of opposite sign and comparable magnitude (`a ≈ −b`). Our readout analysis transplants exactly this identification strategy to a language model's internal activations.
