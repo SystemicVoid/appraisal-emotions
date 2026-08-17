@@ -9,9 +9,9 @@ Reward prediction error (RPE) describes the difference between received and pred
 
 ## 1. Introduction
 
-Rutledge et al. (2014) established a computational relationship between outcome-versus-expectation comparisons and momentary affect in humans, and Sofroniew et al. (2026) provide a method for identifying structured emotion-concept representations in large language models (LLMs). This project connects the two: we test whether an independently constructed emotion-concept readout tracks a reward-prediction-error computation performed online by the model in an affect-neutral task. As LLMs increasingly take actions through agentic systems, identifying internal computations that persist across contexts and relate to subsequent choices may help clarify the mechanisms underlying model behaviour. If a model's recent outcome history shifts its subsequent risk preferences — as prior outcomes shift human choices — then that history is an internal state variable worth monitoring in deployed agents.
+Rutledge et al. (2014) established a computational relationship between outcome-versus-expectation comparisons and momentary affect in humans, and Sofroniew et al. (2026) provide a method for identifying structured emotion-concept representations in large language models (LLMs). We test whether an independently constructed emotion-concept readout tracks a reward-prediction-error computation performed by the model in an affect-neutral task. As LLMs increasingly take actions through agentic systems, identifying internal computations that persist across contexts and relate to subsequent choices may help clarify the mechanisms underlying model behaviour. If a model's recent outcome history shifts its subsequent risk preferences, similarly to how prior outcomes shift human choices, that history is an internal state variable worth monitoring in deployed agents.
 
-In this paper we set out to test the following hypotheses:
+To test whether an independently constructed emotion-concept readout tracks a reward-prediction-error computation, we establish two hypotheses:
 
 * emotion-concept readout at the outcome token tracks the model's reward-prediction error;
 * RPE representation computed at the outcome reveal is functionally used in the model's subsequent risk-taking choice.
