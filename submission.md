@@ -84,10 +84,6 @@ Nothing in our results establishes that LLMs phenomenally experience the emotion
 * Code repository: https://github.com/SystemicVoid/appraisal-emotions
 * Data: run artifacts (JSON reports) are versioned in the repository. Full activation tensors and logs are attached to repository releases.
 
-## Author Contributions
-
-[TODO — e.g. "H.N. designed the experiments and led the analysis. A.C. ... Both authors contributed to writing and reviewed the final manuscript."]
-
 ## References
 
 1. Schultz, W., Dayan, P., & Montague, P. R. (1997). "A Neural Substrate of Prediction and Reward." *Science, 275*(5306), 1593–1599. https://doi.org/10.1126/science.275.5306.1593
