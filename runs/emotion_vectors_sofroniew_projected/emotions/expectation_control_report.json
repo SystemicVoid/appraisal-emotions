@@ -1,0 +1,99 @@
+{
+  "alpha": 0.05,
+  "arms": [
+    {
+      "axes": [
+        {
+          "axis": "pc1_affect_concept_valence",
+          "description": "PC1 of the emotion basis, oriented toward positive affect-concept valence.",
+          "mean_per_cell_slope": 0.028574311671998236,
+          "n_cells": 60,
+          "n_rows": 960,
+          "p_value": 9.999000099990002e-05,
+          "pooled_within_cell_slope": 0.01566982127535187,
+          "reads_expectation": true,
+          "sign_congruent": true
+        },
+        {
+          "axis": "elated_minus_disappointed",
+          "description": "The design's e_disappointed - e_elated contrast, sign-flipped so positive means better-than-expected (fixed before data; see module docstring).",
+          "mean_per_cell_slope": 0.024712951537011914,
+          "n_cells": 60,
+          "n_rows": 960,
+          "p_value": 9.999000099990002e-05,
+          "pooled_within_cell_slope": 0.012978675566471806,
+          "reads_expectation": true,
+          "sign_congruent": true
+        }
+      ],
+      "cell_family": "reward_matched",
+      "cell_key": "reward_cell_id",
+      "held_fixed": "realised reward and |RPE|",
+      "recovers": "-b (the EV coefficient), because reward is pinned inside the cell",
+      "scope_note": "The options block is NOT byte-identical inside a reward-matched cell \u2014 EV differs by construction. The varying text is numeric point values on a surface that passes the zero-emotion-lexicon audit: exactly the variation an expectation-tracker must use and a surface-affect detector should ignore.",
+      "varies": "stated EV"
+    },
+    {
+      "axes": [
+        {
+          "axis": "pc1_affect_concept_valence",
+          "description": "PC1 of the emotion basis, oriented toward positive affect-concept valence.",
+          "mean_per_cell_slope": 0.02397342752543674,
+          "n_cells": 124,
+          "n_rows": 1984,
+          "p_value": 9.999000099990002e-05,
+          "pooled_within_cell_slope": 0.014493531065735482,
+          "reads_expectation": true,
+          "sign_congruent": true
+        },
+        {
+          "axis": "elated_minus_disappointed",
+          "description": "The design's e_disappointed - e_elated contrast, sign-flipped so positive means better-than-expected (fixed before data; see module docstring).",
+          "mean_per_cell_slope": 0.019660523548723365,
+          "n_cells": 124,
+          "n_rows": 1984,
+          "p_value": 9.999000099990002e-05,
+          "pooled_within_cell_slope": 0.011103583976362717,
+          "reads_expectation": true,
+          "sign_congruent": true
+        }
+      ],
+      "cell_family": "ev_matched",
+      "cell_key": "ev_cell_id",
+      "held_fixed": "stated EV and |RPE|",
+      "recovers": "+a (the reward coefficient), because EV is pinned inside the cell",
+      "scope_note": "The realised outcome SYMBOL differs inside an EV-matched cell \u2014 that is what makes the outcome vary \u2014 so unlike the reward-matched arm the surface is not outcome-matched. Symbol identity is put in the intercept rather than the slope by the battery's balanced rendering (both orders, both strata, four templates at equal weight) on neutrality-calibrated symbols. This arm is the complement of the reward-matched one, not a replacement: that arm pins the surface and varies the expectation, this one pins the expectation and varies the surface with the outcome.",
+      "varies": "the realised outcome"
+    }
+  ],
+  "artifact_contract_version": "expectation_control/v2",
+  "battery_sha256": "160208e6cdf9bb49624a5bca6094f216994196015027f9462c38df4481fa138e",
+  "block": 32,
+  "comparison_signature": [
+    {
+      "axis": "pc1_affect_concept_valence",
+      "ev_matched_reads": true,
+      "ev_matched_slope": 0.014493531065735482,
+      "holds": true,
+      "reading": "COMPARISON SIGNATURE. Both arms are sign-congruent and below alpha, which is what a readout carrying reward - ev predicts (a = -b). Neither a pure expectation tracker (predicts the EV-matched arm at zero) nor a pure outcome tracker (predicts the reward-matched arm at zero) survives both. Representational only: this says the readout carries the comparison, not that anything uses it.",
+      "reward_matched_reads": true,
+      "reward_matched_slope": 0.01566982127535187
+    },
+    {
+      "axis": "elated_minus_disappointed",
+      "ev_matched_reads": true,
+      "ev_matched_slope": 0.011103583976362717,
+      "holds": true,
+      "reading": "COMPARISON SIGNATURE. Both arms are sign-congruent and below alpha, which is what a readout carrying reward - ev predicts (a = -b). Neither a pure expectation tracker (predicts the EV-matched arm at zero) nor a pure outcome tracker (predicts the reward-matched arm at zero) survives both. Representational only: this says the readout carries the comparison, not that anything uses it.",
+      "reward_matched_reads": true,
+      "reward_matched_slope": 0.012978675566471806
+    }
+  ],
+  "emotion_selected_block": 32,
+  "emotion_vectors_sha256": "de2926dc7282252170256ee8aacba6560de53cbd5dbb1034fdd364e2ca9c60a1",
+  "n_permutations": 10000,
+  "seed": 7,
+  "sensitivity_gate": "G0=pass",
+  "states_sha256": "3d6de5a79cd72ebadf2d74584d1f9fc608c872d1eca9acc2be689b11f2ae331c",
+  "verdict_cap": "present-and-separable, pilot-suggestive. A sign-congruent within-cell slope on the reward-matched arm says the emotion-probe readout tracks the EXPECTATION manipulation with the outcome text fixed; a null there is what the situational-context rival predicts. Only the CONJUNCTION with the EV-matched arm licenses the word 'comparison' \u2014 read comparison_signature, not one arm. Nothing here is a causal claim, and none of it licenses any welfare / sentience / experience claim."
+}

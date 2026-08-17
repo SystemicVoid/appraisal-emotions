@@ -120,3 +120,7 @@ emotion_vectors:
   fallback_blocks: 48
   first_contact_n: 10
   first_contact_max_drop_rate: 0.5
+  # The pre-registered primary readout, inherited from the widened design (e1-widening.md §1):
+  # valence stays column 1, arousal is the nuisance covariate. Held identical across arms so the
+  # sofroniew map-geometry reports are comparable to runs/emotion_vectors_wide's.
+  residualize_on: [valence, arousal]
