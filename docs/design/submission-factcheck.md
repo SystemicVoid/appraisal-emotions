@@ -117,3 +117,23 @@ Artifacts: `WIDE` = /home/eugenia/appraisal-emotions/runs/emotion_vectors_wide/e
 2. **(8)** The elated/vindicated story counts are a memo-recorded qualitative audit (paper-narrative.md / methods-findings.md), not an artifact readout — fine to report, but it is not machine-recorded anywhere in runs/.
 3. **(11b)** The depth p ≈ 0.005 "on freshly computed floors" is likewise memo-only; no artifact stores per-block permutation p or fresh floors for blocks 48/50. Everything else in the depth paragraph is artifact-backed.
 4. Minor context, no change needed: the binary-valence +0.0407 and the LOO span are not stored report keys but reproduce exactly from the shipped word-level residual data; the 0.921 cross-run correlation and ≈0.043 MDE80 likewise reproduce from artifacts.
+
+## Sofroniew-recipe replication (§4 + A6), audited 2026-08-17
+
+Artifacts: `runs/emotion_vectors_sofroniew{,_projected}/emotions/` (`emotion_vectors.json`, `map_geometry_report.json`, `expectation_control_report.json`), committed at b1e0538. RAW = unprojected arm, PROJ = projected arm.
+
+| # | Claim in draft | Artifact source | Value | Verdict |
+| --- | --- | --- | --- | --- |
+| R1 | Gate 0.841 / 0.850 vs 0.60 threshold at block 32 | emotion_vectors.json `g0_abs_rho` = 0.840698 (RAW), 0.849754 (PROJ); `gate_verdict`=pass; `selected_block`=32 | 0.841 / 0.850 | VERIFIED |
+| R2 | E2 slope table: RAW +0.0150/+0.0102 (reward-matched), +0.0142/+0.0106 (EV-matched); PROJ +0.0157/+0.0130, +0.0145/+0.0111 | expectation_control_report.json `comparison_signature` slopes: 0.015011/0.010231, 0.014222/0.010589; 0.015670/0.012979, 0.014494/0.011104 | as drafted (4 dp) | VERIFIED |
+| R3 | All eight permutation p at the 1/10001 floor | `arms[].axes[].p_value` = 0.0001 in all 8 cells | 1/10001 | VERIFIED |
+| R4 | Positive-pole contrasts: RAW(32) +0.0195, p = 0.048; PROJ(32) +0.0229, p = 0.020; PROJ(35) +0.0266, p = 0.021 | map_geometry_report.json `blocks[].family_contrasts[positive]`: 0.01950/0.0476, 0.02294/0.0203, 0.02659/0.0209 | as drafted | VERIFIED |
+| R5 | Label-shuffle floors 0.0241 / 0.0230 / 0.0300; PROJ(32) misses by 0.0001 | `label_shuffled_p95` = 0.02407, 0.02305, 0.02998; 0.02305 − 0.02294 = 0.00011 | as drafted | VERIFIED |
+| R6 | Negative pole flat: −0.0013 (p 0.55), +0.0018 (p 0.43), +0.0039 (p 0.37); range −0.006 to +0.004 across all maps/blocks | `family_contrasts[negative]`: −0.00134/0.5532, 0.00177/0.4290, 0.00393/0.3719; RAW(35) −0.00568; wide −0.00543 | as drafted | VERIFIED |
+| R7 | Word-level RPE alignment rank-correlates with valence +0.776 to +0.805 | `blocks[].p1_spearman_rho`: 0.78271, 0.79255 (RAW), 0.77589, 0.80475 (PROJ) | as drafted | VERIFIED |
+| R8 | Confirmation-family mean residuals +0.043 (RAW) / +0.031 (PROJ) vs +0.012 / +0.018 outcome-positive | Derived from `word_residuals` (confirm means 0.04261 / 0.03065) and `family_contrasts.mean_residual_outcome` (0.01172 / 0.01795) | as drafted | VERIFIED (derived) |
+| R9 | RAW fails style scale check on unsigned-surprise (−0.064 vs 0.046 band); PROJ passes all three; signed-RPE passes on both | `blocks[0].p5c`: RAW v_absrpe residual −0.06389, p95 0.04554, passed=false; RAW v_rpe passed=true; PROJ all passed=true | as drafted | VERIFIED |
+| R10 | Projection shifts gate by +0.0013 at read block; maps differ 0.0078 before projection | PROJ `g0_table_before_projection` block 32 abs rho 0.84845 vs `g0_abs_rho` 0.84975 (Δ 0.00130); RAW 0.84070 (Δ 0.00775); random-frame control 0.84845 | +0.0013 / 0.0078 | VERIFIED |
+| R11 | About 18 kept stories per word; generator over-delivered vs configured 12 | results/sofroniew_arms_analysis.md corpus section (kept 14–21 per label, ≈19.3 recovered); not a single report key | ~18 | VERIFIED (analysis-derived) |
+| R12 | About 23% of kept stories end mid-sentence | results/sofroniew_arms_analysis.md: 469/2,026 (RAW), 464/2,038 (PROJ) | ~23% | VERIFIED (analysis-derived) |
+| R13 | Broad 0.81–0.85 gate plateau across second half of the stack | results/sofroniew_arms_analysis.md (means 0.828/0.836 over blocks 20–45), backed by the g0 tables in both emotion_vectors.json | as drafted | VERIFIED (analysis-derived) |

@@ -155,7 +155,8 @@ tr {{ page-break-inside: avoid; break-inside: avoid; }}
 figure.fig {{ margin: 9pt 0 9pt 0; text-align: center;
               page-break-inside: avoid; break-inside: avoid; }}
 /* the width also guards any image wrap_figures() did not match */
-img {{ display: block; width: 86%; margin: 8pt auto 6pt auto; }}
+img {{ display: block; width: 76%; margin: 8pt auto 6pt auto; }}
+img[src*="fig3"], img[src*="fig4"] {{ width: 88%; }}
 figure.fig img {{ margin: 0 auto 6pt auto; }}
 figcaption {{ font-size: 9pt; font-style: italic; line-height: 1.38; text-align: justify; }}
 a {{ color: #111; text-decoration: none; }}
