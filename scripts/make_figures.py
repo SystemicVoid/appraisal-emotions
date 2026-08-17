@@ -113,6 +113,14 @@ plt.rcParams.update(
 HALO = [pe.withStroke(linewidth=2.4, foreground="white")]
 HALO_LIGHT = [pe.withStroke(linewidth=1.6, foreground="white")]
 
+# All four figures are placed in the same PDF column (88% of the A4 text width,
+# ~14.3 cm), so a wider canvas is shrunk further and its type lands smaller on
+# the page. Figures 3 and 4 need a wider canvas than 1 and 2; these multipliers
+# scale their type back up so every figure's smallest text is the same physical
+# size in the printed paper.
+TYPE3 = 1.15
+TYPE4 = 1.25
+
 
 def style_axes(ax: plt.Axes, *, xticks: bool = True) -> None:
     """Shared frame: left/top/right spines dropped, one hairline base rule,
@@ -269,11 +277,15 @@ def fig2_carryover() -> list[str]:
     share_pos = (gaps > 0).mean()
 
     fig, ax = plt.subplots(figsize=(5.4, 3.2))
-    # Gaps are quantized on a 1/32-logit grid; align bin edges to half-steps.
-    step = 4 / 32
-    lo = np.floor(gaps.min() / step) * step - step / 2
-    hi = np.ceil(gaps.max() / step) * step + step
+    # The gaps land on a dyadic lattice (multiples of 1/64 logit), so bin edges
+    # are pushed a third of a bin off that lattice. Aligning them to it instead
+    # puts a fifth of the sample exactly on an edge, where numpy assigns every
+    # tied observation to the bin above and visibly skews the bar heights.
+    step = 0.125
+    lo = np.floor(gaps.min() / step) * step - step / 3
+    hi = gaps.max() + step
     bins = np.arange(lo, hi, step)
+    assert not np.isclose(gaps[:, None], bins[None, :]).any(), "value on a bin edge"
     ax.hist(
         gaps,
         bins=bins,
@@ -352,14 +364,15 @@ def fig3_family_residuals() -> list[str]:
         ("outcome_confirm", "Expectation-\nconfirmation"),
     ]
     # Word labels sit tight against their dot (a ~7pt offset, so the pairing is
-    # unambiguous without leader lines). Sides are chosen so the two adjacent
-    # outcome-negative labels open away from each other, and so `elated` clears
-    # the style-control rule just above it.
+    # unambiguous without leader lines). Sides are chosen so no label crosses
+    # into a neighbouring family's dot field: `underwhelmed` and `disappointed`
+    # are only ~0.003 apart in residual, so the upper one is stacked above its
+    # dot and the lower one opens sideways.
     labelled = {
         "elated": (7, -3),
         "amused": (7, 0),
         "disappointed": (7, 0),
-        "underwhelmed": (-7, 0),
+        "underwhelmed": (0, 5),
         "sad": (7, 0),
         "vindicated": (-7, 0),
     }
@@ -404,9 +417,9 @@ def fig3_family_residuals() -> list[str]:
                     (xx, yy),
                     xytext=(dx, dy),
                     textcoords="offset points",
-                    ha="left" if dx > 0 else "right",
-                    va="center",
-                    fontsize=7.5,
+                    ha="left" if dx > 0 else ("right" if dx < 0 else "center"),
+                    va="center" if dx else "bottom",
+                    fontsize=7.5 * TYPE3,
                     style="italic",
                     color=INK,
                     zorder=6,
@@ -419,30 +432,38 @@ def fig3_family_residuals() -> list[str]:
     ax.axhline(style["residual"], color=RUST, lw=0.9, ls=(0, (5, 3)), zorder=2)
     ax.annotate(
         f"style-control pseudo-word ({style['residual']:.3f})",
-        (len(families) - 0.5, style["residual"]),
+        (-0.55, style["residual"]),
         xytext=(0, 4),
         textcoords="offset points",
-        ha="right",
+        ha="left",
         va="bottom",
-        fontsize=7.5,
+        fontsize=7.5 * TYPE3,
         color=RUST,
         zorder=6,
         path_effects=HALO,
     )
 
-    # Headline family gap, computed from the loaded contrast row.
+    # Headline family gap, computed from the loaded contrast row. The bracket
+    # sits in the gutter between the two families the contrast is taken over,
+    # so it cannot be read as comparing any other adjacent pair.
     m_out = pos_contrast["mean_residual_outcome"]
     m_ctl = pos_contrast["mean_residual_control"]
-    xb = 1.42
+    fam_index = {fam: i for i, (fam, _) in enumerate(families)}
+    xb = (
+        fam_index[pos_contrast["outcome_family"]]
+        + fam_index[pos_contrast["control_family"]]
+    ) / 2
     ax.plot([xb, xb], [m_ctl, m_out], color=INK2, lw=0.7, zorder=5)
     for yy in (m_ctl, m_out):
         ax.plot([xb - 0.05, xb], [yy, yy], color=INK2, lw=0.7, zorder=5)
     ax.annotate(
         f"{pos_contrast['statistic']:+.4f}\n(p = {pos_contrast['p_value']:.4f})",
-        (xb + 0.06, m_out),
-        ha="left",
-        va="center",
-        fontsize=7.5,
+        (xb, m_out),
+        xytext=(4, 1),
+        textcoords="offset points",
+        ha="center",
+        va="bottom",
+        fontsize=7.5 * TYPE3,
         color=INK,
         linespacing=1.35,
         zorder=6,
@@ -460,6 +481,9 @@ def fig3_family_residuals() -> list[str]:
     ax.set_ylabel("RPE-alignment residual\n(valence + arousal removed)")
     ax.yaxis.set_major_locator(MultipleLocator(0.05))
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    ax.tick_params(axis="both", which="major", labelsize=8 * TYPE3)
+    ax.xaxis.label.set_size(8.5 * TYPE3)
+    ax.yaxis.label.set_size(8.5 * TYPE3)
     style_axes(ax, xticks=False)
     return save(fig, "fig3_family_residuals")
 
@@ -485,9 +509,14 @@ def fig4_depth_profile() -> list[str]:
     n_wide = wide["norms_covered_words"]
     n_base = base["norms_covered_words"]
     rpe_block = wide["directions_selected_block"]
+    # Highlighted band = the blocks at which the contrast peaks, one per run,
+    # read off the loaded sweeps rather than written down.
+    peaks = sorted({int(wx[np.argmax(wy)]), int(bx[np.argmax(by)])})
+    peak_lo, peak_hi = peaks[0], peaks[-1]
+    x_first, x_last = int(min(bx[0], wx[0])), int(max(bx[-1], wx[-1]))
 
     fig, ax = plt.subplots(figsize=(6.8, 3.4))
-    ax.axvspan(47.5, 50.5, color=BAND, lw=0, zorder=0)
+    ax.axvspan(peak_lo - 0.5, peak_hi + 0.5, color=BAND, lw=0, zorder=0)
     ax.axvline(rpe_block, color=MUTED, lw=0.7, ls=(0, (4, 3)), zorder=2)
     ax.axhline(0, color=HAIR, lw=0.6, zorder=1)
     ax.plot(wx, wy, color=SLATE, lw=1.3, zorder=4, label=f"Widened run ({n_wide} words)")
@@ -501,21 +530,21 @@ def fig4_depth_profile() -> list[str]:
         textcoords="offset points",
         ha="right",
         va="top",
-        fontsize=7.5,
+        fontsize=7.5 * TYPE4,
         color=MUTED,
         linespacing=1.35,
         zorder=6,
         path_effects=HALO,
     )
     ax.annotate(
-        "blocks 48–50",
-        (50.5, 1.0),
+        f"blocks {peak_lo}–{peak_hi}",
+        (peak_hi + 0.5, 1.0),
         xycoords=("data", "axes fraction"),
         xytext=(4, 0),
         textcoords="offset points",
         ha="left",
         va="top",
-        fontsize=7.5,
+        fontsize=7.5 * TYPE4,
         color=MUTED,
         zorder=6,
         path_effects=HALO,
@@ -525,7 +554,7 @@ def fig4_depth_profile() -> list[str]:
         0.97,
         f"depth profiles r = {r:.2f}",
         transform=ax.transAxes,
-        fontsize=8,
+        fontsize=8 * TYPE4,
         color=INK,
         va="top",
         zorder=6,
@@ -535,25 +564,28 @@ def fig4_depth_profile() -> list[str]:
     for name, ys, colour in (("widened", wy, SLATE), ("base", by, RUST)):
         ax.annotate(
             name,
-            (63, ys[-1]),
+            (x_last, ys[-1]),
             xytext=(4, 0),
             textcoords="offset points",
             ha="left",
             va="center",
-            fontsize=7.5,
+            fontsize=7.5 * TYPE4,
             color=colour,
             annotation_clip=False,
         )
     ax.set_xlabel("Transformer block")
     ax.set_ylabel("Outcome-positive family contrast\n(valence-residualized)")
-    ax.set_xlim(0, 63)
+    ax.set_xlim(x_first, x_last)
     ax.xaxis.set_major_locator(MultipleLocator(10))
     ax.xaxis.set_minor_locator(MultipleLocator(5))
     ax.tick_params(axis="x", which="minor", length=1.8, width=0.6, color=HAIR)
     ax.yaxis.set_major_locator(MultipleLocator(0.02))
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    ax.tick_params(axis="both", which="major", labelsize=8 * TYPE4)
+    ax.xaxis.label.set_size(8.5 * TYPE4)
+    ax.yaxis.label.set_size(8.5 * TYPE4)
     style_axes(ax)
-    compact_legend(ax, ncols=2)
+    compact_legend(ax, ncols=2, fontsize=8 * TYPE4)
     return save(fig, "fig4_depth_profile")
 
 
