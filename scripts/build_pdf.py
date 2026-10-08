@@ -51,7 +51,9 @@ def author_cell(entry):
     entry = entry.strip()
     m = re.match(r"(.+?)\s*\((.+?)\)$", entry)
     name, affil = (m.group(1), m.group(2)) if m else (entry, "Independent")
-    return f'<div class="author"><div class="name">{name}</div><div class="affil">{affil}</div></div>'
+    return (
+        f'<div class="author"><div class="name">{name}</div><div class="affil">{affil}</div></div>'
+    )
 
 
 author_cells = "".join(author_cell(a) for a in authors.split(","))
@@ -69,8 +71,7 @@ def wrap_figures(html):
         r"<p>\s*(<img\b[^>]*>)\s*(?:</p>\s*<p>\s*)?<em>(.*?)</em>\s*</p>", re.DOTALL
     )
     html = with_caption.sub(
-        lambda m: f'<figure class="fig">{m.group(1)}'
-        f"<figcaption>{m.group(2)}</figcaption></figure>",
+        lambda m: f'<figure class="fig">{m.group(1)}<figcaption>{m.group(2)}</figcaption></figure>',
         html,
     )
     # Any image left without a caption still gets the no-split wrapper.
@@ -180,4 +181,4 @@ a {{ color: #111; text-decoration: none; }}
 html = re.sub(r"10\^(-?\d+)", lambda m: f"10<sup>{m.group(1).replace('-', '−')}</sup>", html)
 
 HTML(string=html, base_url=str(ROOT)).write_pdf(OUT)
-print(f"wrote {OUT} ({OUT.stat().st_size/1e6:.1f} MB)")
+print(f"wrote {OUT} ({OUT.stat().st_size / 1e6:.1f} MB)")

@@ -380,7 +380,7 @@ def fig3_family_residuals() -> list[str]:
     fig, ax = plt.subplots(figsize=(6.8, 3.6))
     rng = np.random.default_rng(7)
     means = {}
-    for i, (fam, disp) in enumerate(families):
+    for i, (fam, _disp) in enumerate(families):
         frows = [r for r in rows if r["family"] == fam]
         ys = np.array([r["residual"] for r in frows])
         xs = i + rng.uniform(-0.16, 0.16, size=len(frows))
@@ -406,7 +406,7 @@ def fig3_family_residuals() -> list[str]:
                 zorder=z,
                 solid_capstyle="butt",
             )
-        for r, xx, yy in zip(frows, xs, ys):
+        for r, xx, yy in zip(frows, xs, ys, strict=False):
             if r["word"] in labelled:
                 dx, dy = labelled[r["word"]]
                 text = r["word"]
@@ -449,10 +449,7 @@ def fig3_family_residuals() -> list[str]:
     m_out = pos_contrast["mean_residual_outcome"]
     m_ctl = pos_contrast["mean_residual_control"]
     fam_index = {fam: i for i, (fam, _) in enumerate(families)}
-    xb = (
-        fam_index[pos_contrast["outcome_family"]]
-        + fam_index[pos_contrast["control_family"]]
-    ) / 2
+    xb = (fam_index[pos_contrast["outcome_family"]] + fam_index[pos_contrast["control_family"]]) / 2
     ax.plot([xb, xb], [m_ctl, m_out], color=INK2, lw=0.7, zorder=5)
     for yy in (m_ctl, m_out):
         ax.plot([xb - 0.05, xb], [yy, yy], color=INK2, lw=0.7, zorder=5)
@@ -472,10 +469,7 @@ def fig3_family_residuals() -> list[str]:
 
     ax.set_xticks(
         range(len(families)),
-        [
-            f"{disp}\n(n = {sum(r['family'] == fam for r in rows)})"
-            for fam, disp in families
-        ],
+        [f"{disp}\n(n = {sum(r['family'] == fam for r in rows)})" for fam, disp in families],
     )
     ax.set_xlim(-0.6, len(families) - 0.4)
     ax.set_ylabel("RPE-alignment residual\n(valence + arousal removed)")
@@ -497,9 +491,7 @@ def fig4_depth_profile() -> list[str]:
 
     def series(rep: dict) -> tuple[np.ndarray, np.ndarray]:
         blocks = np.array([b["block"] for b in rep["block_sweep"]])
-        vals = np.array(
-            [b["family_contrast_statistics"]["positive"] for b in rep["block_sweep"]]
-        )
+        vals = np.array([b["family_contrast_statistics"]["positive"] for b in rep["block_sweep"]])
         order = np.argsort(blocks)
         return blocks[order], vals[order]
 
