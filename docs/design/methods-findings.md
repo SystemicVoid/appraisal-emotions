@@ -50,8 +50,11 @@ narrative; open questions appear as open questions with their measured price, no
 
 - For each block, per-block **OLS at the reveal token** on estimation rows yields three
   directions: `v_RPE` (signed `reward − EV`), `v_EV`, `v_absrpe` (unsigned surprise).
-- Block selection on the held-out selection partition chose **block 35** of 64 for the
-  RPE instrument.
+- Block selection on the selection partition (held out from direction fitting) chose
+  **block 35** of 64 for the RPE instrument. The sign AUROC reported for that block is
+  scored on the same selection trials that chose it: a selection-set score, not an
+  untouched-test estimate, and possibly optimistic. The reserved confirmation partition
+  is not used by any reported score.
 - Certification gates (all reported in `reveal_rpe_report.json`): sign-decoding AUROC
   against a **random-direction floor**; within-cell **sign contests** in both matched
   designs (permutation p); split-half **stability** over 200 draw-grouped splits; an
@@ -167,8 +170,11 @@ price.
 
 Artifact: `runs/reveal_rpe_base/reveal_rpe/reveal_rpe_report.json` (block 35/64).
 
-- Signed-RPE sign decoding **AUROC 0.985** (random-direction floor 0.734; permutation
-  p ≈ 0.001).
+- Signed-RPE sign decoding **AUROC 0.985** on the selection set at the depth selected there
+  (random-direction floor 0.734). The selection-aware sign-permutation test (each
+  permutation repeats the maximum over all blocks; `selection_aware_sign_null`) gives
+  p ≈ 0.001. That p-value addresses significance after depth selection; it does not make
+  0.985 an unbiased performance estimate.
 - Reward-matched and EV-matched **sign contests both 1.0** (60 and 124 cells; p ≈ 0.001
   each) — the direction reads the comparison within cells where outcome, or expectation,
   is pinned.
