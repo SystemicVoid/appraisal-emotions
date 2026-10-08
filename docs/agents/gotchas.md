@@ -389,3 +389,15 @@ never a design where an expiring login is on the critical path.
 
 `environmental` for the expiry itself (credential lifetime is not ours to set); the mode default is
 not, and is worth changing in the runbook.
+
+### A manuscript rebuild can pass while the repository lint gate fails
+
+On 2026-10-08, the PDF build passed, but `just check` stopped at Ruff formatting in
+`scripts/build_pdf.py` and `scripts/make_figures.py`. Both files matched public baseline
+`e9518828`. After `uv run ruff format scripts/build_pdf.py scripts/make_figures.py`,
+`just lint` exposed two further baseline errors in the figure script: unused `disp`
+and `zip` without explicit `strict`. Renaming the unused binding and specifying
+`strict=False` preserves the loop's behavior. Run `just lint` before calling a
+publication slice ready to land; a successful PDF build does not exercise that gate.
+
+*Fix path:* [#15](https://github.com/SystemicVoid/appraisal-emotions/issues/15).
