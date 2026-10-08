@@ -401,3 +401,16 @@ and `zip` without explicit `strict`. Renaming the unused binding and specifying
 publication slice ready to land; a successful PDF build does not exercise that gate.
 
 *Fix path:* [#15](https://github.com/SystemicVoid/appraisal-emotions/issues/15).
+
+### The arousal-arm inventory test lagged the Sofroniew analysis configs
+
+After lint passed on 2026-10-08, `just check` failed the static arousal-arm inventory.
+Commit `b1e0538` intentionally added valence-plus-arousal residualization to both real
+Sofroniew configs and recorded the choice in `results/sofroniew_arms_analysis.md`, but
+left the test expecting only the widened pair. The test and configs reproduce this
+failure at public baseline `e9518828`. Update the explicit test inventory when declaring
+an arm; do not infer its expected membership from the configs being checked. The two
+Sofroniew smoke configs remain valence-only. Verify with
+`uv run pytest tests/test_emotion_cli_smoke.py` and `just lint`.
+
+*Fix path:* [#15](https://github.com/SystemicVoid/appraisal-emotions/issues/15).
