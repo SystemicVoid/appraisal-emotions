@@ -344,13 +344,13 @@ def test_the_readout_columns_come_from_the_config_and_default_to_valence_alone(c
     ]
 
 
-def test_only_the_widened_arm_partials_out_arousal():
-    """The certified path's default must not move when a new arm ships.
+def test_only_declared_arms_partial_out_arousal():
+    """Keep the base readout valence-only and require new arousal arms to declare themselves.
 
-    Every other shipped E0 config feeds analyses whose published numbers were computed on
-    ``[1, valence]``; a config that quietly gained a second nuisance column would change what those
-    numbers ESTIMATE without changing anything a reader can see. So the split is asserted over the
-    shipped set rather than over a list this test keeps, and a new arm has to declare itself here.
+    The widened arms use valence and arousal. Commit b1e0538 extends that primary readout to
+    the two real Sofroniew arms, as recorded in results/sofroniew_arms_analysis.md. Their smoke
+    configs retain the valence-only default. Check every shipped config against an explicit
+    inventory so an undeclared arousal arm still fails.
     """
 
     residualize = {
@@ -358,8 +358,13 @@ def test_only_the_widened_arm_partials_out_arousal():
         for path in sorted((REPO_ROOT / "configs").glob("emotion_vectors_*.yaml"))
     }
     assert residualize, "no shipped emotion_vectors config was loaded"
-    widened = {name for name, columns in residualize.items() if "arousal" in columns}
-    assert widened == {"emotion_vectors_wide.yaml", "emotion_vectors_wide_smoke.yaml"}, residualize
+    arousal_arms = {name for name, columns in residualize.items() if "arousal" in columns}
+    assert arousal_arms == {
+        "emotion_vectors_wide.yaml",
+        "emotion_vectors_wide_smoke.yaml",
+        "emotion_vectors_sofroniew.yaml",
+        "emotion_vectors_sofroniew_projected.yaml",
+    }, residualize
     assert all(columns[0] == "valence" for columns in residualize.values())
 
 
